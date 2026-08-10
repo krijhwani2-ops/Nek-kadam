@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Nek Kadam</string>
+    <string name="title_activity_main">Nek Kadam</string>
+    <string name="package_name">org.nekkadam.app</string>
+    <string name="custom_url_scheme">org.nekkadam.app</string>
+</resources>

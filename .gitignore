@@ -1,0 +1,88 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+android/app/build/
+android/.gradle/
+
+# Database files
+*.sqlite
+*.db
+*.db-shm
+*.db-wal
+*.db.bak*
+local.db
+
+# Logs
+*.log
+server_errors.log
+
+# Environment
+.env
+
+# APK files (large binaries)
+*.apk
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Temporary/scratch scripts
+scratch/
+
+# Data files (CSVs, Excel, PDFs - too large for git)
+*.csv
+*.xlsx
+*.pdf
+*.pptx
+clean_visits.csv
+
+# Import/migration scripts (one-time use)
+import_*.js
+import_*.cjs
+import_*.log
+reimport_*.cjs
+migrate_*.cjs
+run_migration_*.cjs
+patch_*.cjs
+setup_pg.cjs
+sync_*.js
+sync_*.cjs
+ultimate_sync.cjs
+sanitize_db.cjs
+normalize_all.cjs
+dedup_visits.cjs
+clean_db_dates*.cjs
+fix_dates.cjs
+
+# Test/check scripts (one-time use)
+check*.cjs
+check*.js
+test_*.cjs
+verify_*.js
+count_*.js
+compare_files.js
+process.js
+process.cjs
+parse_sheet2.js
+parse_sheet2.cjs
+analyze_sheet2.cjs
+deep_analyze.cjs
+audit_db.cjs
+
+# Old/backup APKs
+Nek Kadam old.apk
+NekKadam*.apk
+nek-kadam.apk
+
+# Presentation files
+Nek_Kadam_*.pptx
+generate_ppt.js
+
+# Misc generated
+skills-lock.json

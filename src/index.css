@@ -1,0 +1,207 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Outfit', sans-serif;
+    background: #f0fdf4;
+    color: #1e293b;
+    overflow-x: hidden;
+    transition: background-color 0.3s, color 0.3s;
+  }
+  
+  html.dark body {
+    background: #0b0f19;
+    color: #f8fafc;
+  }
+  
+  /* Selection colors */
+  ::selection {
+    background: #a7f3d0;
+    color: #047857;
+  }
+}
+
+@layer utilities {
+  /* ── Glassmorphism Theme ── */
+  .glass, .glass-card, .glass-panel {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(226, 232, 240, 0.8);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    transition: background-color 0.3s, border-color 0.3s;
+  }
+  
+  html.dark .glass, html.dark .glass-card, html.dark .glass-panel {
+    background: rgba(15, 23, 42, 0.8);
+    border-color: rgba(51, 65, 85, 0.5);
+  }
+
+  /* ── Text Gradients ── */
+  .text-gradient, .text-gradient-green {
+    color: #047857;
+  }
+  .text-gradient-orange {
+    color: #ea580c;
+  }
+
+  /* ── Backgrounds ── */
+  .bg-gradient-primary {
+    background-color: #10b981;
+  }
+  .bg-gradient-secondary {
+    background-color: #fb923c;
+  }
+  .bg-mesh {
+    background-color: #f0fdf4;
+  }
+
+  /* ── Input Styles ── */
+  .input-field {
+    @apply w-full px-5 py-4 bg-white border-2 border-slate-200 rounded-lg outline-none font-medium text-slate-800;
+  }
+  .input-field:focus {
+    @apply border-emerald-500 ring-2 ring-emerald-500/20;
+  }
+
+  /* ── Button Styles ── */
+  .btn-primary {
+    @apply bg-emerald-600 text-white font-bold px-6 py-3 rounded-lg flex items-center justify-center gap-2 active:bg-emerald-700;
+  }
+  .btn-secondary {
+    @apply bg-orange-500 text-white font-bold px-6 py-3 rounded-lg flex items-center justify-center gap-2 active:bg-orange-600;
+  }
+
+  /* ── Badge Styles ── */
+  .badge-green {
+    @apply bg-emerald-100 text-emerald-700 font-bold px-3 py-1 rounded text-sm;
+  }
+  .badge-orange {
+    @apply bg-orange-100 text-orange-700 font-bold px-3 py-1 rounded text-sm;
+  }
+
+  .accent-green { border-top: 3px solid #10b981; }
+  .accent-orange { border-top: 3px solid #fb923c; }
+
+  .stat-card {
+    @apply bg-white p-6 rounded-xl flex items-center gap-6 border border-slate-200 shadow-sm;
+  }
+}
+
+.app-bg {
+  min-height: 100vh;
+  background: #f8fafc;
+  transition: background-color 0.3s;
+}
+
+html.dark .app-bg {
+  background: #020617;
+}
+
+/* ───────────────────────────────────────────── */
+/*  Custom Scrollbar                            */
+/* ───────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #10b981, #fb923c);
+  border-radius: 100px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #059669, #ea580c);
+}
+
+/* ───────────────────────────────────────────── */
+/*  Sidebar Nav Link Active State               */
+/* ───────────────────────────────────────────── */
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.nav-link-active {
+  background-color: #ecfdf5;
+  color: #047857;
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #10b981;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Re-enable and define animations */
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.animate-slide-left {
+  animation: slideLeft 0.3s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideLeft {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.stagger > * {
+  opacity: 0;
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* ───────────────────────────────────────────── */
+/*  Print Layout for Prescription PDF           */
+/* ───────────────────────────────────────────── */
+@media print {
+  body {
+    background: white;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .printable-prescription, .printable-prescription * {
+    visibility: visible;
+  }
+  .printable-prescription {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: white;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
