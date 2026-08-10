@@ -113,9 +113,11 @@ function OTAUpdater() {
       let loaded = 0;
       const chunks: Uint8Array[] = [];
       
-      while(true) {
+      let isDone = false;
+      while(!isDone) {
         const { done, value } = await reader.read();
-        if (done) break;
+        isDone = done;
+        if (isDone) break;
         if (value) {
           chunks.push(value);
           loaded += value.length;
