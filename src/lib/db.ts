@@ -173,7 +173,6 @@ async function addPendingOp(op: any): Promise<void> {
 
     ops.push({ ...op, timestamp: Date.now(), id: generateUUID() });
     await db.put('keyval', ops, 'nk_pending_ops');
-    console.log(`[DB] Operation queued: ${op.action} on ${op.query.table}`);
   } catch (e) {
     console.error('Failed to queue pending op:', e);
   }
