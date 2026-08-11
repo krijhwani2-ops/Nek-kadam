@@ -53,7 +53,6 @@ export function createTransaction(): DBTransaction {
     ops: [],
     async execute() {
       try {
-        console.log('[DB TRANSACTION] Executing batch of', this.ops.length, 'operations');
         const db = await dbPromise;
         const pendingOps = await getPendingOps();
         
@@ -452,7 +451,7 @@ export async function fullDataSync(): Promise<{ success: boolean; message: strin
         await setCache(key, result);
         
         // Merge server data with any remaining unsynced local data
-        let mergedData = Array.isArray(result.data) ? [...result.data] : [];
+        const mergedData = Array.isArray(result.data) ? [...result.data] : [];
         
         // For visits/prescription_groups/group_medicines, preserve pending local entries
         if (['visits', 'prescription_groups', 'group_medicines'].includes(table)) {
