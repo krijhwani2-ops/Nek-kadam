@@ -452,7 +452,7 @@ export async function fullDataSync(): Promise<{ success: boolean; message: strin
         await setCache(key, result);
         
         // Merge server data with any remaining unsynced local data
-        let mergedData = Array.isArray(result.data) ? [...result.data] : [];
+        const mergedData = Array.isArray(result.data) ? [...result.data] : [];
         
         // For visits/prescription_groups/group_medicines, preserve pending local entries
         if (['visits', 'prescription_groups', 'group_medicines'].includes(table)) {

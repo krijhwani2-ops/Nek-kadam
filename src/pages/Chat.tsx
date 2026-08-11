@@ -198,7 +198,7 @@ export default function Chat() {
         ) : (
           messages.map((msg) => {
             const isOwn = msg.senderId === session?.userId;
-            const hasAttachment = msg.fileName && msg.fileData;
+            const _hasAttachment = msg.fileName && msg.fileData;
 
             return (
               <div key={msg.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>

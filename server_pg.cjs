@@ -58,7 +58,7 @@ io.on('connection', (socket) => {
   });
 });
 
-app.use((req, res, next) => {
+app.get('*', (req, res, next) => {
   req.io = io;
   next();
 });
@@ -583,31 +583,61 @@ app.get('/api/tokens/dashboard', async (_req, res) => {
   try {
     const dateKey = todayKey();
     const depts = await qr('SELECT id, name, code FROM departments WHERE "isActive" = 1');
+
+    const statsRows = await qr(
+      `
+      SELECT
+        currentDepartmentId AS "currentDepartmentId",
+        COALESCE(SUM(CASE WHEN status = 'WAITING' THEN 1 ELSE 0 END),0)::int AS waiting,
+        COALESCE(SUM(CASE WHEN status = 'IN_PROGRESS' THEN 1 ELSE 0 END),0)::int AS inprogress,
+        COALESCE(SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END),0)::int AS done,
+        COALESCE(SUM(CASE WHEN status = 'SKIPPED' THEN 1 ELSE 0 END),0)::int AS skipped
+      FROM tokens
+      WHERE dateKey = $1 AND isDeleted = 0
+      GROUP BY currentDepartmentId
+      `,
+      [dateKey]
+    );
+
+    const currentRows = await qr(
+      `
+      SELECT DISTINCT ON (t.currentDepartmentId) t.*, d.code AS "departmentCode"
+      FROM tokens t JOIN departments d ON t.currentDepartmentId = d.id
+      WHERE t.dateKey = $1 AND t.status = 'IN_PROGRESS' AND t.isDeleted = 0
+      ORDER BY t.currentDepartmentId, t.id
+      `,
+      [dateKey]
+    );
+
+    const nextRows = await qr(
+      `
+      SELECT DISTINCT ON (t.currentDepartmentId) t.*, d.code AS "departmentCode"
+      FROM tokens t JOIN departments d ON t.currentDepartmentId = d.id
+      WHERE t.dateKey = $1 AND t.status = 'WAITING' AND t.isDeleted = 0
+      ORDER BY t.currentDepartmentId, t.priority DESC, t.sequenceIndex ASC
+      `,
+      [dateKey]
+    );
+
+    const statsMap = {};
+    for (const r of statsRows) {
+      statsMap[r.currentDepartmentId || r.currentdepartmentid] = r;
+    }
+    const currentMap = {};
+    for (const r of currentRows) {
+      currentMap[r.currentDepartmentId || r.currentdepartmentid] = r;
+    }
+    const nextMap = {};
+    for (const r of nextRows) {
+      nextMap[r.currentDepartmentId || r.currentdepartmentid] = r;
+    }
+
     const data = [];
     for (const d of depts) {
-      const stats = await qr1(
-        `
-        SELECT
-          COALESCE(SUM(CASE WHEN status = 'WAITING' THEN 1 ELSE 0 END),0)::int AS waiting,
-          COALESCE(SUM(CASE WHEN status = 'IN_PROGRESS' THEN 1 ELSE 0 END),0)::int AS inprogress,
-          COALESCE(SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END),0)::int AS done,
-          COALESCE(SUM(CASE WHEN status = 'SKIPPED' THEN 1 ELSE 0 END),0)::int AS skipped
-        FROM tokens
-        WHERE currentDepartmentId = $1 AND dateKey = $2 AND isDeleted = 0
-        `,
-        [d.id, dateKey]
-      );
-      const current = await qr1(
-        `SELECT t.*, d.code AS "departmentCode" FROM tokens t JOIN departments d ON t.currentDepartmentId = d.id
-         WHERE t.currentDepartmentId = $1 AND t.dateKey = $2 AND t.status = 'IN_PROGRESS' AND t.isDeleted = 0 LIMIT 1`,
-        [d.id, dateKey]
-      );
-      const next = await qr1(
-        `SELECT t.*, d.code AS "departmentCode" FROM tokens t JOIN departments d ON t.currentDepartmentId = d.id
-         WHERE t.currentDepartmentId = $1 AND t.dateKey = $2 AND t.status = 'WAITING' AND t.isDeleted = 0
-         ORDER BY t.priority DESC, t.sequenceIndex ASC LIMIT 1`,
-        [d.id, dateKey]
-      );
+      const stats = statsMap[d.id];
+      const current = currentMap[d.id];
+      const next = nextMap[d.id];
+
       data.push({
         departmentId: d.id,
         departmentName: d.name,
@@ -1478,7 +1508,7 @@ app.post('/api/presence/heartbeat', async (req, res) => {
 });
 
 // Catch-all route for React SPA routing
-app.get('*', (req, res, next) => {
+app.use((req, res, next) => {
   if (req.path.startsWith('/api') || req.path.startsWith('/rpc') || req.path.startsWith('/static')) {
     return next();
   }
