@@ -63,7 +63,6 @@ export function createTransaction(): DBTransaction {
     ops: [],
     async execute() {
       try {
-        console.log('[DB TRANSACTION] Executing batch of', this.ops.length, 'operations');
         const db = await dbPromise;
         const pendingOps = await getPendingOps();
         
@@ -250,7 +249,6 @@ export async function saveVisitOffline(payload: {
     query: payload
   });
   
-  console.log('[OFFLINE SAVE] Visit saved locally & queued for sync:', visitId);
   return visitId;
 }
 
@@ -563,7 +561,6 @@ export async function fullDataSync(): Promise<{ success: boolean; message: strin
   if (!online) return { success: false, message: 'Server not reachable. Make sure laptop is on & same WiFi.' };
 
   // 1. FIRST: Push all pending local writes to the server
-  console.log('[SYNC] Pushing pending operations first...');
   const syncResult = await syncPendingOps();
 
   const tables = [
@@ -594,7 +591,6 @@ export async function fullDataSync(): Promise<{ success: boolean; message: strin
       clearTimeout(timeout);
       const result = await res.json();
       if (result.data) {
-        console.log(`[SYNC] Downloaded ${result.data.length} rows for ${table}`);
         const key = cacheKey(query, 'query');
         await setCache(key, result);
         
@@ -1003,7 +999,6 @@ if (typeof window !== 'undefined') {
             if (currentUserStr) {
               try {
                 const currentUser = JSON.parse(currentUserStr);
-                console.log('[AUTO-SYNC] Silent token recovery initiated...');
                 // getBaseUrl is now statically imported at the top
                 const recoveryUrl = getBaseUrl();
                 const res = await fetch(`${recoveryUrl}/api/users/create-profile`, {
@@ -1029,7 +1024,6 @@ if (typeof window !== 'undefined') {
                       loginTime: currentUser.loginTime || new Date().toISOString(),
                       lastSyncTime: null
                     });
-                    console.log('[AUTO-SYNC] Silently acquired session token!');
                   }
                 }
               } catch (err) {

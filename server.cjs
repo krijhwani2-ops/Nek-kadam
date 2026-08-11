@@ -674,25 +674,54 @@ app.get('/api/tokens/dashboard', (req, res) => {
   try {
     const depts = db.prepare('SELECT id, name, code FROM departments WHERE isActive = 1').all();
     const dateKey = todayKey();
+    const statsRows = db.prepare(`
+      SELECT
+        currentDepartmentId,
+        SUM(CASE WHEN status = 'WAITING' THEN 1 ELSE 0 END) as waiting,
+        SUM(CASE WHEN status = 'IN_PROGRESS' THEN 1 ELSE 0 END) as inProgress,
+        SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END) as done,
+        SUM(CASE WHEN status = 'SKIPPED' THEN 1 ELSE 0 END) as skipped
+      FROM tokens WHERE dateKey = ? AND isDeleted = 0
+      GROUP BY currentDepartmentId
+    `).all(dateKey);
+    const statsMap = new Map();
+    for (const row of statsRows) statsMap.set(row.currentDepartmentId, row);
+
+    const currentTokens = db.prepare(`
+      SELECT * FROM (
+        SELECT *, ROW_NUMBER() OVER(PARTITION BY currentDepartmentId) as rn
+        FROM tokens
+        WHERE dateKey = ? AND status = 'IN_PROGRESS' AND isDeleted = 0
+      ) WHERE rn = 1
+    `).all(dateKey);
+    const currentMap = new Map();
+    for (const row of currentTokens) {
+      delete row.rn;
+      currentMap.set(row.currentDepartmentId, row);
+    }
+
+    const nextTokens = db.prepare(`
+      SELECT * FROM (
+        SELECT *, ROW_NUMBER() OVER(PARTITION BY currentDepartmentId ORDER BY priority DESC, sequenceIndex ASC) as rn
+        FROM tokens
+        WHERE dateKey = ? AND status = 'WAITING' AND isDeleted = 0
+      ) WHERE rn = 1
+    `).all(dateKey);
+    const nextMap = new Map();
+    for (const row of nextTokens) {
+      delete row.rn;
+      nextMap.set(row.currentDepartmentId, row);
+    }
+
     const data = depts.map(d => {
-      const stats = db.prepare(`
-        SELECT 
-          SUM(CASE WHEN status = 'WAITING' THEN 1 ELSE 0 END) as waiting,
-          SUM(CASE WHEN status = 'IN_PROGRESS' THEN 1 ELSE 0 END) as inProgress,
-          SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END) as done,
-          SUM(CASE WHEN status = 'SKIPPED' THEN 1 ELSE 0 END) as skipped
-        FROM tokens WHERE currentDepartmentId = ? AND dateKey = ? AND isDeleted = 0
-      `).get(d.id, dateKey);
-      
-      const current = db.prepare(`SELECT * FROM tokens WHERE currentDepartmentId = ? AND dateKey = ? AND status = 'IN_PROGRESS' AND isDeleted = 0 LIMIT 1`).get(d.id, dateKey);
-      const next = db.prepare(`SELECT * FROM tokens WHERE currentDepartmentId = ? AND dateKey = ? AND status = 'WAITING' AND isDeleted = 0 ORDER BY priority DESC, sequenceIndex ASC LIMIT 1`).get(d.id, dateKey);
-      
+      const stats = statsMap.get(d.id) || {};
       return { 
         departmentId: d.id, departmentName: d.name, departmentCode: d.code,
         waiting: stats.waiting || 0, inProgress: stats.inProgress || 0, done: stats.done || 0, skipped: stats.skipped || 0,
-        nextToken: next || null, currentToken: current || null
+        nextToken: nextMap.get(d.id) || null, currentToken: currentMap.get(d.id) || null
       };
     });
+
     res.json({ data });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
