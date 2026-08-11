@@ -54,6 +54,35 @@ app.use((req, res, next) => {
 
 app.use(cors());
 app.use(bodyParser.json());
+
+// CRITICAL FIX: Clean IndexedDB cache '.0' suffix from patient IDs globally
+const cleanDotZeroId = (val) => {
+  if (typeof val === 'string' && val.endsWith('.0')) {
+    return val.substring(0, val.length - 2);
+  }
+  return val;
+};
+
+const sanitizeIds = (obj) => {
+  if (Array.isArray(obj)) {
+    obj.forEach(sanitizeIds);
+  } else if (obj !== null && typeof obj === 'object') {
+    for (const key of Object.keys(obj)) {
+      if (['patientId', 'patient_id', 'identifier', 'id'].includes(key)) {
+        obj[key] = cleanDotZeroId(obj[key]);
+      } else if (typeof obj[key] === 'object') {
+        sanitizeIds(obj[key]);
+      }
+    }
+  }
+};
+
+app.use((req, res, next) => {
+  if (req.body) sanitizeIds(req.body);
+  if (req.query) sanitizeIds(req.query);
+  next();
+});
+
 app.use('/static', express.static('.'));
 app.use('/apk', express.static(__dirname + '/apk'));
 app.get('/api/version', (req, res) => res.json({ version: '1.0.8', apkUrl: '/apk/nek-kadam.apk' }));
