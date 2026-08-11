@@ -1029,7 +1029,6 @@ if (typeof window !== 'undefined') {
                       loginTime: currentUser.loginTime || new Date().toISOString(),
                       lastSyncTime: null
                     });
-                    console.log('[AUTO-SYNC] Silently acquired session token!');
                   }
                 }
               } catch (err) {
