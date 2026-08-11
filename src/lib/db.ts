@@ -856,7 +856,6 @@ if (typeof window !== 'undefined') {
             if (currentUserStr) {
               try {
                 const currentUser = JSON.parse(currentUserStr);
-                console.log('[AUTO-SYNC] Silent token recovery initiated...');
                 // getBaseUrl is now statically imported at the top
                 const recoveryUrl = getBaseUrl();
                 const res = await fetch(`${recoveryUrl}/api/users/create-profile`, {
