@@ -19,8 +19,7 @@
     "start:all": "node start.cjs",
     "db:sqlite-to-pg": "node migrate_to_pg.cjs",
     "electron:dev": "electron .",
-    "electron:build": "npm run build && electron-builder",
-    "test": "vitest run"
+    "electron:build": "npm run build && electron-builder"
   },
   "main": "electron-main.cjs",
   "dependencies": {
@@ -76,7 +75,6 @@
     "tailwindcss": "^3.4.0",
     "typescript": "^5.2.2",
     "vite": "^5.0.8",
-    "vitest": "^4.1.10",
-    "@vitest/ui": "^4.1.10"
+    "vitest": "^4.1.10"
   }
 }
