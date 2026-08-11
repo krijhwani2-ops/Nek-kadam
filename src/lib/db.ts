@@ -240,7 +240,6 @@ export async function saveVisitOffline(payload: {
     query: payload
   });
   
-  console.log('[OFFLINE SAVE] Visit saved locally & queued for sync:', visitId);
   return visitId;
 }
 
