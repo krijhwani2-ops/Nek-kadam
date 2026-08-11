@@ -248,7 +248,6 @@ export default function NewPatient() {
         }
       }
 
-      console.log('[NEW PATIENT] Registration complete. Navigating...');
       setLoading(false);
       navigate(`/patients/${card_number}`);
     } catch (err: unknown) {
