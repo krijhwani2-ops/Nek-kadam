@@ -558,7 +558,6 @@ export async function syncPendingOps(): Promise<{ synced: number; failed: number
 }
 
 export async function fullDataSync(): Promise<{ success: boolean; message: string }> {
-  console.log('[SYNC] Starting full data sync...');
   const online = await checkServerOnline();
   if (!online) return { success: false, message: 'Server not reachable. Make sure laptop is on & same WiFi.' };
 
