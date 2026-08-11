@@ -416,7 +416,6 @@ export async function fullDataSync(): Promise<{ success: boolean; message: strin
   if (!online) return { success: false, message: 'Server not reachable. Make sure laptop is on & same WiFi.' };
 
   // 1. FIRST: Push all pending local writes to the server
-  console.log('[SYNC] Pushing pending operations first...');
   const syncResult = await syncPendingOps();
 
   const tables = [
@@ -452,7 +451,7 @@ export async function fullDataSync(): Promise<{ success: boolean; message: strin
         await setCache(key, result);
         
         // Merge server data with any remaining unsynced local data
-        let mergedData = Array.isArray(result.data) ? [...result.data] : [];
+        const mergedData = Array.isArray(result.data) ? [...result.data] : [];
         
         // For visits/prescription_groups/group_medicines, preserve pending local entries
         if (['visits', 'prescription_groups', 'group_medicines'].includes(table)) {
