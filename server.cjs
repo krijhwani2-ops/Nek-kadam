@@ -56,7 +56,7 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use('/static', express.static('.'));
 app.use('/apk', express.static(__dirname + '/apk'));
-app.get('/api/version', (req, res) => res.json({ version: '1.0.7', apkUrl: '/apk/nek-kadam.apk' }));
+app.get('/api/version', (req, res) => res.json({ version: '1.0.8', apkUrl: '/apk/nek-kadam.apk' }));
 
 // ─────────────────────────────────────
 //  ECOSYSTEM: Request Logger

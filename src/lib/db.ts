@@ -5,19 +5,26 @@ import { getStoredSession, setStoredSession, getBaseUrl } from './session';
 // No silent failures. Every operation is try-catched.
 
 // Allow overriding the server IP for mobile connectivity
-const savedIp = typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_SERVER_IP') : null;
-const SERVER_IP = savedIp || '192.168.29.180';
 const SERVER_PORT = 3001;
 const API_URL_LOCAL = '/rpc';
-const API_URL_REMOTE = `http://${SERVER_IP}:${SERVER_PORT}/rpc`;
 
-let activeApiUrl = (typeof window !== 'undefined' && window.location.hostname === 'localhost') ? API_URL_LOCAL : API_URL_REMOTE;
+function getRemoteApiUrl(): string {
+  const savedIp = typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_SERVER_IP') : null;
+  const ip = savedIp || '192.168.29.180';
+  return `http://${ip}:${SERVER_PORT}/rpc`;
+}
+
+let activeApiUrl = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) 
+  ? API_URL_LOCAL 
+  : getRemoteApiUrl();
 
 export function setServerIp(ip: string) {
   if (ip) {
     localStorage.setItem('NEK_KADAM_SERVER_IP', ip);
+    activeApiUrl = `http://${ip}:${SERVER_PORT}/rpc`;
   } else {
     localStorage.removeItem('NEK_KADAM_SERVER_IP');
+    activeApiUrl = `http://192.168.29.180:${SERVER_PORT}/rpc`;
   }
 }
 
@@ -26,7 +33,10 @@ export function getServerIp() {
 }
 
 function getApiUrl(): string {
-  return activeApiUrl;
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return API_URL_LOCAL;
+  }
+  return getRemoteApiUrl();
 }
 
 // ─── UUID Generator (deterministic, no duplicates) ───
@@ -281,9 +291,137 @@ export async function getPendingVisitsForPatient(patientId: string): Promise<any
   return pendingVisits;
 }
 
-// ─── Server Health Check ───
+// ─── Server Health Check & Local Auto-Discovery ───
 let _serverOnline: boolean | null = null;
 let _lastCheck = 0;
+let isAutoDiscovering = false;
+
+const COMMON_SUBNETS = [
+  '192.168.43.',  // Android hotspot (highest priority for offline camps!)
+  '192.168.137.', // Windows hotspot
+  '192.168.29.',  // Camp subnet
+  '192.168.1.',   // Common router
+  '192.168.0.',   // D-Link router
+  '192.168.8.',   // 4G dongle/hotspot
+  '192.168.3.',   // Router
+  '192.168.100.', // Fiber router
+  '192.168.2.',   // Belkin/other router
+  '10.0.0.'       // Apple hotspot/Enterprise
+];
+
+async function getClientLocalSubnets(): Promise<string[]> {
+  return new Promise((resolve) => {
+    const subnets: string[] = [];
+    try {
+      const RTCPeerConnectionClass = (window as any).RTCPeerConnection || (window as any).webkitRTCPeerConnection || (window as any).mozRTCPeerConnection;
+      if (!RTCPeerConnectionClass) {
+        resolve([]);
+        return;
+      }
+      const pc = new RTCPeerConnectionClass({ iceServers: [] });
+      pc.createDataChannel('');
+      pc.createOffer().then((offer: any) => pc.setLocalDescription(offer)).catch(() => {});
+      
+      pc.onicecandidate = (ice: any) => {
+        if (!ice || !ice.candidate || !ice.candidate.candidate) {
+          resolve(subnets);
+          return;
+        }
+        const candidate = ice.candidate.candidate;
+        const ipRegex = /([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3})\.[0-9]{1,3}/;
+        const match = candidate.match(ipRegex);
+        if (match && match[1]) {
+          const subnet = match[1] + '.';
+          if (!subnets.includes(subnet) && subnet !== '0.0.0.' && subnet !== '127.0.0.') {
+            subnets.push(subnet);
+          }
+        }
+      };
+      setTimeout(() => resolve(subnets), 1000);
+    } catch (e) {
+      resolve([]);
+    }
+  });
+}
+
+async function scanSubnetForServer(subnetBase: string, port: number = 3001): Promise<string | null> {
+  const chunkSize = 40;
+  for (let offset = 1; offset <= 254; offset += chunkSize) {
+    const promises: Promise<string>[] = [];
+    const controllers: AbortController[] = [];
+    const limit = Math.min(offset + chunkSize - 1, 254);
+    
+    for (let i = offset; i <= limit; i++) {
+      const ip = `${subnetBase}${i}`;
+      const controller = new AbortController();
+      controllers.push(controller);
+      
+      const p = (async () => {
+        const timeout = setTimeout(() => controller.abort(), 800);
+        try {
+          const res = await fetch(`http://${ip}:${port}/api/version`, {
+            method: 'GET',
+            signal: controller.signal
+          });
+          clearTimeout(timeout);
+          if (res.ok) {
+            const data = await res.json().catch(() => null);
+            if (data && data.version) {
+              return ip;
+            }
+          }
+        } catch (e) {
+          // fail or abort
+        }
+        throw new Error('Not found');
+      })();
+      promises.push(p);
+    }
+    
+    try {
+      const foundIp = await Promise.any(promises);
+      controllers.forEach(c => c.abort());
+      return foundIp;
+    } catch (err) {
+      // try next chunk
+    }
+  }
+  return null;
+}
+
+export async function discoverLocalServer(): Promise<string | null> {
+  if (isAutoDiscovering) return null;
+  isAutoDiscovering = true;
+  console.log('[AUTO-DISCOVERY] Started background local network discovery...');
+  
+  try {
+    const detectedSubnets = await getClientLocalSubnets();
+    const scanList = [...detectedSubnets];
+    for (const sub of COMMON_SUBNETS) {
+      if (!scanList.includes(sub)) scanList.push(sub);
+    }
+    
+    for (const subnet of scanList) {
+      const foundIp = await scanSubnetForServer(subnet);
+      if (foundIp) {
+        console.log(`[AUTO-DISCOVERY] Nek Kadam Server FOUND at: http://${foundIp}:3001`);
+        localStorage.setItem('NEK_KADAM_SERVER_IP', foundIp);
+        activeApiUrl = `http://${foundIp}:${SERVER_PORT}/rpc`;
+        _serverOnline = true;
+        _lastCheck = Date.now();
+        
+        window.dispatchEvent(new Event('nk_live_sync_completed'));
+        window.dispatchEvent(new CustomEvent('nk_server_ip_changed', { detail: foundIp }));
+        isAutoDiscovering = false;
+        return foundIp;
+      }
+    }
+  } catch (e) {
+    console.error('[AUTO-DISCOVERY] Error during network scanning:', e);
+  }
+  isAutoDiscovering = false;
+  return null;
+}
 
 export async function checkServerOnline(): Promise<boolean> {
   if (_serverOnline !== null && Date.now() - _lastCheck < 5000) return _serverOnline;
@@ -307,18 +445,27 @@ export async function checkServerOnline(): Promise<boolean> {
     } catch { return false; }
   };
 
-  let online = await tryPing(API_URL_REMOTE);
+  const remoteUrl = getRemoteApiUrl();
+  let online = await tryPing(remoteUrl);
   if (online) {
-    activeApiUrl = API_URL_REMOTE;
+    activeApiUrl = remoteUrl;
   } else {
-    // Try current host or localhost
     const originUrl = `${window.location.protocol}//${window.location.hostname}:${SERVER_PORT}/rpc`;
     online = await tryPing(originUrl);
     if (online) {
       activeApiUrl = originUrl;
     } else {
       online = await tryPing(API_URL_LOCAL);
-      if (online) activeApiUrl = API_URL_LOCAL;
+      if (online) {
+        activeApiUrl = API_URL_LOCAL;
+      } else {
+        // Trigger silent background network scanning
+        if (!isAutoDiscovering) {
+          discoverLocalServer().catch(err => {
+            console.error('[AUTO-DISCOVERY] Background scan failed:', err);
+          });
+        }
+      }
     }
   }
 

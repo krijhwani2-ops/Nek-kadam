@@ -46,6 +46,17 @@ export default function Settings() {
   const [serverIp, setServerIpValue] = useState(getServerIp());
   const [ipSaving, setIpSaving] = useState(false);
 
+  useEffect(() => {
+    const handleIpChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        setServerIpValue(customEvent.detail);
+      }
+    };
+    window.addEventListener('nk_server_ip_changed', handleIpChange);
+    return () => window.removeEventListener('nk_server_ip_changed', handleIpChange);
+  }, []);
+
   async function handleIpSave() {
     setIpSaving(true);
     setServerIp(serverIp);

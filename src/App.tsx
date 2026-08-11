@@ -58,7 +58,7 @@ function BackButtonHandler() {
   return null;
 }
 
-const APP_VERSION = "1.0.7"; // Increment this in future builds
+const APP_VERSION = "1.0.8"; // Increment this in future builds
 
 function OTAUpdater() {
   const [updateAvailable, setUpdateAvailable] = useState<{version: string, apkUrl: string} | null>(null);
