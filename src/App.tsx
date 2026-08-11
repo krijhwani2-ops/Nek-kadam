@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { getBaseUrl } from './lib/session';
 import { App as CapApp } from '@capacitor/app';
@@ -15,20 +15,20 @@ import { useApp } from './contexts/AppContext';
 import { QRCodeSVG } from 'qrcode.react';
 
 // Pages
-import Dashboard from './pages/Dashboard';
-import PatientsList from './pages/PatientsList';
-import PatientProfile from './pages/PatientProfile';
-import NewPatient from './pages/NewPatient';
-import Medicines from './pages/Medicines';
-import ImportPatients from './pages/ImportPatients';
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const PatientsList = lazy(() => import('./pages/PatientsList'));
+const PatientProfile = lazy(() => import('./pages/PatientProfile'));
+const NewPatient = lazy(() => import('./pages/NewPatient'));
+const Medicines = lazy(() => import('./pages/Medicines'));
+const ImportPatients = lazy(() => import('./pages/ImportPatients'));
 import Login from './pages/Login';
 import SplashScreen from './components/SplashScreen';
-import SettingsPage from './pages/Settings';
-import Attendance from './pages/Attendance';
-import MedicineQueue from './pages/MedicineQueue';
-import MedicineDashboard from './pages/MedicineDashboard';
-import UserProfile from './pages/UserProfile';
-import Chat from './pages/Chat';
+const SettingsPage = lazy(() => import('./pages/Settings'));
+const Attendance = lazy(() => import('./pages/Attendance'));
+const MedicineQueue = lazy(() => import('./pages/MedicineQueue'));
+const MedicineDashboard = lazy(() => import('./pages/MedicineDashboard'));
+const UserProfile = lazy(() => import('./pages/UserProfile'));
+const Chat = lazy(() => import('./pages/Chat'));
 
 // ─── BACK BUTTON HANDLER (Android Hardware Back) ───
 function BackButtonHandler() {
@@ -730,6 +730,7 @@ function AppLayout() {
         
         <main className={`flex-1 min-h-0 relative ${location.pathname === '/chat' ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}`}>
           <div className={`mx-auto pb-20 md:pb-0 ${location.pathname === '/chat' ? 'p-0 w-full h-full max-w-none flex-grow flex flex-col' : 'max-w-7xl p-4 md:p-6 lg:p-8'}`}>
+            <Suspense fallback={<div className="flex h-full items-center justify-center"><div className="w-8 h-8 rounded-full border-2 border-emerald-100 border-t-emerald-500 animate-spin"></div></div>}>
             <Routes>
               <Route path="/login" element={!isLoggedIn ? <Login /> : <Navigate to="/" replace />} />
               
@@ -753,6 +754,7 @@ function AppLayout() {
               <Route path="/dashboard" element={<Navigate to="/" replace />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            </Suspense>
           </div>
         </main>
         
