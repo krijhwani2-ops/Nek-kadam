@@ -437,24 +437,40 @@ app.get('/api/patients/:identifier/visits', async (req, res) => {
     const cardNumber = patient ? patient.card_number : identifier;
 
     const visits = await execSqliteStyle('SELECT * FROM visits WHERE patient_id = ? ORDER BY date DESC', [cardNumber]);
-    const enriched = [];
-    for (const v of visits) {
-      const groups = await execSqliteStyle('SELECT * FROM prescription_groups WHERE visit_id = ?', [v.id]);
-      const enrichedGroups = [];
-      for (const g of groups) {
-        const meds = await qr(
-          `
+    let allGroups = [];
+    let allMeds = [];
+
+    if (visits.length > 0) {
+      const visitIds = visits.map(v => v.id);
+      allGroups = await qr(`SELECT * FROM prescription_groups WHERE visit_id = ANY($1)`, [visitIds]);
+
+      if (allGroups.length > 0) {
+        const groupIds = allGroups.map(g => g.id);
+        allMeds = await qr(`
           SELECT gm.*, COALESCE(m.name, gm.medicine_code) AS medicine_name
           FROM group_medicines gm
           LEFT JOIN medicines m ON gm.medicine_code = m.code
-          WHERE gm.group_id = $1
-          `,
-          [g.id]
-        );
-        enrichedGroups.push({ ...g, group_medicines: meds });
+          WHERE gm.group_id = ANY($1)
+        `, [groupIds]);
       }
-      enriched.push({ ...v, prescription_groups: enrichedGroups });
     }
+
+    const medsByGroup = {};
+    for (const m of allMeds) {
+      if (!medsByGroup[m.group_id]) medsByGroup[m.group_id] = [];
+      medsByGroup[m.group_id].push(m);
+    }
+
+    const groupsByVisit = {};
+    for (const g of allGroups) {
+      if (!groupsByVisit[g.visit_id]) groupsByVisit[g.visit_id] = [];
+      groupsByVisit[g.visit_id].push({ ...g, group_medicines: medsByGroup[g.id] || [] });
+    }
+
+    const enriched = visits.map(v => ({
+      ...v,
+      prescription_groups: groupsByVisit[v.id] || []
+    }));
     res.json({ data: enriched });
   } catch (e) {
     res.status(500).json({ error: e.message });

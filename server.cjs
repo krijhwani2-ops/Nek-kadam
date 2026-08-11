@@ -512,24 +512,42 @@ app.get('/api/patients/:identifier/visits', (req, res) => {
     console.log(`[API] Found ${visits.length} visits for card_number: "${cardNumber}"`);
 
     // 2. For each visit, get prescription_groups + group_medicines in bulk
-    const enriched = visits.map(v => {
-      const groups = db.prepare(
-        'SELECT * FROM prescription_groups WHERE visit_id = ?'
-      ).all(v.id);
+    let allGroups = [];
+    let allMeds = [];
 
-      const enrichedGroups = groups.map(g => {
-        // Use COALESCE to ensure we always have a displayable name
-        const meds = db.prepare(`
+    if (visits.length > 0) {
+      const visitIds = visits.map(v => v.id);
+      const placeholdersV = visitIds.map(() => '?').join(',');
+      allGroups = db.prepare(`SELECT * FROM prescription_groups WHERE visit_id IN (${placeholdersV})`).all(...visitIds);
+
+      if (allGroups.length > 0) {
+        const groupIds = allGroups.map(g => g.id);
+        const placeholdersG = groupIds.map(() => '?').join(',');
+        allMeds = db.prepare(`
           SELECT gm.*, COALESCE(m.name, gm.medicine_code) as medicine_name 
           FROM group_medicines gm
           LEFT JOIN medicines m ON gm.medicine_code = m.code
-          WHERE gm.group_id = ?
-        `).all(g.id);
-        return { ...g, group_medicines: meds };
-      });
+          WHERE gm.group_id IN (${placeholdersG})
+        `).all(...groupIds);
+      }
+    }
 
-      return { ...v, prescription_groups: enrichedGroups };
-    });
+    const medsByGroup = {};
+    for (const m of allMeds) {
+      if (!medsByGroup[m.group_id]) medsByGroup[m.group_id] = [];
+      medsByGroup[m.group_id].push(m);
+    }
+
+    const groupsByVisit = {};
+    for (const g of allGroups) {
+      if (!groupsByVisit[g.visit_id]) groupsByVisit[g.visit_id] = [];
+      groupsByVisit[g.visit_id].push({ ...g, group_medicines: medsByGroup[g.id] || [] });
+    }
+
+    const enriched = visits.map(v => ({
+      ...v,
+      prescription_groups: groupsByVisit[v.id] || []
+    }));
 
     res.json({ data: enriched });
   } catch (e) {
@@ -969,8 +987,18 @@ function ensureMedicineTask(visitId) {
     if (groups.length === 0) return;
 
     const allMedsForTask = [];
+    const groupIds = groups.map(g => g.id);
+    const placeholders = groupIds.map(() => '?').join(',');
+    const allMeds = db.prepare(`SELECT gm.group_id, gm.medicine_code, m.name FROM group_medicines gm LEFT JOIN medicines m ON gm.medicine_code = m.code WHERE gm.group_id IN (${placeholders})`).all(...groupIds);
+
+    const medsByGroup = {};
+    for (const med of allMeds) {
+      if (!medsByGroup[med.group_id]) medsByGroup[med.group_id] = [];
+      medsByGroup[med.group_id].push(med);
+    }
+
     for (const group of groups) {
-      const meds = db.prepare('SELECT gm.medicine_code, m.name FROM group_medicines gm LEFT JOIN medicines m ON gm.medicine_code = m.code WHERE gm.group_id = ?').all(group.id);
+      const meds = medsByGroup[group.id] || [];
       for (const med of meds) {
         allMedsForTask.push({
           code: med.medicine_code,
