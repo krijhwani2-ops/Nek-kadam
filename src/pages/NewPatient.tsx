@@ -177,7 +177,6 @@ export default function NewPatient() {
     }
 
     try {
-      console.log('[NEW PATIENT] Starting registration for:', card_number);
       
       // 1. Create Patient
       const patientData = { 
