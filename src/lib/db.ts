@@ -28,6 +28,16 @@ export function setServerIp(ip: string) {
   }
 }
 
+
+export function getDeviceId(): string {
+  let id = localStorage.getItem('nk_device_id');
+  if (!id) {
+    id = generateUUID();
+    localStorage.setItem('nk_device_id', id);
+  }
+  return id;
+}
+
 export function getServerIp() {
   return localStorage.getItem('NEK_KADAM_SERVER_IP') || '192.168.29.180';
 }
@@ -246,7 +256,7 @@ export async function saveVisitOffline(payload: {
   // 4. Queue SINGLE compound save-full operation (NOT 3 separate RPC inserts)
   await addPendingOp({
     action: 'save-full',
-    query: payload
+    query: { ...payload, id: visitId }
   });
   
   return visitId;
@@ -482,72 +492,71 @@ export async function syncPendingOps(): Promise<{ synced: number; failed: number
 
   let synced = 0;
   let failed = 0;
-  const failedOps: any[] = [];
-  const url = getApiUrl();
+  let failedOps: any[] = [];
+  const url = getBaseUrl();
+  const session = await getStoredSession();
+  const token = session?.sessionId || localStorage.getItem('nk_token') || '';
 
-  for (const op of ops) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8000);
-      const session = await getStoredSession();
-      const token = session?.sessionId || localStorage.getItem('nk_token') || '';
-      
-      // Determine the correct endpoint based on action type
-      let fetchUrl: string;
-      let fetchBody: string;
-      
-      if (op.action === 'save-full') {
-        // Compound visit save — send to the dedicated API endpoint
-        const baseUrl = getBaseUrl();
-        fetchUrl = `${baseUrl}/api/visits/save-full`;
-        fetchBody = JSON.stringify(op.query);
-      } else {
-        // Standard RPC operations (insert/update/upsert/delete)
-        fetchUrl = `${url}/${op.action}`;
-        fetchBody = JSON.stringify(op.query);
-      }
-      
-      const res = await fetch(fetchUrl, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: fetchBody,
-        signal: controller.signal
-      });
-      clearTimeout(timeout);
-      if (res.status === 401) {
-        console.warn('[SYNC] Received 401 Unauthorized. Clearing invalid session token for recovery.');
-        localStorage.removeItem('nk_token');
-        await setStoredSession(null);
-        failed++;
-        failedOps.push(op);
-        continue;
-      }
-      if (res.ok) {
-        const result = await res.json().catch(() => ({}));
-        if (result && result.error) {
-          console.error('[SYNC] Server returned error for operation:', result.error, op);
-          // For UNIQUE constraint errors on medicines, drop them (they already exist)
-          if (String(result.error).includes('UNIQUE constraint') && op.query?.table === 'medicines') {
-            console.warn('[SYNC] Dropping duplicate medicine insert (already exists on server).');
+  // Format operations for batch push
+  const payload = {
+    deviceId: getDeviceId(),
+    operations: ops.map(op => ({
+      operationId: op.id,
+      entity: op.query.table || 'bulk',
+      operationType: op.action,
+      payload: op.query,
+      userId: session?.userId,
+      ...op
+    }))
+  };
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    const res = await fetch(`${url}/api/sync/push`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeout);
+
+    if (res.status === 401) {
+      console.warn('[SYNC] Received 401 Unauthorized. Clearing invalid session token for recovery.');
+      localStorage.removeItem('nk_token');
+      await setStoredSession(null);
+      return { synced: 0, failed: ops.length, total: ops.length };
+    }
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.results) {
+        for (const op of ops) {
+          const result = data.results.find((r: any) => r.operationId === op.id);
+          if (result && (result.status === 'APPLIED' || result.status === 'ALREADY_APPLIED')) {
             synced++;
           } else {
             failed++;
             failedOps.push(op);
           }
-        } else {
-          synced++;
         }
       } else {
-        failed++;
-        failedOps.push(op);
+        failedOps = ops;
+        failed = ops.length;
       }
-    } catch {
-      failed++;
-      failedOps.push(op);
+    } else {
+      failedOps = ops;
+      failed = ops.length;
     }
+  } catch (err) {
+    console.error('[SYNC] Push batch failed:', err);
+    failedOps = ops;
+    failed = ops.length;
   }
 
   const idb = await dbPromise;
