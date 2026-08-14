@@ -1,0 +1,5 @@
+I have completed the backend regression fixes:
+1. Ported the missing token endpoints (`move`, `skip`, `requeue`, `cancel`, `priority`, `GET /api/tokens`, `GET /api/tokens/:tokenId/events`) from `server_pg.cjs` into `server.cjs` (the SQLite offline backend) using `better-sqlite3` syntax.
+2. Fixed a parameter mismatch in `server_pg.cjs` for `/api/education/students/:id/remove` -> `/api/education/students/:studentId/remove` to match the frontend and `server.cjs`.
+
+Tests are passing and types check out. I have updated `server.cjs` and `server_pg.cjs`. I did not modify any frontend UI, so no screenshot diff is needed.
