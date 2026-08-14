@@ -726,6 +726,46 @@ app.get('/api/tokens/dashboard', (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+
+app.get('/api/tokens', (req, res) => {
+  try {
+    const { departmentId, status, dateKey } = req.query;
+    let sql = `
+      SELECT t.*, d.code as departmentCode, d.name as departmentName
+      FROM tokens t
+      LEFT JOIN departments d ON t.currentDepartmentId = d.id
+      WHERE t.isDeleted = 0
+    `;
+    const params = [];
+    if (departmentId) {
+      sql += ' AND t.currentDepartmentId = ?';
+      params.push(departmentId);
+    }
+    if (status) {
+      sql += ' AND t.status = ?';
+      params.push(status);
+    }
+    if (dateKey) {
+      sql += ' AND t.dateKey = ?';
+      params.push(dateKey);
+    }
+    sql += ' ORDER BY CASE WHEN t.priority = \'URGENT\' THEN 1 ELSE 2 END, t.sequenceIndex ASC';
+    const tokens = db.prepare(sql).all(...params);
+    res.json({ data: tokens });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/tokens/:tokenId/events', (req, res) => {
+  try {
+    const rows = db.prepare('SELECT id, tokenId, userId, departmentId, event, metadata, timestamp FROM token_events WHERE tokenId = ? ORDER BY timestamp DESC').all(req.params.tokenId);
+    res.json({ data: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/tokens/create', (req, res) => {
   try {
     const result = db.transaction(() => {
@@ -768,6 +808,54 @@ app.post('/api/tokens/start', (req, res) => {
     
     db.prepare("UPDATE tokens SET status = 'IN_PROGRESS' WHERE id = ?").run(targetId);
     res.json({ data: db.prepare('SELECT * FROM tokens WHERE id = ?').get(targetId) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+
+app.post('/api/tokens/move', (req, res) => {
+  try {
+    const { tokenId } = req.body;
+    const t = db.prepare('SELECT * FROM tokens WHERE id = ?').get(tokenId);
+    if (!t) return res.json({ error: 'Token not found' });
+    const order = db.prepare('SELECT id FROM departments WHERE isActive = 1 ORDER BY code ASC').all().map(r => r.id);
+    const ix = order.indexOf(t.currentDepartmentId);
+    if (ix >= 0 && ix < order.length - 1) {
+      const nextDept = order[ix + 1];
+      const nextSeq = (db.prepare('SELECT MAX(sequenceIndex) as m FROM tokens WHERE currentDepartmentId = ? AND dateKey = ?').get(nextDept, t.dateKey).m || 0) + 1;
+      db.prepare("UPDATE tokens SET currentDepartmentId = ?, status = 'WAITING', sequenceIndex = ? WHERE id = ?").run(nextDept, nextSeq, tokenId);
+    } else {
+      db.prepare("UPDATE tokens SET status = 'DONE' WHERE id = ?").run(tokenId);
+    }
+    const mapped = db.prepare('SELECT * FROM tokens WHERE id = ?').get(tokenId);
+    res.json({ data: mapped });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/tokens/skip', (req, res) => {
+  try {
+    db.prepare("UPDATE tokens SET status = 'SKIPPED' WHERE id = ?").run(req.body.tokenId);
+    res.json({ data: db.prepare('SELECT * FROM tokens WHERE id = ?').get(req.body.tokenId) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/tokens/requeue', (req, res) => {
+  try {
+    db.prepare("UPDATE tokens SET status = 'WAITING' WHERE id = ?").run(req.body.tokenId);
+    res.json({ data: db.prepare('SELECT * FROM tokens WHERE id = ?').get(req.body.tokenId) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/tokens/cancel', (req, res) => {
+  try {
+    db.prepare("UPDATE tokens SET status = 'CANCELLED', isDeleted = 1 WHERE id = ?").run(req.body.tokenId);
+    res.json({ data: db.prepare('SELECT * FROM tokens WHERE id = ?').get(req.body.tokenId) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/tokens/priority', (req, res) => {
+  try {
+    db.prepare("UPDATE tokens SET priority = ? WHERE id = ?").run(req.body.priority, req.body.tokenId);
+    res.json({ data: db.prepare('SELECT * FROM tokens WHERE id = ?').get(req.body.tokenId) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -1060,9 +1060,9 @@ app.post('/api/education/students/create', async (req, res) => {
   }
 });
 
-app.post('/api/education/students/:id/remove', async (req, res) => {
+app.post('/api/education/students/:studentId/remove', async (req, res) => {
   try {
-    const studentId = req.params.id;
+    const studentId = req.params.studentId;
     await q(`DELETE FROM attendance WHERE "studentId" = $1`, [studentId]);
     await q(`DELETE FROM education_students WHERE id = $1`, [studentId]);
     res.json({ success: true });
