@@ -424,6 +424,8 @@ function TopBar({ onSync, syncing, onToggleMenu }: { onSync: () => void, syncing
           <button 
             onClick={() => navigate(-1)} 
             className="p-2 rounded-full hover:bg-emerald-700 active:bg-emerald-800"
+            aria-label="Go back"
+            title="Go back"
           >
             <ChevronLeft size={22} />
           </button>
