@@ -799,11 +799,11 @@ export default function PatientProfile() {
                 </div>
                 <div className="flex gap-1.5">
                   {medicineGroups.length > 1 && (
-                    <button type="button" onClick={() => removeGroup(activeGroupIndex)} className="p-2 bg-red-50 dark:bg-red-950/20 text-red-500 dark:text-red-400 rounded-xl hover:bg-red-500 dark:hover:bg-red-600 hover:text-white transition-all border border-red-100 dark:border-red-900/30 shadow-sm">
+                    <button type="button" onClick={() => removeGroup(activeGroupIndex)} aria-label="Remove combination" className="p-2 bg-red-50 dark:bg-red-950/20 text-red-500 dark:text-red-400 rounded-xl hover:bg-red-500 dark:hover:bg-red-600 hover:text-white transition-all border border-red-100 dark:border-red-900/30 shadow-sm">
                       <Trash2 size={16} />
                     </button>
                   )}
-                  <button type="button" onClick={addGroup} className="p-2 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-500 dark:text-emerald-400 rounded-xl hover:bg-emerald-500 dark:hover:bg-emerald-600 hover:text-white transition-all border border-emerald-100 dark:border-emerald-900/30 shadow-sm">
+                  <button type="button" onClick={addGroup} aria-label="Add combination" className="p-2 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-500 dark:text-emerald-400 rounded-xl hover:bg-emerald-500 dark:hover:bg-emerald-600 hover:text-white transition-all border border-emerald-100 dark:border-emerald-900/30 shadow-sm">
                     <Plus size={16} />
                   </button>
                 </div>
@@ -898,7 +898,7 @@ export default function PatientProfile() {
                   <div className="flex items-center gap-2 shrink-0">
                     <input type="number" min="1" value={currentQuantity} onChange={(e) => setCurrentQuantity(parseInt(e.target.value) || 1)} className="w-16 px-2 py-2 bg-slate-50 dark:bg-slate-900 rounded-xl outline-none font-black text-center text-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100" />
                     
-                    <button type="button" onClick={handleAddMedicine} disabled={!currentCode.trim() || !currentName.trim()} className="px-4 py-2 bg-emerald-600 text-white rounded-xl disabled:opacity-50 font-black flex items-center justify-center shrink-0">
+                    <button type="button" onClick={handleAddMedicine} disabled={!currentCode.trim() || !currentName.trim()} aria-label="Add medicine" className="px-4 py-2 bg-emerald-600 text-white rounded-xl disabled:opacity-50 font-black flex items-center justify-center shrink-0">
                       <Plus size={20} strokeWidth={3} />
                     </button>
                   </div>
@@ -919,7 +919,7 @@ export default function PatientProfile() {
                               const updated = [...medicineGroups];
                               updated[activeGroupIndex].meds = updated[activeGroupIndex].meds.filter(m => m.code !== med.code);
                               setMedicineGroups(updated);
-                          }} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
+                          }} aria-label="Remove medicine" className="p-2 text-slate-300 hover:text-red-500 transition-colors">
                             <Trash2 size={16} />
                           </button>
                         </div>
@@ -1146,11 +1146,11 @@ export default function PatientProfile() {
                       </div>
                       <div className="flex gap-1.5">
                         {editVisitMeds.length > 1 && (
-                          <button type="button" onClick={() => removeEditGroup(editActiveGroupIndex)} className="p-2 bg-red-50 dark:bg-red-955/20 text-red-500 dark:text-red-400 rounded-lg hover:bg-red-500 dark:hover:bg-red-600 hover:text-white transition-all">
+                          <button type="button" onClick={() => removeEditGroup(editActiveGroupIndex)} aria-label="Remove combination" className="p-2 bg-red-50 dark:bg-red-955/20 text-red-500 dark:text-red-400 rounded-lg hover:bg-red-500 dark:hover:bg-red-600 hover:text-white transition-all">
                             <Trash2 size={14} />
                           </button>
                         )}
-                        <button type="button" onClick={addEditGroup} className="p-2 bg-emerald-50 dark:bg-emerald-955/20 text-emerald-500 dark:text-emerald-400 rounded-lg hover:bg-emerald-500 dark:hover:bg-emerald-600 hover:text-white transition-all">
+                        <button type="button" onClick={addEditGroup} aria-label="Add combination" className="p-2 bg-emerald-50 dark:bg-emerald-955/20 text-emerald-500 dark:text-emerald-400 rounded-lg hover:bg-emerald-500 dark:hover:bg-emerald-600 hover:text-white transition-all">
                           <Plus size={14} />
                         </button>
                       </div>

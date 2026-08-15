@@ -278,6 +278,7 @@ export default function Chat() {
             <button 
               onClick={() => setAttachment(null)} 
               className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-full transition-colors shrink-0"
+              aria-label="Remove attachment"
             >
               <X size={14} />
             </button>
