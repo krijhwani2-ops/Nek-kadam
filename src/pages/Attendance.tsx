@@ -321,7 +321,7 @@ export default function Attendance() {
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden flex flex-col">
             <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <h3 className="font-black text-slate-800 dark:text-slate-100">Create New Batch</h3>
-              <button onClick={() => setShowBatchModal(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400">
+              <button onClick={() => setShowBatchModal(false)} aria-label="Close modal" className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400">
                 <X size={20} />
               </button>
             </div>
@@ -363,7 +363,7 @@ export default function Attendance() {
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <h3 className="font-black text-slate-800 dark:text-slate-100">Add Child</h3>
-              <button onClick={() => setShowEnroll(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400">
+              <button onClick={() => setShowEnroll(false)} aria-label="Close modal" className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400">
                 <X size={20} />
               </button>
             </div>
@@ -564,6 +564,7 @@ export default function Attendance() {
                       onClick={(e) => handleRemoveStudent(s.educationStudentId, s.name, e)}
                       className="p-1.5 text-slate-300 dark:text-slate-600 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors ml-1"
                       title="Remove Student"
+                      aria-label="Remove student"
                     >
                       <Trash2 size={16} />
                     </button>
