@@ -308,6 +308,7 @@ function Sidebar() {
                onClick={() => setShowQrModal(true)}
                className="p-2 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950 text-emerald-600 hover:text-emerald-700 border border-slate-200 dark:border-slate-700 shadow-sm rounded-lg transition-all shrink-0 flex items-center justify-center"
                title="Show Access QR Code"
+               aria-label="Open QR code"
              >
                <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">QR</span>
              </button>
@@ -424,6 +425,7 @@ function TopBar({ onSync, syncing, onToggleMenu }: { onSync: () => void, syncing
           <button 
             onClick={() => navigate(-1)} 
             className="p-2 rounded-full hover:bg-emerald-700 active:bg-emerald-800"
+            aria-label="Go back"
           >
             <ChevronLeft size={22} />
           </button>
