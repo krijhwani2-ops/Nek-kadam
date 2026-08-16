@@ -112,6 +112,7 @@ export default function PatientsList() {
           <button
             onClick={() => { setLocalQuery(''); setSearchQuery(''); }}
             className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-lg leading-none font-bold"
+            aria-label="Clear search"
           >
             ×
           </button>
