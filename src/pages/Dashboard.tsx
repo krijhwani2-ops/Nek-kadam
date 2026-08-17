@@ -167,7 +167,7 @@ export default function Dashboard() {
             <h1 className="font-bold text-2xl">{session.userName}</h1>
             <p className="text-emerald-200 text-xs uppercase tracking-wide font-bold">{session.department} • {session.role}</p>
           </div>
-          <button onClick={() => window.location.reload()} className="p-2 bg-emerald-800 rounded-lg active:bg-emerald-900 border border-emerald-600">
+          <button onClick={() => window.location.reload()} className="p-2 bg-emerald-800 rounded-lg active:bg-emerald-900 border border-emerald-600" aria-label="Refresh Dashboard">
             <RefreshCw size={18} />
           </button>
         </div>
