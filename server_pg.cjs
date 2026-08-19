@@ -58,7 +58,7 @@ io.on('connection', (socket) => {
   });
 });
 
-app.get('*', (req, res, next) => {
+app.use((req, res, next) => {
   req.io = io;
   next();
 });
@@ -120,7 +120,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use('/static', express.static('.'));
+app.use('/static', express.static('dist'));
 app.use(express.static(path.join(__dirname, 'dist')));
 
 app.use((req, res, next) => {
@@ -500,6 +500,7 @@ app.get('/api/patients/:identifier/visits', async (req, res) => {
       ...v,
       prescription_groups: groupsByVisit[v.id] || []
     }));
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.json({ data: enriched });
   } catch (e) {
     res.status(500).json({ error: e.message });
