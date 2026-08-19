@@ -8,6 +8,17 @@ import { openDB } from 'idb';
 const savedIp = typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_SERVER_IP') : null;
 const SERVER_IP = savedIp || '192.168.29.180';
 const SERVER_PORT = 3001;
+const CLOUD_URL = 'https://nekkadam.onrender.com';
+
+/** Returns true if hostname is a private/local network address */
+function isPrivateNetwork(hostname: string): boolean {
+  if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
+  if (hostname.startsWith('192.168.') || hostname.startsWith('10.')) return true;
+  // 172.16.0.0 – 172.31.255.255
+  const m = hostname.match(/^172\.(\d+)\./);
+  if (m && +m[1] >= 16 && +m[1] <= 31) return true;
+  return false;
+}
 
 export function setServerIp(ip: string) {
   if (ip) {
@@ -22,11 +33,18 @@ export function getServerIp() {
 }
 
 export function getBaseUrl(): string {
+  // 0. Cloud detection: public domain browser → same-origin (no port needed)
+  if (typeof window !== 'undefined'
+      && typeof (window as any)?.Capacitor === 'undefined'
+      && !isPrivateNetwork(window.location.hostname)) {
+    return '';  // relative to same origin
+  }
+
   // 1. For mobile/Capacitor (needs remote IP) - Check this first!
   if (typeof (window as any)?.Capacitor !== 'undefined') {
     const savedIp = localStorage.getItem('NEK_KADAM_SERVER_IP');
     if (savedIp) return `http://${savedIp}:${SERVER_PORT}`;
-    return `http://${SERVER_IP}:${SERVER_PORT}`;
+    return CLOUD_URL;  // APK defaults to cloud (works everywhere)
   }
 
   // 2. If running in browser/Electron on the server machine
