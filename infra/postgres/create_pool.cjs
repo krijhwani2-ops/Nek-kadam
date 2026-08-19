@@ -6,6 +6,8 @@
 require('dotenv').config();
 const { Pool } = require('pg');
 
+const DEFAULT_CLOUD_DB = 'postgresql://postgres:nekkadam2026@db.quzmtmvymlrwprewszkr.supabase.co:5432/nekkadam';
+
 function parsePositiveInt(raw, fallback) {
   const n = parseInt(String(raw ?? '').trim(), 10);
   return Number.isFinite(n) && n > 0 ? n : fallback;
@@ -18,11 +20,10 @@ function getDirectClientOptions(override = {}) {
   delete removedDup.connectionString;
 
   const superUrl = process.env.POSTGRES_SUPER_URL;
-  const targetUrl = connStr || superUrl || (process.env.DATABASE_URL && !dbOverride ? process.env.DATABASE_URL : null);
+  // If no env is set, use cloud database fallback instead of localhost
+  const targetUrl = connStr || superUrl || process.env.DATABASE_URL || DEFAULT_CLOUD_DB;
 
-  const sslOption = (process.env.DATABASE_URL || connStr || superUrl || process.env.NODE_ENV === 'production')
-    ? { rejectUnauthorized: false }
-    : undefined;
+  const sslOption = { rejectUnauthorized: false };
 
   if (targetUrl) {
     return {
@@ -30,21 +31,6 @@ function getDirectClientOptions(override = {}) {
       ssl: sslOption,
       ...removedDup
     };
-  }
-
-  let database = dbOverride ?? (process.env.PGDATABASE || 'nekkadam');
-  if (process.env.DATABASE_URL && dbOverride) {
-    try {
-      const u = new URL(process.env.DATABASE_URL);
-      u.pathname = `/${dbOverride}`;
-      return {
-        connectionString: u.toString(),
-        ssl: sslOption,
-        ...removedDup
-      };
-    } catch {
-      /* fallback below */
-    }
   }
 
   const host = process.env.PGHOST || '127.0.0.1';
@@ -55,7 +41,7 @@ function getDirectClientOptions(override = {}) {
     password: process.env.PGPASSWORD ?? '',
     host,
     port: parsePositiveInt(process.env.PGPORT, 5432),
-    database,
+    database: dbOverride || process.env.PGDATABASE || 'nekkadam',
     ssl: isLocalHost ? undefined : { rejectUnauthorized: false },
     ...removedDup,
   };
