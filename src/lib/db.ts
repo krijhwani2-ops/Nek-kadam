@@ -7,8 +7,28 @@ import { getStoredSession, setStoredSession, getBaseUrl } from './session';
 // Allow overriding the server IP for mobile connectivity
 const SERVER_PORT = 3001;
 const API_URL_LOCAL = '/rpc';
+const CLOUD_URL = 'https://nekkadam.onrender.com';
+
+/** Returns true if hostname is a private/local network address */
+function isPrivateNetwork(hostname: string): boolean {
+  if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
+  if (hostname.startsWith('192.168.') || hostname.startsWith('10.')) return true;
+  // 172.16.0.0 – 172.31.255.255
+  const m = hostname.match(/^172\.(\d+)\./);
+  if (m && +m[1] >= 16 && +m[1] <= 31) return true;
+  return false;
+}
 
 function getRemoteApiUrl(): string {
+  // Cloud detection: if hosted on a public domain, use relative URL (same origin)
+  if (typeof window !== 'undefined' && !isPrivateNetwork(window.location.hostname)) {
+    return '/rpc';
+  }
+  // Capacitor APK: default to cloud when no custom IP is saved
+  if (typeof window !== 'undefined' && typeof (window as any)?.Capacitor !== 'undefined'
+      && !localStorage.getItem('NEK_KADAM_SERVER_IP')) {
+    return `${CLOUD_URL}/rpc`;
+  }
   const savedIp = typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_SERVER_IP') : null;
   const ip = savedIp || '192.168.29.180';
   return `http://${ip}:${SERVER_PORT}/rpc`;
@@ -37,6 +57,15 @@ function getApiUrl(): string {
     return API_URL_LOCAL;
   }
   return activeApiUrl;
+}
+
+export function cleanPatientId(id: string | number | undefined | null): string {
+  if (id === undefined || id === null) return '';
+  const s = String(id).trim();
+  if (s.endsWith('.0')) {
+    return s.slice(0, -2);
+  }
+  return s;
 }
 
 // ─── UUID Generator (deterministic, no duplicates) ───
@@ -189,9 +218,11 @@ export async function saveVisitOffline(payload: {
   const visitId = 'VISIT-' + Date.now();
   
   // 1. Write visit to local cache for immediate UI display
+  const cleanId = cleanPatientId(payload.patientId);
+  payload.patientId = cleanId;
   const visitRecord = {
     id: visitId,
-    patient_id: payload.patientId,
+    patient_id: cleanId,
     date: payload.date,
     doctor_name: payload.doctorName,
     notes: payload.notes,
@@ -256,9 +287,10 @@ export async function saveVisitOffline(payload: {
 export async function getPendingVisitsForPatient(patientId: string): Promise<any[]> {
   const ops = await getPendingOps();
   const pendingVisits: any[] = [];
-  
   for (const op of ops) {
-    if (op.action === 'save-full' && op.query?.patientId === patientId) {
+    const opPatientId = cleanPatientId(op.query?.patientId);
+    const targetPatientId = cleanPatientId(patientId);
+    if (op.action === 'save-full' && opPatientId === targetPatientId) {
       // Reconstruct a visit-like object from the save-full payload
       const payload = op.query;
       const visitId = `PENDING-${op.id || op.timestamp}`;
@@ -575,7 +607,11 @@ export async function fullDataSync(): Promise<{ success: boolean; message: strin
   // 2. SECOND: Pull all fresh data from the server (which now includes our pushed writes!)
   for (const table of tables) {
     try {
-      const query = { table, select: '*' };
+      // AUDIT FIX: Exclude fileData from chat_messages to avoid downloading binary blobs (was unbounded payload)
+      const selectFields = (table === 'chat_messages') 
+        ? 'id,senderId,senderName,senderDepartment,recipientId,message,timestamp,fileName' 
+        : '*';
+      const query = { table, select: selectFields };
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000); // Increased timeout
       const session = await getStoredSession();
@@ -988,6 +1024,9 @@ export const db = {
 if (typeof window !== 'undefined') {
   const runAutoSync = async () => {
     try {
+      // AUDIT FIX: Skip sync entirely if browser knows it's offline (saves failed fetch timeouts)
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+
       const ops = await getPendingOps();
       if (ops.length > 0) {
         const online = await checkServerOnline();
@@ -1051,6 +1090,6 @@ if (typeof window !== 'undefined') {
   // Sync when window status fires online
   window.addEventListener('online', runAutoSync);
   
-  // Periodically check every 10 seconds
-  setInterval(runAutoSync, 10000);
+  // AUDIT FIX: Reduced from 10s → 30s to cut background network churn by 3x
+  setInterval(runAutoSync, 30000);
 }
