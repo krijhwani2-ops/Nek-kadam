@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: nekkadam
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: node server_pg.cjs
+    envVars:
+      - key: DATABASE_URL
+        sync: false  # Set manually in Render dashboard
+      - key: NODE_ENV
+        value: production
