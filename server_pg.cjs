@@ -1563,7 +1563,11 @@ app.use((req, res, next) => {
 
 async function bootstrap() {
   attachGracefulShutdown();
-  await ensureSchema();
+  try {
+    await ensureSchema();
+  } catch (schemaErr) {
+    console.warn('[SCHEMA WARNING] Schema check deferred/warned:', schemaErr.message);
+  }
   server.listen(port, '0.0.0.0', () => {
     const dbg = process.env.DATABASE_URL ? 'DATABASE_URL' : process.env.PGDATABASE || 'nekkadam';
     console.log(`\x1b[32m[POSTGRES ONLINE]\x1b[0m :${port} bind=0.0.0.0 | DB=${dbg}`);
