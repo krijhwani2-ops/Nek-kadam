@@ -122,7 +122,7 @@ export default function TokenQueue() {
           </h2>
         </div>
         <div className="flex gap-2">
-          <button onClick={loadAll} className="p-2 bg-white border border-slate-200 rounded-lg active:bg-slate-50">
+          <button onClick={loadAll} className="p-2 bg-white border border-slate-200 rounded-lg active:bg-slate-50 hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1 outline-none transition-colors" aria-label="Refresh Queue">
             <RefreshCw size={18} className="text-slate-500" />
           </button>
           <button onClick={() => setShowCreate(true)} className="btn-primary text-sm py-2">
@@ -217,31 +217,31 @@ export default function TokenQueue() {
                 <div className="flex gap-1 shrink-0">
                   {t.status === 'WAITING' && (
                     <>
-                      <button title="Start" disabled={!!busy} onClick={() => doAction('start', { tokenId: t.id, departmentId: t.currentDepartmentId, userId: session?.userId })}
-                        className="p-1.5 rounded-lg bg-amber-50 text-amber-600 active:bg-amber-100"><Play size={14} /></button>
-                      <button title="Skip" disabled={!!busy} onClick={() => doAction('skip', { tokenId: t.id, userId: session?.userId })}
-                        className="p-1.5 rounded-lg bg-slate-50 text-slate-500 active:bg-slate-100"><SkipForward size={14} /></button>
+                      <button title="Start" aria-label={`Start token ${t.tokenNumber}`} disabled={!!busy} onClick={() => doAction('start', { tokenId: t.id, departmentId: t.currentDepartmentId, userId: session?.userId })}
+                        className="p-1.5 rounded-lg bg-amber-50 text-amber-600 active:bg-amber-100 hover:bg-amber-100 focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1 outline-none transition-colors"><Play size={14} /></button>
+                      <button title="Skip" aria-label={`Skip token ${t.tokenNumber}`} disabled={!!busy} onClick={() => doAction('skip', { tokenId: t.id, userId: session?.userId })}
+                        className="p-1.5 rounded-lg bg-slate-50 text-slate-500 active:bg-slate-100 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-1 outline-none transition-colors"><SkipForward size={14} /></button>
                       {t.priority === 'NORMAL' && (
-                        <button title="Urgent" disabled={!!busy} onClick={() => doAction('priority', { tokenId: t.id, priority: 'URGENT', userId: session?.userId })}
-                          className="p-1.5 rounded-lg bg-red-50 text-red-500 active:bg-red-100"><Zap size={14} /></button>
+                        <button title="Urgent" aria-label={`Mark token ${t.tokenNumber} urgent`} disabled={!!busy} onClick={() => doAction('priority', { tokenId: t.id, priority: 'URGENT', userId: session?.userId })}
+                          className="p-1.5 rounded-lg bg-red-50 text-red-500 active:bg-red-100 hover:bg-red-100 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1 outline-none transition-colors"><Zap size={14} /></button>
                       )}
                     </>
                   )}
                   {t.status === 'IN_PROGRESS' && (
                     <>
-                      <button title="Move/Complete" disabled={!!busy} onClick={() => doAction('move', { tokenId: t.id, userId: session?.userId })}
-                        className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 active:bg-emerald-100"><ArrowRight size={14} /></button>
-                      <button title="Skip" disabled={!!busy} onClick={() => doAction('skip', { tokenId: t.id, userId: session?.userId })}
-                        className="p-1.5 rounded-lg bg-slate-50 text-slate-500 active:bg-slate-100"><SkipForward size={14} /></button>
+                      <button title="Move/Complete" aria-label={`Move or Complete token ${t.tokenNumber}`} disabled={!!busy} onClick={() => doAction('move', { tokenId: t.id, userId: session?.userId })}
+                        className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 active:bg-emerald-100 hover:bg-emerald-100 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1 outline-none transition-colors"><ArrowRight size={14} /></button>
+                      <button title="Skip" aria-label={`Skip token ${t.tokenNumber}`} disabled={!!busy} onClick={() => doAction('skip', { tokenId: t.id, userId: session?.userId })}
+                        className="p-1.5 rounded-lg bg-slate-50 text-slate-500 active:bg-slate-100 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-slate-500 focus-visible:ring-offset-1 outline-none transition-colors"><SkipForward size={14} /></button>
                     </>
                   )}
                   {t.status === 'SKIPPED' && (
-                    <button title="Re-queue" disabled={!!busy} onClick={() => doAction('requeue', { tokenId: t.id, userId: session?.userId })}
-                      className="p-1.5 rounded-lg bg-blue-50 text-blue-600 active:bg-blue-100"><Undo2 size={14} /></button>
+                    <button title="Re-queue" aria-label={`Re-queue token ${t.tokenNumber}`} disabled={!!busy} onClick={() => doAction('requeue', { tokenId: t.id, userId: session?.userId })}
+                      className="p-1.5 rounded-lg bg-blue-50 text-blue-600 active:bg-blue-100 hover:bg-blue-100 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 outline-none transition-colors"><Undo2 size={14} /></button>
                   )}
                   {!['DONE', 'CANCELLED'].includes(t.status) && (
-                    <button title="Cancel" disabled={!!busy} onClick={() => { if (confirm('Cancel this token?')) doAction('cancel', { tokenId: t.id, userId: session?.userId }); }}
-                      className="p-1.5 rounded-lg bg-red-50 text-red-500 active:bg-red-100"><XCircle size={14} /></button>
+                    <button title="Cancel" aria-label={`Cancel token ${t.tokenNumber}`} disabled={!!busy} onClick={() => { if (confirm('Cancel this token?')) doAction('cancel', { tokenId: t.id, userId: session?.userId }); }}
+                      className="p-1.5 rounded-lg bg-red-50 text-red-500 active:bg-red-100 hover:bg-red-100 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1 outline-none transition-colors"><XCircle size={14} /></button>
                   )}
                 </div>
               </div>
