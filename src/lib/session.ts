@@ -1,5 +1,5 @@
 // ─── Nek Kadam: Session Management Service ───
-// Handles: Login, Logout, Heartbeat, Activity Tracking
+// Handles: Login, Logout, Heartbeat, Activity Tracking, Dashboard & Admin APIs
 // Stores session in IndexedDB for offline persistence
 
 import { openDB } from 'idb';
@@ -8,11 +8,10 @@ import { openDB } from 'idb';
 const savedIp = typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_SERVER_IP') : null;
 const SERVER_IP = savedIp || '192.168.29.180';
 const SERVER_PORT = 3001;
-const CLOUD_URL = 'https://nekkadam.onrender.com';
 
 /** Returns true if hostname is a private/local network address */
-function isPrivateNetwork(hostname: string): boolean {
-  if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
+export function isPrivateNetwork(hostname: string): boolean {
+  if (!hostname || hostname === 'localhost' || hostname === '127.0.0.1') return true;
   if (hostname.startsWith('192.168.') || hostname.startsWith('10.')) return true;
   // 172.16.0.0 – 172.31.255.255
   const m = hostname.match(/^172\.(\d+)\./);
@@ -33,32 +32,29 @@ export function getServerIp() {
 }
 
 export function getBaseUrl(): string {
-  // 0. Cloud detection: public domain browser → same-origin (no port needed)
-  if (typeof window !== 'undefined'
-      && typeof (window as any)?.Capacitor === 'undefined'
-      && !isPrivateNetwork(window.location.hostname)) {
-    return '';  // relative to same origin
-  }
-
-  // 1. For mobile/Capacitor (needs remote IP) - Check this first!
-  if (typeof (window as any)?.Capacitor !== 'undefined') {
-    const savedIp = localStorage.getItem('NEK_KADAM_SERVER_IP');
-    if (savedIp) return `http://${savedIp}:${SERVER_PORT}`;
-    return CLOUD_URL;  // APK defaults to cloud (works everywhere)
-  }
-
-  // 2. If running in browser/Electron on the server machine
+  // 1. If running in browser/Electron on the server machine (localhost)
   if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
     return `http://localhost:${SERVER_PORT}`;
   }
 
-  // 3. If we have a manually saved IP in Settings (non-Capacitor remote)
-  const savedIp = localStorage.getItem('NEK_KADAM_SERVER_IP');
-  if (savedIp) return `http://${savedIp}:${SERVER_PORT}`;
-  
-  // 4. Default fallback to current host
-  if (typeof window !== 'undefined') {
-    return `${window.location.protocol}//${window.location.hostname}:${SERVER_PORT}`;
+  // 2. If a custom IP is manually saved in Settings, respect it unconditionally
+  const savedIp = typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_SERVER_IP') : null;
+  if (savedIp) {
+    return `http://${savedIp}:${SERVER_PORT}`;
+  }
+
+  // 3. For mobile / Capacitor APK
+  if (typeof (window as any)?.Capacitor !== 'undefined') {
+    return `http://${SERVER_IP}:${SERVER_PORT}`;
+  }
+
+  // 4. If accessed in browser on LAN (e.g. phone browser on http://192.168.29.180:5173)
+  if (typeof window !== 'undefined' && window.location.hostname) {
+    if (isPrivateNetwork(window.location.hostname)) {
+      return `${window.location.protocol}//${window.location.hostname}:${SERVER_PORT}`;
+    }
+    // Public cloud domain (e.g. Render / Custom domain) -> relative same origin
+    return '';
   }
 
   return `http://${SERVER_IP}:${SERVER_PORT}`;
@@ -79,248 +75,127 @@ export interface NKSession {
   lastSyncTime: string | null;
 }
 
-export interface NKUser {
-  id: string;
-  name: string;
-  department: string;
-  role: string;
-}
-
-export interface DashboardData {
-  loads: Record<string, { code: string; count: number }>;
-  users: Array<{
-    userId: string;
-    name: string;
-    deptCode: string;
-    status: 'Online' | 'Idle' | 'Away';
-  }>;
-  recentLogs: Array<{
-    id: string;
-    userName: string;
-    deptCode: string;
-    action: string;
-    timestamp: string;
-  }>;
-  stats: {
-    patientsToday: number;
-    totalPatients: number;
-    totalVisits: number;
-  };
-}
-
-// ─── Get/Set Session from IndexedDB ───
 export async function getStoredSession(): Promise<NKSession | null> {
   try {
     const db = await sessionDb;
     return (await db.get('session', 'current')) || null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
-export async function setStoredSession(s: NKSession | null): Promise<void> {
+export async function setStoredSession(session: NKSession | null): Promise<void> {
   try {
     const db = await sessionDb;
-    if (s) {
-      await db.put('session', s, 'current');
+    if (session) {
+      await db.put('session', session, 'current');
     } else {
       await db.delete('session', 'current');
     }
-  } catch (e) { console.warn('Session store error:', e); }
-}
-
-// ─── Fetch Users List (for login dropdown) ───
-export async function fetchUsers(): Promise<NKUser[]> {
-  try {
-    const res = await fetch(`${getBaseUrl()}/api/users`, { 
-      signal: AbortSignal.timeout(3000)
-    });
-    const json = await res.json();
-    return json.data || [];
-  } catch {
-    return [];
+  } catch (e) {
+    console.error('Failed to store session:', e);
   }
 }
 
-// ─── Login ───
-export async function loginUser(name: string, passcode: string): Promise<{ session: NKSession | null; error: string | null }> {
+// ─── API Calls with Auth ───
+export async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
+  const session = await getStoredSession();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> || {}),
+  };
+  if (session) {
+    headers['Authorization'] = `Bearer ${session.sessionId}`;
+  }
+  const baseUrl = getBaseUrl();
+  return fetch(`${baseUrl}${endpoint}`, {
+    ...options,
+    headers,
+  });
+}
+
+// ─── Auth Operations ───
+export async function loginWithPasscode(passcode: string, department?: string): Promise<{ success: boolean; user?: any; token?: string; error?: string }> {
   try {
-    const res = await fetch(`${getBaseUrl()}/api/login`, {
+    const baseUrl = getBaseUrl();
+    const res = await fetch(`${baseUrl}/api/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, passcode }),
-      signal: AbortSignal.timeout(5000)
+      body: JSON.stringify({ passcode, department }),
     });
-    const json = await res.json();
-    
-    if (!res.ok || json.error) return { session: null, error: json.error || 'Login failed' };
-    
-    const session: NKSession = {
-      sessionId: json.token, // Store token here
-      userId: json.user.id,
-      userName: json.user.name,
-      department: json.user.deptCode, // store code
-      role: json.user.role,
-      loginTime: new Date().toISOString(),
-      lastSyncTime: null,
-    };
-    
-    localStorage.setItem('nk_token', json.token);
-    await setStoredSession(session);
-    return { session, error: null };
-  } catch (e: any) {
-    return { session: null, error: 'Server not reachable. Check WiFi.' };
-  }
-}
-
-// ─── PC Auto-Login (silent login for Electron/Local) ───
-export async function pcAutoLogin(): Promise<NKSession | null> {
-  try {
-    const res = await fetch(`${getBaseUrl()}/api/pc-login`, {
-      signal: AbortSignal.timeout(3000)
-    });
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (!json.token) return null;
-
-    const session: NKSession = {
-      sessionId: json.token,
-      userId: json.user.id,
-      userName: json.user.name,
-      department: json.user.deptCode,
-      role: json.user.role,
-      loginTime: new Date().toISOString(),
-      lastSyncTime: null,
-    };
-    localStorage.setItem('nk_token', json.token);
-    await setStoredSession(session);
-    return session;
-  } catch {
-    return null;
-  }
-}
-
-// ─── Logout ───
-export async function logoutUser(): Promise<void> {
-  try {
-    const session = await getStoredSession();
-    if (session) {
-      fetch(`${getBaseUrl()}/api/logout`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.sessionId}` 
-        },
-        body: JSON.stringify({}),
-      }).catch(() => {}); // Fire and forget
+    const data = await res.json();
+    if (res.ok && data.token) {
+      const session: NKSession = {
+        sessionId: data.token,
+        userId: data.user.id,
+        userName: data.user.name,
+        department: data.user.department || department || 'GEN',
+        role: data.user.role,
+        loginTime: new Date().toISOString(),
+        lastSyncTime: null,
+      };
+      await setStoredSession(session);
+      localStorage.setItem('nk_token', data.token);
+      localStorage.setItem('nk_user_role', data.user.role);
+      localStorage.setItem('nk_user_dept', data.user.department || department || 'GEN');
+      localStorage.setItem('nk_current_user', JSON.stringify(session));
+      return { success: true, user: data.user, token: data.token };
     }
-  } catch { /* safe */ }
-  localStorage.removeItem('nk_token');
-  await setStoredSession(null);
-}
-
-// ─── Heartbeat (call every 10-15 sec) ───
-let _heartbeatInterval: any = null;
-let _currentAction = 'Idle';
-
-export function setCurrentAction(action: string) {
-  _currentAction = action;
-}
-
-export function startHeartbeat() {
-  stopHeartbeat();
-  _heartbeatInterval = setInterval(async () => {
-    try {
-      const session = await getStoredSession();
-      if (!session) return;
-      
-      await fetch(`${getBaseUrl()}/api/heartbeat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: session.sessionId, currentAction: _currentAction }),
-        signal: AbortSignal.timeout(3000)
-      });
-    } catch { /* offline — that's fine */ }
-  }, 12000); // Every 12 seconds
-}
-
-export function stopHeartbeat() {
-  if (_heartbeatInterval) {
-    clearInterval(_heartbeatInterval);
-    _heartbeatInterval = null;
+    return { success: false, error: data.error || 'Login failed' };
+  } catch (e: any) {
+    return { success: false, error: e.message || 'Network error' };
   }
 }
 
-// ─── Log Activity ───
-export async function logActivity(action: string, entity?: string, entityId?: string): Promise<void> {
+export async function loginWithPC(): Promise<{ success: boolean; user?: any; token?: string; error?: string }> {
   try {
-    const session = await getStoredSession();
-    if (!session) return;
-    
-    // Update current action
-    setCurrentAction(action);
-    
-    await fetch(`${getBaseUrl()}/api/log-activity`, {
+    const baseUrl = getBaseUrl();
+    const res = await fetch(`${baseUrl}/api/pc-login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: session.userId,
-        userName: session.userName,
-        action,
-        entity,
-        entityId
-      }),
-      signal: AbortSignal.timeout(3000)
+      body: JSON.stringify({}),
     });
-  } catch { /* offline — skip logging */ }
-}
-
-// ─── Fetch Dashboard Data ───
-export async function fetchDashboardData(): Promise<DashboardData | null> {
-  try {
-    const session = await getStoredSession();
-    const res = await fetch(`${getBaseUrl()}/api/dashboard`, {
-      headers: {
-        'Authorization': session ? `Bearer ${session.sessionId}` : ''
-      },
-      signal: AbortSignal.timeout(4000)
-    });
-    return await res.json();
-  } catch {
-    return null;
+    const data = await res.json();
+    if (res.ok && data.token) {
+      const session: NKSession = {
+        sessionId: data.token,
+        userId: data.user.id,
+        userName: data.user.name,
+        department: data.user.department || 'GEN',
+        role: data.user.role,
+        loginTime: new Date().toISOString(),
+        lastSyncTime: null,
+      };
+      await setStoredSession(session);
+      localStorage.setItem('nk_token', data.token);
+      localStorage.setItem('nk_user_role', data.user.role);
+      localStorage.setItem('nk_user_dept', data.user.department || 'GEN');
+      localStorage.setItem('nk_current_user', JSON.stringify(session));
+      return { success: true, user: data.user, token: data.token };
+    }
+    return { success: false, error: data.error || 'PC Login failed' };
+  } catch (e: any) {
+    return { success: false, error: e.message || 'Network error' };
   }
 }
 
-// ─── Status Helper ───
-export function getUserStatus(lastActiveAt: string): 'online' | 'idle' | 'offline' {
-  const diff = Date.now() - new Date(lastActiveAt).getTime();
-  if (diff < 30000) return 'online';   // < 30 sec
-  if (diff < 120000) return 'idle';    // < 2 min
-  return 'offline';                     // > 2 min
+export async function logout(): Promise<void> {
+  await setStoredSession(null);
+  localStorage.removeItem('nk_token');
+  localStorage.removeItem('nk_user_role');
+  localStorage.removeItem('nk_user_dept');
+  localStorage.removeItem('nk_current_user');
 }
 
-// ─── Admin Methods ───
-export async function fetchDepartments(): Promise<any[]> {
-  try {
-    const session = await getStoredSession();
-    const res = await fetch(`${getBaseUrl()}/api/admin/departments`, { 
-      headers: { 'Authorization': session ? `Bearer ${session.sessionId}` : '' },
-      signal: AbortSignal.timeout(3000) 
-    });
-    const json = await res.json();
-    return json.data || [];
-  } catch {
-    return [];
-  }
-}
-
+// ─── User Management (Admin) ───
 export async function fetchAdminUsers(): Promise<any[]> {
   try {
-    const session = await getStoredSession();
-    const res = await fetch(`${getBaseUrl()}/api/admin/users`, { 
-      headers: { 'Authorization': session ? `Bearer ${session.sessionId}` : '' },
-      signal: AbortSignal.timeout(3000) 
-    });
-    const json = await res.json();
-    return json.data || [];
+    const res = await apiFetch('/api/users');
+    if (res.ok) {
+      const data = await res.json();
+      return data.users || [];
+    }
+    return [];
   } catch {
     return [];
   }
@@ -328,36 +203,85 @@ export async function fetchAdminUsers(): Promise<any[]> {
 
 export async function updateAdminUser(user: any): Promise<boolean> {
   try {
-    const session = await getStoredSession();
-    const res = await fetch(`${getBaseUrl()}/api/admin/users/update`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': session ? `Bearer ${session.sessionId}` : ''
-      },
-      body: JSON.stringify(user)
+    const userId = user.id || user.userId;
+    const res = await apiFetch(`/api/users/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(user),
     });
-    const json = await res.json();
-    return json.ok || false;
+    return res.ok;
   } catch {
     return false;
   }
 }
 
-export async function createAdminUser(user: any): Promise<boolean> {
+export async function createAdminUser(user: any): Promise<{ success: boolean; user?: any; error?: string }> {
+  try {
+    const res = await apiFetch('/api/users', {
+      method: 'POST',
+      body: JSON.stringify(user),
+    });
+    const data = await res.json();
+    return { success: res.ok, user: data.user, error: data.error };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+export async function fetchDepartments(): Promise<any[]> {
+  try {
+    const res = await apiFetch('/api/departments');
+    if (res.ok) {
+      const data = await res.json();
+      return data.departments || [];
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+// ─── Dashboard & Activity Logging ───
+export interface DashboardData {
+  stats: {
+    totalPatients: number;
+    totalVisits: number;
+    patientsToday: number;
+    pendingQueue?: number;
+  };
+  recentLogs: Array<{
+    id: string;
+    userName: string;
+    deptCode: string;
+    action: string;
+    timestamp: string;
+  }>;
+}
+
+export async function fetchDashboardData(): Promise<DashboardData | null> {
+  try {
+    const res = await apiFetch('/api/dashboard');
+    if (res.ok) {
+      return await res.json();
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function logActivity(action: string, details?: string): Promise<void> {
   try {
     const session = await getStoredSession();
-    const res = await fetch(`${getBaseUrl()}/api/admin/users/create`, {
+    await apiFetch('/api/activity', {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': session ? `Bearer ${session.sessionId}` : ''
-      },
-      body: JSON.stringify(user)
+      body: JSON.stringify({
+        action,
+        details: details || '',
+        userId: session?.userId || 'unknown',
+        departmentId: session?.department || 'GEN',
+      }),
     });
-    const json = await res.json();
-    return json.ok || false;
-  } catch {
-    return false;
+  } catch (e) {
+    console.warn('Failed to log activity:', e);
   }
 }
