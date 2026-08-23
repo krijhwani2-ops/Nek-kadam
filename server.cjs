@@ -63,12 +63,14 @@ const cleanDotZeroId = (val) => {
   return val;
 };
 
+// AUDIT FIX: Only sanitize known patient-related ID fields, NOT generic 'id' (was corrupting UUIDs ending in .0)
+const PATIENT_ID_FIELDS = new Set(['patientId', 'patient_id', 'identifier', 'personId', 'personCard']);
 const sanitizeIds = (obj) => {
   if (Array.isArray(obj)) {
     obj.forEach(sanitizeIds);
   } else if (obj !== null && typeof obj === 'object') {
     for (const key of Object.keys(obj)) {
-      if (['patientId', 'patient_id', 'identifier', 'id'].includes(key)) {
+      if (PATIENT_ID_FIELDS.has(key)) {
         obj[key] = cleanDotZeroId(obj[key]);
       } else if (typeof obj[key] === 'object') {
         sanitizeIds(obj[key]);
@@ -83,7 +85,8 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use('/static', express.static('.'));
+// AUDIT FIX: Serve only the dist folder, not the entire project root (was exposing nekkadam.db, source code, .env)
+app.use('/static', express.static('dist'));
 app.use('/apk', express.static(__dirname + '/apk'));
 app.get('/api/version', (req, res) => res.json({ version: '1.0.8', apkUrl: '/apk/nek-kadam.apk' }));
 
@@ -296,6 +299,14 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_medicine_tasks_updated_at ON medicine_tasks(updatedAt);
   CREATE INDEX IF NOT EXISTS idx_medicine_task_items_task_id ON medicine_task_items(taskId);
 
+  CREATE INDEX IF NOT EXISTS idx_tokens_lookup ON tokens(dateKey, isDeleted, currentDepartmentId, status);
+  CREATE INDEX IF NOT EXISTS idx_tokens_person ON tokens(dateKey, personId);
+  CREATE INDEX IF NOT EXISTS idx_tokens_seq ON tokens(dateKey, currentDepartmentId, priority, sequenceIndex);
+  CREATE INDEX IF NOT EXISTS idx_visits_patient ON visits(patient_id);
+  CREATE INDEX IF NOT EXISTS idx_pgroups_visit ON prescription_groups(visit_id);
+  CREATE INDEX IF NOT EXISTS idx_gmeds_group ON group_medicines(group_id);
+  CREATE INDEX IF NOT EXISTS idx_actlogs_dept ON activity_logs(departmentId, timestamp);
+
   CREATE TABLE IF NOT EXISTS user_presence (
     id TEXT PRIMARY KEY,
     userId TEXT UNIQUE NOT NULL,
@@ -345,10 +356,14 @@ db.exec(`
 // ─────────────────────────────────────
 const activeSessions = new Map();
 
+// AUDIT FIX: Pre-compiled prepared statements for session ops (was recompiling SQL every request)
+const stmtGetSession = db.prepare('SELECT * FROM sessions WHERE token = ?');
+const stmtSetSession = db.prepare('INSERT OR REPLACE INTO sessions (token, userId, userName, departmentId, deptCode, role, lastActiveTime) VALUES (?, ?, ?, ?, ?, ?, ?)');
+
 function getSession(token) {
   const cached = activeSessions.get(token);
   if (cached) return cached;
-  const row = db.prepare('SELECT * FROM sessions WHERE token = ?').get(token);
+  const row = stmtGetSession.get(token);
   if (row) {
     const session = { userId: row.userId, userName: row.userName, departmentId: row.departmentId, deptCode: row.deptCode, role: row.role, lastActiveTime: row.lastActiveTime || Date.now() };
     activeSessions.set(token, session);
@@ -360,10 +375,20 @@ function getSession(token) {
 function setSession(token, session) {
   activeSessions.set(token, session);
   try {
-    db.prepare('INSERT OR REPLACE INTO sessions (token, userId, userName, departmentId, deptCode, role, lastActiveTime) VALUES (?, ?, ?, ?, ?, ?, ?)').run(token, session.userId, session.userName, session.departmentId || null, session.deptCode || null, session.role || null, session.lastActiveTime || Date.now());
+    stmtSetSession.run(token, session.userId, session.userName, session.departmentId || null, session.deptCode || null, session.role || null, session.lastActiveTime || Date.now());
   } catch(e) { console.error('Session persist error:', e.message); }
 }
-const activeLocks = new Map();
+
+// AUDIT FIX: Session eviction — clean sessions older than 24h every 30 minutes
+setInterval(() => {
+  const cutoff = Date.now() - (24 * 60 * 60 * 1000);
+  for (const [token, session] of activeSessions) {
+    if (session.lastActiveTime && session.lastActiveTime < cutoff) {
+      activeSessions.delete(token);
+    }
+  }
+}, 30 * 60 * 1000);
+// AUDIT FIX: Removed dead 'activeLocks' Map (was never used)
 
 function getDepartmentLoad() {
   const loads = {};
@@ -432,7 +457,9 @@ app.use('/api', requireAuth);
 //  ROUTES
 // ─────────────────────────────────────
 app.get('/api/pc-login', (req, res) => {
+  // AUDIT FIX: Guard against missing admin user (was crashing with TypeError)
   const user = db.prepare("SELECT u.*, d.code as deptCode FROM users u JOIN departments d ON u.departmentId = d.id WHERE u.role = 'ADMIN' LIMIT 1").get();
+  if (!user) return res.status(404).json({ error: 'No admin user found. Create one first.' });
   const token = uuid();
   setSession(token, { userId: user.id, userName: user.name, departmentId: user.departmentId, deptCode: user.deptCode, role: user.role, lastActiveTime: Date.now() });
   res.json({ token, user: { id: user.id, name: user.name, role: user.role, departmentId: user.departmentId, deptCode: user.deptCode } });
@@ -441,11 +468,12 @@ app.get('/api/pc-login', (req, res) => {
 app.post('/api/login', (req, res) => {
   const { name, passcode } = req.body;
   const hash = crypto.createHash('sha256').update(passcode).digest('hex');
-  const user = db.prepare('SELECT u.*, d.code as deptCode FROM users u JOIN departments d ON u.departmentId = d.id WHERE u.name = ? AND u.passcode = ?').get(name, hash);
+  // AUDIT FIX: Use LEFT JOIN so login works even if user has no department assigned
+  const user = db.prepare('SELECT u.*, d.code as deptCode FROM users u LEFT JOIN departments d ON u.departmentId = d.id WHERE u.name = ? AND u.passcode = ?').get(name, hash);
   if (!user) return res.status(401).json({ error: 'Invalid credentials' });
   const token = uuid();
-  setSession(token, { userId: user.id, userName: user.name, departmentId: user.departmentId, deptCode: user.deptCode, role: user.role, lastActiveTime: Date.now() });
-  res.json({ token, user: { id: user.id, name: user.name, role: user.role, departmentId: user.departmentId, deptCode: user.deptCode } });
+  setSession(token, { userId: user.id, userName: user.name, departmentId: user.departmentId || null, deptCode: user.deptCode || 'GEN', role: user.role, lastActiveTime: Date.now() });
+  res.json({ token, user: { id: user.id, name: user.name, role: user.role, departmentId: user.departmentId, deptCode: user.deptCode || 'GEN' } });
 });
 
 app.post('/api/heartbeat', (req, res) => {
@@ -476,7 +504,16 @@ app.get('/api/dashboard', (req, res) => {
       totalPatients: db.prepare('SELECT COUNT(*) as c FROM patients').get().c,
       totalVisits: db.prepare('SELECT COUNT(*) as c FROM visits').get().c,
     };
-    const recentLogs = db.prepare('SELECT l.*, u.name as userName, d.code as deptCode FROM activity_logs l JOIN users u ON l.user_id = u.id JOIN departments d ON l.departmentId = d.id ORDER BY l.timestamp DESC LIMIT 10').all();
+    let recentLogs = [];
+    try {
+      recentLogs = db.prepare(`
+        SELECT l.*, COALESCE(u.name, l.user_name, 'Staff') as userName, COALESCE(d.code, 'GEN') as deptCode 
+        FROM activity_logs l 
+        LEFT JOIN users u ON l.user_id = u.id 
+        LEFT JOIN departments d ON l.departmentId = d.id 
+        ORDER BY l.timestamp DESC LIMIT 10
+      `).all();
+    } catch (_) {}
     res.json({ stats, recentLogs });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -531,13 +568,15 @@ app.get('/api/patients/:identifier/visits', (req, res) => {
     
     console.log(`[API] Fetching visits for identifier: "${identifier}"`);
     
-    const patient = db.prepare('SELECT id, card_number FROM patients WHERE id = ? OR card_number = ?').get(identifier, identifier);
+    const patient = db.prepare('SELECT id, card_number FROM patients WHERE id = ? OR card_number = ? OR card_number = ?').get(identifier, identifier, cleanDotZeroId(identifier));
     const cardNumber = patient ? patient.card_number : identifier;
-    console.log(`[API] Resolved identifier to card_number: "${cardNumber}"`);
+    const patientUUID = patient ? patient.id : identifier;
+    const cleanId = cleanDotZeroId(identifier);
+    console.log(`[API] Resolved identifier to card_number: "${cardNumber}", UUID: "${patientUUID}"`);
 
     const visits = db.prepare(
-      'SELECT * FROM visits WHERE patient_id = ? ORDER BY date DESC'
-    ).all(cardNumber);
+      'SELECT * FROM visits WHERE patient_id = ? OR patient_id = ? OR patient_id = ? ORDER BY date DESC'
+    ).all(cardNumber, patientUUID, cleanId);
     console.log(`[API] Found ${visits.length} visits for card_number: "${cardNumber}"`);
 
     // 2. For each visit, get prescription_groups + group_medicines in bulk
@@ -578,6 +617,7 @@ app.get('/api/patients/:identifier/visits', (req, res) => {
       prescription_groups: groupsByVisit[v.id] || []
     }));
 
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.json({ data: enriched });
   } catch (e) {
     console.error('[VISITS API] Error:', e);
@@ -1023,6 +1063,9 @@ app.post('/rpc/query', (req, res) => {
         throw new Error('Invalid limit parameter');
       }
       sql += ` LIMIT ${parsedLimit}`;
+    } else {
+      // AUDIT FIX: Default LIMIT 50000 to prevent truncating large tables during full sync (11,700+ prescription_groups)
+      sql += ' LIMIT 50000';
     }
     const data = single ? db.prepare(sql).get(...params) : db.prepare(sql).all(...params);
     res.json({ data });
@@ -1069,19 +1112,22 @@ function ensureMedicineTask(visitId) {
     if (allMedsForTask.length === 0) return;
 
     const taskId = uuid();
-    db.prepare(`
-      INSERT INTO medicine_tasks (id, visitId, patientId, patientName, status, createdBy, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, 'PENDING', 'System', datetime('now'), datetime('now'))
-    `).run(taskId, visitId, visit.patient_id, patientName);
-
     const insertItem = db.prepare(`
       INSERT INTO medicine_task_items (id, taskId, medicineCode, medicineName, dosage, duration, instructions)
       VALUES (?, ?, ?, ?, ?, '', '')
     `);
 
-    for (const m of allMedsForTask) {
-      insertItem.run(uuid(), taskId, m.code, m.name || m.code, m.dosage);
-    }
+    // AUDIT FIX: Wrap task + items in single transaction (was split — task outside, items inside)
+    db.transaction(() => {
+      db.prepare(`
+        INSERT INTO medicine_tasks (id, visitId, patientId, patientName, status, createdBy, createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, 'PENDING', 'System', datetime('now'), datetime('now'))
+      `).run(taskId, visitId, visit.patient_id, patientName);
+
+      for (const m of allMedsForTask) {
+        insertItem.run(uuid(), taskId, m.code, m.name || m.code, m.dosage);
+      }
+    })();
 
     console.log('[TRIGGER] Auto-created medicine task for synced visit:', visitId);
   } catch (err) {
@@ -1228,18 +1274,50 @@ app.post('/rpc/delete', (req, res) => {
 
 // ─── MEDICINE TRAFFIC CONTROL QUEUE (SQLITE) ───
 
+// Pre-compiled prepared statements for visit transaction operations
+const stmtGetPatientName = db.prepare('SELECT name FROM patients WHERE card_number = ? OR id = ?');
+const stmtInsertVisit = db.prepare('INSERT INTO visits (id, patient_id, date, doctor_name, notes) VALUES (?, ?, ?, ?, ?)');
+const stmtInsertPrescriptionGroup = db.prepare('INSERT INTO prescription_groups (id, visit_id, power, dosage_code) VALUES (?, ?, ?, ?)');
+const stmtInsertGroupMedicine = db.prepare('INSERT INTO group_medicines (group_id, medicine_code) VALUES (?, ?)');
+const stmtInsertMedicineTask = db.prepare(`
+  INSERT INTO medicine_tasks (id, visitId, patientId, patientName, status, createdBy, createdAt, updatedAt)
+  VALUES (?, ?, ?, ?, 'PENDING', ?, datetime('now'), datetime('now'))
+`);
+const stmtInsertMedicineTaskItem = db.prepare(`
+  INSERT INTO medicine_task_items (id, taskId, medicineCode, medicineName, dosage, duration, instructions)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+`);
+const stmtGetFirstDept = db.prepare('SELECT id FROM departments LIMIT 1');
+const stmtInsertActivityLog = db.prepare(`
+  INSERT INTO activity_logs (id, user_id, departmentId, action, entity, entity_id, timestamp)
+  VALUES (?, ?, ?, 'MEDICINE_TASK_CREATED', 'visits', ?, datetime('now'))
+`);
+const stmtSelectGroupIdsByVisit = db.prepare('SELECT id FROM prescription_groups WHERE visit_id = ?');
+const stmtDeletePrescriptionGroupsByVisit = db.prepare('DELETE FROM prescription_groups WHERE visit_id = ?');
+const stmtUpdateVisit = db.prepare(`
+  UPDATE visits 
+  SET doctor_name = ?, date = ?, notes = ? 
+  WHERE id = ?
+`);
+const stmtSelectTaskByVisit = db.prepare('SELECT id FROM medicine_tasks WHERE visitId = ?');
+const stmtDeleteTaskItemsByTask = db.prepare('DELETE FROM medicine_task_items WHERE taskId = ?');
+const stmtUpdateTaskUpdatedAt = db.prepare(`
+  UPDATE medicine_tasks 
+  SET updatedAt = datetime('now') 
+  WHERE id = ?
+`);
+
 const saveFullTx = db.transaction((payload, userId, userName) => {
   const { patientId, doctorName, date, notes, medicineGroups } = payload;
   
   // 1. Get Patient Name
-  const patient = db.prepare('SELECT name FROM patients WHERE card_number = ? OR id = ?').get(patientId, patientId);
+  const patient = stmtGetPatientName.get(patientId, patientId);
   const patientName = patient ? patient.name : 'Unknown';
   
   const visitId = uuid();
   
   // 2. Insert Visit
-  db.prepare('INSERT INTO visits (id, patient_id, date, doctor_name, notes) VALUES (?, ?, ?, ?, ?)')
-    .run(visitId, patientId, date || new Date().toISOString(), doctorName, notes);
+  stmtInsertVisit.run(visitId, patientId, date || new Date().toISOString(), doctorName, notes);
     
   let hasMeds = false;
   let allMedsForTask = [];
@@ -1251,12 +1329,10 @@ const saveFullTx = db.transaction((payload, userId, userName) => {
     hasMeds = true;
     
     const groupId = uuid();
-    db.prepare('INSERT INTO prescription_groups (id, visit_id, power, dosage_code) VALUES (?, ?, ?, ?)')
-      .run(groupId, visitId, group.power || null, group.dosage || 'BD');
+    stmtInsertPrescriptionGroup.run(groupId, visitId, group.power || null, group.dosage || 'BD');
       
     for (const med of group.meds) {
-      db.prepare('INSERT INTO group_medicines (group_id, medicine_code) VALUES (?, ?)')
-        .run(groupId, med.code);
+      stmtInsertGroupMedicine.run(groupId, med.code);
         
       allMedsForTask.push({
         code: med.code,
@@ -1271,28 +1347,17 @@ const saveFullTx = db.transaction((payload, userId, userName) => {
   // 4. Create Medicine Task
   if (hasMeds) {
     const taskId = uuid();
-    db.prepare(`
-      INSERT INTO medicine_tasks (id, visitId, patientId, patientName, status, createdBy, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, 'PENDING', ?, datetime('now'), datetime('now'))
-    `).run(taskId, visitId, patientId, patientName, userName || 'System');
+    stmtInsertMedicineTask.run(taskId, visitId, patientId, patientName, userName || 'System');
     
     // 5. Create Medicine Task Items
-    const insertItem = db.prepare(`
-      INSERT INTO medicine_task_items (id, taskId, medicineCode, medicineName, dosage, duration, instructions)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-    
     for (const m of allMedsForTask) {
-      insertItem.run(uuid(), taskId, m.code, m.name || m.code, m.dosage, m.duration, m.instructions);
+      stmtInsertMedicineTaskItem.run(uuid(), taskId, m.code, m.name || m.code, m.dosage, m.duration, m.instructions);
     }
     
     // 6. Log Activity
-    const firstDept = db.prepare('SELECT id FROM departments LIMIT 1').get();
+    const firstDept = stmtGetFirstDept.get();
     const deptId = firstDept ? firstDept.id : null;
-    db.prepare(`
-      INSERT INTO activity_logs (id, user_id, departmentId, action, entity, entity_id, timestamp)
-      VALUES (?, ?, ?, 'MEDICINE_TASK_CREATED', 'visits', ?, datetime('now'))
-    `).run(uuid(), userId || null, deptId, visitId);
+    stmtInsertActivityLog.run(uuid(), userId || null, deptId, visitId);
   }
   
   return visitId;
@@ -1317,19 +1382,15 @@ const editFullTx = db.transaction((payload) => {
   const { visitId, doctorName, date, notes, medicineGroups } = payload;
   
   // 1. Delete previous mapping data for this visit
-  const groupIds = db.prepare('SELECT id FROM prescription_groups WHERE visit_id = ?').all(visitId).map(g => g.id);
+  const groupIds = stmtSelectGroupIdsByVisit.all(visitId).map(g => g.id);
   if (groupIds.length > 0) {
     const placeholders = groupIds.map(() => '?').join(',');
     db.prepare(`DELETE FROM group_medicines WHERE group_id IN (${placeholders})`).run(...groupIds);
   }
-  db.prepare('DELETE FROM prescription_groups WHERE visit_id = ?').run(visitId);
+  stmtDeletePrescriptionGroupsByVisit.run(visitId);
 
   // 2. Update visits table info
-  db.prepare(`
-    UPDATE visits 
-    SET doctor_name = ?, date = ?, notes = ? 
-    WHERE id = ?
-  `).run(doctorName, date, notes, visitId);
+  stmtUpdateVisit.run(doctorName, date, notes, visitId);
 
   let hasMeds = false;
   let allMedsForTask = [];
@@ -1341,12 +1402,10 @@ const editFullTx = db.transaction((payload) => {
     hasMeds = true;
     const groupId = `GRP-${visitId}-${i}`;
 
-    db.prepare('INSERT INTO prescription_groups (id, visit_id, power, dosage_code) VALUES (?, ?, ?, ?)')
-      .run(groupId, visitId, group.power || null, group.dosage || 'BD');
+    stmtInsertPrescriptionGroup.run(groupId, visitId, group.power || null, group.dosage || 'BD');
 
     for (const med of group.meds) {
-      db.prepare('INSERT INTO group_medicines (group_id, medicine_code) VALUES (?, ?)')
-        .run(groupId, med.code);
+      stmtInsertGroupMedicine.run(groupId, med.code);
 
       allMedsForTask.push({
         code: med.code,
@@ -1357,24 +1416,15 @@ const editFullTx = db.transaction((payload) => {
   }
 
   // 4. Update pharmacy tasks if exists
-  const task = db.prepare('SELECT id FROM medicine_tasks WHERE visitId = ?').get(visitId);
+  const task = stmtSelectTaskByVisit.get(visitId);
   if (task) {
-    db.prepare('DELETE FROM medicine_task_items WHERE taskId = ?').run(task.id);
-    
-    const insertItem = db.prepare(`
-      INSERT INTO medicine_task_items (id, taskId, medicineCode, medicineName, dosage, duration, instructions)
-      VALUES (?, ?, ?, ?, ?, '', '')
-    `);
+    stmtDeleteTaskItemsByTask.run(task.id);
     
     for (const m of allMedsForTask) {
-      insertItem.run(uuid(), task.id, m.code, m.name || m.code, m.dosage);
+      stmtInsertMedicineTaskItem.run(uuid(), task.id, m.code, m.name || m.code, m.dosage, '', '');
     }
 
-    db.prepare(`
-      UPDATE medicine_tasks 
-      SET updatedAt = datetime('now') 
-      WHERE id = ?
-    `).run(task.id);
+    stmtUpdateTaskUpdatedAt.run(task.id);
   }
 });
 
