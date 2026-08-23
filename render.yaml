@@ -7,7 +7,7 @@ services:
     startCommand: node server_pg.cjs
     envVars:
       - key: DATABASE_URL
-        value: postgresql://postgres:nekkadam2026@db.quzmtmvymlrwprewszkr.supabase.co:5432/nekkadam
+        value: postgresql://postgres.quzmtmvymlrwprewszkr:nekkadam2026@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres
       - key: NODE_ENV
         value: production
       - key: NPM_CONFIG_PRODUCTION
