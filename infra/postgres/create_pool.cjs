@@ -6,7 +6,7 @@
 require('dotenv').config();
 const { Pool } = require('pg');
 
-const DEFAULT_CLOUD_DB = 'postgresql://postgres:nekkadam2026@db.quzmtmvymlrwprewszkr.supabase.co:5432/nekkadam';
+const DEFAULT_CLOUD_DB = 'postgresql://postgres.quzmtmvymlrwprewszkr:nekkadam2026@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres';
 
 function parsePositiveInt(raw, fallback) {
   const n = parseInt(String(raw ?? '').trim(), 10);
@@ -20,7 +20,6 @@ function getDirectClientOptions(override = {}) {
   delete removedDup.connectionString;
 
   const superUrl = process.env.POSTGRES_SUPER_URL;
-  // If no env is set, use cloud database fallback instead of localhost
   const targetUrl = connStr || superUrl || process.env.DATABASE_URL || DEFAULT_CLOUD_DB;
 
   const sslOption = { rejectUnauthorized: false };
@@ -41,7 +40,7 @@ function getDirectClientOptions(override = {}) {
     password: process.env.PGPASSWORD ?? '',
     host,
     port: parsePositiveInt(process.env.PGPORT, 5432),
-    database: dbOverride || process.env.PGDATABASE || 'nekkadam',
+    database: dbOverride || process.env.PGDATABASE || 'postgres',
     ssl: isLocalHost ? undefined : { rejectUnauthorized: false },
     ...removedDup,
   };
