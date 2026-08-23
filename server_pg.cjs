@@ -395,13 +395,16 @@ app.get('/api/dashboard', async (_req, res) => {
     const pts = await qr1(`SELECT COUNT(*)::int AS c FROM patients WHERE created_at::date >= CURRENT_DATE`);
     const totPt = await qr1('SELECT COUNT(*)::int AS c FROM patients');
     const totVt = await qr1('SELECT COUNT(*)::int AS c FROM visits');
-    const logs = await qr(`
-      SELECT l.*, u.name AS "userName", d.code AS "deptCode"
-      FROM activity_logs l
-      JOIN users u ON l.user_id = u.id
-      JOIN departments d ON l.departmentId = d.id
-      ORDER BY l.timestamp DESC LIMIT 10
-    `);
+    let logs = [];
+    try {
+      logs = await qr(`
+        SELECT l.*, COALESCE(u.name, 'Staff') AS "userName", COALESCE(d.code, 'GEN') AS "deptCode"
+        FROM activity_logs l
+        LEFT JOIN users u ON (l.user_id = u.id OR l."userId" = u.id)
+        LEFT JOIN departments d ON (l."departmentId" = d.id)
+        ORDER BY l.timestamp DESC LIMIT 10
+      `);
+    } catch (_) {}
     res.json({
       stats: {
         patientsToday: pts?.c || 0,
