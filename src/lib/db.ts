@@ -450,13 +450,15 @@ export async function discoverLocalServer(): Promise<string | null> {
   return null;
 }
 
+const CLOUD_URL = 'https://nek-kadam.onrender.com';
+
 export async function checkServerOnline(): Promise<boolean> {
   if (_serverOnline !== null && Date.now() - _lastCheck < 5000) return _serverOnline;
   
   const tryPing = async (urlToTry: string) => {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 2000);
+      const timeout = setTimeout(() => controller.abort(), 2500);
       const session = await getStoredSession();
       const res = await fetch(`${urlToTry}/query`, {
         method: 'POST',
@@ -472,16 +474,19 @@ export async function checkServerOnline(): Promise<boolean> {
     } catch { return false; }
   };
 
+  // 1. Try local LAN server first (super fast offline Wi-Fi)
   const remoteUrl = getRemoteApiUrl();
   let online = await tryPing(remoteUrl);
   if (online) {
     activeApiUrl = remoteUrl;
   } else {
-    const originUrl = `${window.location.protocol}//${window.location.hostname}:${SERVER_PORT}/rpc`;
-    online = await tryPing(originUrl);
+    // 2. Fallback to Cloud Server URL (works over 4G/5G mobile data anywhere!)
+    const cloudApiUrl = `${CLOUD_URL}/rpc`;
+    online = await tryPing(cloudApiUrl);
     if (online) {
-      activeApiUrl = originUrl;
+      activeApiUrl = cloudApiUrl;
     } else {
+      // 3. Fallback to same-origin relative /rpc
       online = await tryPing(API_URL_LOCAL);
       if (online) {
         activeApiUrl = API_URL_LOCAL;
