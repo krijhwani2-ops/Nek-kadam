@@ -1,37 +1,34 @@
 // ─── Nek Kadam: Offline-First Database Client ───
 // Architecture: LOCAL FIRST. All reads/writes go to IndexedDB.
-import { getStoredSession, setStoredSession, getBaseUrl } from './session';
+import { getStoredSession, setStoredSession, getBaseUrl, isPrivateNetwork } from './session';
 // Server sync happens ONLY on manual "Sync" button press.
 // No silent failures. Every operation is try-catched.
 
 // Allow overriding the server IP for mobile connectivity
 const SERVER_PORT = 3001;
 const API_URL_LOCAL = '/rpc';
-const CLOUD_URL = 'https://nekkadam.onrender.com';
-
-/** Returns true if hostname is a private/local network address */
-function isPrivateNetwork(hostname: string): boolean {
-  if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
-  if (hostname.startsWith('192.168.') || hostname.startsWith('10.')) return true;
-  // 172.16.0.0 – 172.31.255.255
-  const m = hostname.match(/^172\.(\d+)\./);
-  if (m && +m[1] >= 16 && +m[1] <= 31) return true;
-  return false;
-}
 
 function getRemoteApiUrl(): string {
-  // Cloud detection: if hosted on a public domain, use relative URL (same origin)
-  if (typeof window !== 'undefined' && !isPrivateNetwork(window.location.hostname)) {
+  // 1. If custom IP is manually configured in Settings, use it unconditionally
+  const savedIp = typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_SERVER_IP') : null;
+  if (savedIp) {
+    return `http://${savedIp}:${SERVER_PORT}/rpc`;
+  }
+
+  // 2. If running on local LAN browser (e.g. phone browser accessing http://192.168.29.180:5173)
+  if (typeof window !== 'undefined' && window.location.hostname) {
+    if (isPrivateNetwork(window.location.hostname)) {
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return API_URL_LOCAL;
+      }
+      return `${window.location.protocol}//${window.location.hostname}:${SERVER_PORT}/rpc`;
+    }
+    // Public cloud domain (e.g. Render) -> relative same-origin
     return '/rpc';
   }
-  // Capacitor APK: default to cloud when no custom IP is saved
-  if (typeof window !== 'undefined' && typeof (window as any)?.Capacitor !== 'undefined'
-      && !localStorage.getItem('NEK_KADAM_SERVER_IP')) {
-    return `${CLOUD_URL}/rpc`;
-  }
-  const savedIp = typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_SERVER_IP') : null;
-  const ip = savedIp || '192.168.29.180';
-  return `http://${ip}:${SERVER_PORT}/rpc`;
+
+  // 3. Default fallback for local clinic Wi-Fi
+  return `http://192.168.29.180:${SERVER_PORT}/rpc`;
 }
 
 let activeApiUrl = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) 
