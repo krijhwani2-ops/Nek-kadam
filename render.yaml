@@ -3,10 +3,12 @@ services:
     name: nekkadam
     runtime: node
     plan: free
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: node server_pg.cjs
     envVars:
       - key: DATABASE_URL
-        sync: false  # Set manually in Render dashboard
+        value: postgresql://postgres:nekkadam2026@db.quzmtmvymlrwprewszkr.supabase.co:5432/nekkadam
       - key: NODE_ENV
         value: production
+      - key: NPM_CONFIG_PRODUCTION
+        value: "false"
