@@ -329,11 +329,11 @@ export default function Login() {
              <p className="text-slate-400 text-xs mt-1">Scan this QR Code with your phone to connect to the clinic system.</p>
            </div>
            <div className="p-4 bg-white rounded-3xl shadow-lg shadow-emerald-950/20 border border-slate-200">
-             <QRCodeSVG value={`http://${localIp}:5173`} size={160} level="H" includeMargin={true} />
+             <QRCodeSVG value={typeof window !== 'undefined' && window.location.hostname && !['localhost', '127.0.0.1'].includes(window.location.hostname) && !window.location.hostname.startsWith('192.168.') && !window.location.hostname.startsWith('10.') ? window.location.origin : `http://${localIp}:5173`} size={160} level="H" includeMargin={true} />
            </div>
            <div className="space-y-1">
              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Access Link</p>
-             <p className="text-xs font-mono font-bold text-emerald-400 select-all">http://{localIp}:5173</p>
+             <p className="text-xs font-mono font-bold text-emerald-400 select-all">{typeof window !== 'undefined' && window.location.hostname && !['localhost', '127.0.0.1'].includes(window.location.hostname) && !window.location.hostname.startsWith('192.168.') && !window.location.hostname.startsWith('10.') ? window.location.origin : `http://${localIp}:5173`}</p>
            </div>
         </div>
       </div>
