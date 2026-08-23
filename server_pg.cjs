@@ -197,8 +197,8 @@ async function requireAuth(req, res, next) {
   try {
     if (!req.user) {
       const adminRow = await qr1(
-        `SELECT u.id, u.name, u.role, u.departmentId, d.code AS deptcode
-         FROM users u JOIN departments d ON u.departmentId = d.id
+        `SELECT u.id, u.name, u.role, u."departmentId", d.code AS deptcode
+         FROM users u LEFT JOIN departments d ON u."departmentId" = d.id
          WHERE upper(u.role::text) = 'ADMIN' LIMIT 1`,
         []
       );
@@ -243,8 +243,7 @@ app.get('/api/users', async (_req, res) => {
     const rows = await qr(
       `SELECT u.id, u.name, d.name AS department, d.code AS deptcode
        FROM users u
-       LEFT JOIN departments d ON u.departmentId = d.id
-       WHERE u.isActive = 1
+       LEFT JOIN departments d ON u."departmentId" = d.id
        ORDER BY u.name`,
       []
     );
@@ -264,8 +263,8 @@ app.get('/api/users', async (_req, res) => {
 // Simpler path for tokenService
 app.get('/api/departments', async (_req, res) => {
   try {
-    const rows = await qr('SELECT id, name, code, isActive FROM departments WHERE isActive = 1 ORDER BY name', []);
-    res.json({ data: rows });
+    const rows = await qr('SELECT id, name, code FROM departments ORDER BY name', []);
+    res.json({ data: rows, departments: rows });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -274,7 +273,7 @@ app.get('/api/departments', async (_req, res) => {
 app.get('/api/pc-login', async (_req, res) => {
   try {
     const user = await qr1lite(
-      `SELECT u.*, d.code as deptCode FROM users u JOIN departments d ON u.departmentId = d.id WHERE upper(u.role::text) = 'ADMIN' LIMIT 1`,
+      `SELECT u.*, d.code as deptCode FROM users u LEFT JOIN departments d ON u."departmentId" = d.id WHERE upper(u.role::text) = 'ADMIN' LIMIT 1`,
       []
     );
     if (!user) return res.status(503).json({ error: 'No admin user' });
@@ -1469,19 +1468,27 @@ app.post('/api/users/create-profile', async (req, res) => {
 
   try {
     const { rows: existingRows } = await pool.query(
-      'SELECT * FROM users WHERE LOWER(name) = LOWER($1) AND department = $2 LIMIT 1',
-      [name, department]
+      `SELECT u.id, u.name, u.role, d.name AS department
+       FROM users u
+       LEFT JOIN departments d ON u."departmentId" = d.id
+       WHERE LOWER(u.name) = LOWER($1) LIMIT 1`,
+      [name]
     );
     if (existingRows.length > 0) {
       return res.json({ success: true, user: existingRows[0] });
     }
 
     const id = uuid();
-    // Insert user without passcode
+    const { rows: deptRows } = await pool.query(
+      'SELECT id FROM departments WHERE LOWER(code) = LOWER($1) OR LOWER(name) = LOWER($1) LIMIT 1',
+      [department]
+    );
+    const departmentId = deptRows[0]?.id || null;
+
     await pool.query(
-      `INSERT INTO users (id, name, passcode, department, role, "deviceId", "isActive", created_at, "updatedAt")
-       VALUES ($1, $2, '', $3, $4, $5, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-      [id, name, department, role || 'Volunteer', deviceId || null]
+      `INSERT INTO users (id, name, passcode, "departmentId", role, "deviceId", created_at, "updatedAt")
+       VALUES ($1, $2, '', $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [id, name, departmentId, role || 'Volunteer', deviceId || null]
     );
 
     res.json({ success: true, user: { id, name, department, role: role || 'Volunteer' } });
