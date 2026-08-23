@@ -31,9 +31,16 @@ export function getServerIp() {
   return localStorage.getItem('NEK_KADAM_SERVER_IP') || '192.168.29.180';
 }
 
+const CLOUD_URL = 'https://nek-kadam.onrender.com';
+
 export function getBaseUrl(): string {
   // 1. If running in browser/Electron on the server machine (localhost)
   if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    if (typeof (window as any)?.Capacitor !== 'undefined') {
+      const savedIp = localStorage.getItem('NEK_KADAM_SERVER_IP');
+      if (savedIp) return `http://${savedIp}:${SERVER_PORT}`;
+      return CLOUD_URL; // APK on mobile connects to Cloud URL by default
+    }
     return `http://localhost:${SERVER_PORT}`;
   }
 
@@ -45,7 +52,7 @@ export function getBaseUrl(): string {
 
   // 3. For mobile / Capacitor APK
   if (typeof (window as any)?.Capacitor !== 'undefined') {
-    return `http://${SERVER_IP}:${SERVER_PORT}`;
+    return CLOUD_URL;
   }
 
   // 4. If accessed in browser on LAN (e.g. phone browser on http://192.168.29.180:5173)
@@ -57,7 +64,7 @@ export function getBaseUrl(): string {
     return '';
   }
 
-  return `http://${SERVER_IP}:${SERVER_PORT}`;
+  return CLOUD_URL;
 }
 
 // ─── Session Store (IndexedDB) ───
