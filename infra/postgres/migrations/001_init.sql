@@ -178,10 +178,13 @@ CREATE TABLE IF NOT EXISTS user_presence (
   "userId" TEXT UNIQUE NOT NULL,
   "userName" TEXT NOT NULL,
   department TEXT NOT NULL,
-  status TEXT NOT NULL,
+  "currentStatus" TEXT NOT NULL DEFAULT 'ONLINE',
   "currentScreen" TEXT,
   "currentTaskId" TEXT,
   "currentPatientName" TEXT,
+  "lastActivityAt" TIMESTAMPTZ DEFAULT NOW(),
+  "lastHeartbeatAt" TIMESTAMPTZ DEFAULT NOW(),
+  "isOnline" INTEGER DEFAULT 1,
   "deviceId" TEXT,
   "updatedAt" TIMESTAMPTZ DEFAULT NOW()
 );
