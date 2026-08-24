@@ -1585,10 +1585,10 @@ app.post('/api/users/create-profile', (req, res) => {
 
 app.get('/api/presence', (req, res) => {
   try {
-    // Return all presence entries. Determine online dynamically: if lastHeartbeatAt is within 30 seconds.
+    // Return all presence entries. Determine online dynamically: if lastHeartbeatAt is within 120 seconds.
     const rows = db.prepare(`
       SELECT *, 
-      CASE WHEN lastHeartbeatAt >= datetime('now', '-30 seconds') THEN 1 ELSE 0 END as isOnlineCalc
+      CASE WHEN lastHeartbeatAt >= datetime('now', '-120 seconds') THEN 1 ELSE 0 END as isOnlineCalc
       FROM user_presence
       ORDER BY lastActivityAt DESC
     `).all();
