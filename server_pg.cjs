@@ -1471,30 +1471,43 @@ app.post('/api/users/create-profile', async (req, res) => {
 
   try {
     const { rows: existingRows } = await pool.query(
-      `SELECT u.id, u.name, u.role, d.name AS department
+      `SELECT u.id, u.name, u.role, u."departmentId", d.name AS department
        FROM users u
        LEFT JOIN departments d ON u."departmentId" = d.id
        WHERE LOWER(u.name) = LOWER($1) LIMIT 1`,
       [name]
     );
+
+    let userObj;
     if (existingRows.length > 0) {
-      return res.json({ success: true, user: existingRows[0] });
+      userObj = existingRows[0];
+    } else {
+      const id = uuid();
+      const { rows: deptRows } = await pool.query(
+        'SELECT id FROM departments WHERE LOWER(code) = LOWER($1) OR LOWER(name) = LOWER($1) LIMIT 1',
+        [department]
+      );
+      const departmentId = deptRows[0]?.id || null;
+
+      await pool.query(
+        `INSERT INTO users (id, name, passcode, "departmentId", role, "deviceId", created_at, "updatedAt")
+         VALUES ($1, $2, '', $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        [id, name, departmentId, role || 'Volunteer', deviceId || null]
+      );
+      userObj = { id, name, department, departmentId, role: role || 'Volunteer' };
     }
 
-    const id = uuid();
-    const { rows: deptRows } = await pool.query(
-      'SELECT id FROM departments WHERE LOWER(code) = LOWER($1) OR LOWER(name) = LOWER($1) LIMIT 1',
-      [department]
-    );
-    const departmentId = deptRows[0]?.id || null;
+    const token = uuid();
+    activeSessions.set(token, {
+      userId: userObj.id,
+      userName: userObj.name,
+      departmentId: userObj.departmentId || '1',
+      deptCode: userObj.department || 'Medical',
+      role: userObj.role || 'Volunteer',
+      lastActiveTime: Date.now()
+    });
 
-    await pool.query(
-      `INSERT INTO users (id, name, passcode, "departmentId", role, "deviceId", created_at, "updatedAt")
-       VALUES ($1, $2, '', $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-      [id, name, departmentId, role || 'Volunteer', deviceId || null]
-    );
-
-    res.json({ success: true, user: { id, name, department, role: role || 'Volunteer' } });
+    res.json({ success: true, user: userObj, token });
     if (req.io) req.io.emit('db_changed', { table: 'users' });
   } catch (e) {
     console.error('[CREATE PROFILE ERROR]', e);
@@ -1504,15 +1517,13 @@ app.post('/api/users/create-profile', async (req, res) => {
 
 app.get('/api/presence', async (req, res) => {
   try {
-    // Return all presence entries. To determine if they are online, we will check if lastHeartbeatAt is within 30 seconds.
     const { rows } = await pool.query(`
       SELECT *, 
-      CASE WHEN "lastHeartbeatAt" >= NOW() - INTERVAL '30 seconds' THEN 1 ELSE 0 END as "isOnlineCalc"
+      CASE WHEN "lastHeartbeatAt" >= NOW() - INTERVAL '120 seconds' THEN 1 ELSE 0 END as "isOnlineCalc"
       FROM user_presence
       ORDER BY "lastActivityAt" DESC
     `);
     
-    // Convert isOnlineCalc to boolean matching isOnline
     const presenceList = rows.map(r => ({
       ...r,
       isOnline: r.isOnlineCalc === 1
@@ -1529,7 +1540,6 @@ app.post('/api/presence/heartbeat', async (req, res) => {
   if (!userId || !userName) return res.status(400).json({ error: 'Missing userId or userName' });
 
   try {
-    // Upsert into user_presence
     const presenceId = uuid();
     await pool.query(`
       INSERT INTO user_presence (
@@ -1550,12 +1560,11 @@ app.post('/api/presence/heartbeat', async (req, res) => {
         "deviceId" = EXCLUDED."deviceId",
         "updatedAt" = CURRENT_TIMESTAMP
     `, [
-      presenceId, userId, userName, department || 'MED', currentStatus || 'ONLINE', 
-      currentScreen || null, currentTaskId || null, currentPatientName || null, deviceId || null
+      presenceId, userId, userName, department || 'Medical', currentStatus || 'ONLINE', 
+      currentScreen || 'Dashboard', currentTaskId || null, currentPatientName || null, deviceId || null
     ]);
 
     res.json({ success: true });
-    // Emit dynamic db changed presence event
     if (req.io) req.io.emit('db_changed', { table: 'user_presence' });
   } catch (e) {
     console.error('[HEARTBEAT ERROR]', e);
