@@ -217,30 +217,30 @@ export default function TokenQueue() {
                 <div className="flex gap-1 shrink-0">
                   {t.status === 'WAITING' && (
                     <>
-                      <button title="Start" disabled={!!busy} onClick={() => doAction('start', { tokenId: t.id, departmentId: t.currentDepartmentId, userId: session?.userId })}
+                      <button title="Start" aria-label="Start" disabled={!!busy} onClick={() => doAction('start', { tokenId: t.id, departmentId: t.currentDepartmentId, userId: session?.userId })}
                         className="p-1.5 rounded-lg bg-amber-50 text-amber-600 active:bg-amber-100"><Play size={14} /></button>
-                      <button title="Skip" disabled={!!busy} onClick={() => doAction('skip', { tokenId: t.id, userId: session?.userId })}
+                      <button title="Skip" aria-label="Skip" disabled={!!busy} onClick={() => doAction('skip', { tokenId: t.id, userId: session?.userId })}
                         className="p-1.5 rounded-lg bg-slate-50 text-slate-500 active:bg-slate-100"><SkipForward size={14} /></button>
                       {t.priority === 'NORMAL' && (
-                        <button title="Urgent" disabled={!!busy} onClick={() => doAction('priority', { tokenId: t.id, priority: 'URGENT', userId: session?.userId })}
+                        <button title="Urgent" aria-label="Urgent" disabled={!!busy} onClick={() => doAction('priority', { tokenId: t.id, priority: 'URGENT', userId: session?.userId })}
                           className="p-1.5 rounded-lg bg-red-50 text-red-500 active:bg-red-100"><Zap size={14} /></button>
                       )}
                     </>
                   )}
                   {t.status === 'IN_PROGRESS' && (
                     <>
-                      <button title="Move/Complete" disabled={!!busy} onClick={() => doAction('move', { tokenId: t.id, userId: session?.userId })}
+                      <button title="Move/Complete" aria-label="Move/Complete" disabled={!!busy} onClick={() => doAction('move', { tokenId: t.id, userId: session?.userId })}
                         className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 active:bg-emerald-100"><ArrowRight size={14} /></button>
-                      <button title="Skip" disabled={!!busy} onClick={() => doAction('skip', { tokenId: t.id, userId: session?.userId })}
+                      <button title="Skip" aria-label="Skip" disabled={!!busy} onClick={() => doAction('skip', { tokenId: t.id, userId: session?.userId })}
                         className="p-1.5 rounded-lg bg-slate-50 text-slate-500 active:bg-slate-100"><SkipForward size={14} /></button>
                     </>
                   )}
                   {t.status === 'SKIPPED' && (
-                    <button title="Re-queue" disabled={!!busy} onClick={() => doAction('requeue', { tokenId: t.id, userId: session?.userId })}
+                    <button title="Re-queue" aria-label="Re-queue" disabled={!!busy} onClick={() => doAction('requeue', { tokenId: t.id, userId: session?.userId })}
                       className="p-1.5 rounded-lg bg-blue-50 text-blue-600 active:bg-blue-100"><Undo2 size={14} /></button>
                   )}
                   {!['DONE', 'CANCELLED'].includes(t.status) && (
-                    <button title="Cancel" disabled={!!busy} onClick={() => { if (confirm('Cancel this token?')) doAction('cancel', { tokenId: t.id, userId: session?.userId }); }}
+                    <button title="Cancel" aria-label="Cancel" disabled={!!busy} onClick={() => { if (confirm('Cancel this token?')) doAction('cancel', { tokenId: t.id, userId: session?.userId }); }}
                       className="p-1.5 rounded-lg bg-red-50 text-red-500 active:bg-red-100"><XCircle size={14} /></button>
                   )}
                 </div>
