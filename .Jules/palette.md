@@ -1,0 +1,3 @@
+## 2025-02-27 - Icon-only Buttons Accessibility
+**Learning:** Found several action buttons in the TokenQueue component that relied solely on `title` attributes for tooltips, but lacked `aria-label` attributes. While `title` provides a visual tooltip on hover, `aria-label` is crucial for screen readers to properly announce the button's purpose when focused. Relying only on `title` creates an inaccessible experience for users navigating via keyboard and screen reader.
+**Action:** Always ensure that icon-only buttons include an explicit `aria-label` attribute that clearly describes the action, in addition to any visual tooltips (`title`).
