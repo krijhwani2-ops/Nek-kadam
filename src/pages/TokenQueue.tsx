@@ -122,7 +122,7 @@ export default function TokenQueue() {
           </h2>
         </div>
         <div className="flex gap-2">
-          <button onClick={loadAll} className="p-2 bg-white border border-slate-200 rounded-lg active:bg-slate-50">
+          <button onClick={loadAll} aria-label="Refresh token queue" className="p-2 bg-white border border-slate-200 rounded-lg active:bg-slate-50">
             <RefreshCw size={18} className="text-slate-500" />
           </button>
           <button onClick={() => setShowCreate(true)} className="btn-primary text-sm py-2">
