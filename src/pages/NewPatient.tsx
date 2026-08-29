@@ -449,6 +449,7 @@ export default function NewPatient() {
                     <button 
                       type="button"
                       onClick={addGroup}
+                      aria-label="Add medicine combination group"
                       className="p-2 bg-white dark:bg-slate-800 text-emerald-500 dark:text-emerald-400 rounded-xl hover:bg-emerald-500 dark:hover:bg-emerald-600 hover:text-white transition-all border border-emerald-100 dark:border-emerald-900/50 shadow-sm"
                     >
                       <Plus size={16} />
@@ -521,7 +522,7 @@ export default function NewPatient() {
                     )}
 
                     <input type="number" min="1" value={currentQuantity} onChange={(e) => setCurrentQuantity(parseInt(e.target.value) || 1)} className="w-16 px-2 py-2 bg-slate-50 dark:bg-slate-900 rounded-xl outline-none font-black text-center text-sm text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800" />
-                    <button type="button" onClick={handleAddMedicine} disabled={!currentCode.trim() || !currentName.trim()} className="px-4 py-2 bg-emerald-600 text-white rounded-xl disabled:opacity-50 font-black flex items-center justify-center shrink-0">
+                    <button type="button" onClick={handleAddMedicine} aria-label="Add medicine" disabled={!currentCode.trim() || !currentName.trim()} className="px-4 py-2 bg-emerald-600 text-white rounded-xl disabled:opacity-50 font-black flex items-center justify-center shrink-0">
                       <Plus size={20} strokeWidth={3} />
                     </button>
                   </div>
@@ -539,7 +540,7 @@ export default function NewPatient() {
                                  <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[9px] font-black px-2 py-0.5 rounded-lg">x{med.quantity}</span>
                               </div>
                             </div>
-                            <button type="button" onClick={() => removeMedicine(activeGroupIndex, med.code)} className="p-2 text-slate-300 hover:text-red-500 transition-colors">
+                            <button type="button" onClick={() => removeMedicine(activeGroupIndex, med.code)} aria-label="Remove medicine" className="p-2 text-slate-300 hover:text-red-500 transition-colors">
                               <Trash2 size={16} />
                             </button>
                           </div>

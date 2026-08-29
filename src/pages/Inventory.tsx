@@ -125,7 +125,7 @@ export default function Inventory() {
             <h2 className="text-xl font-extrabold text-brand-darkGreen flex items-center gap-2">
               <Plus className="text-brand-green" /> Register New Medicine
             </h2>
-            <button onClick={() => setShowAddForm(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+            <button onClick={() => setShowAddForm(false)} aria-label="Close register new medicine form" className="p-2 hover:bg-slate-100 rounded-full transition-colors">
               <X size={20} className="text-slate-400" />
             </button>
           </div>
