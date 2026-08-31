@@ -1026,8 +1026,10 @@ export const db = {
 if (typeof window !== 'undefined') {
   const runAutoSync = async () => {
     try {
-      // AUDIT FIX: Skip sync entirely if browser knows it's offline (saves failed fetch timeouts)
-      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+      // AUDIT FIX: Skip sync entirely if browser knows it's offline (saves failed fetch timeouts).
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        return;
+      }
 
       const ops = await getPendingOps();
       if (ops.length > 0) {
