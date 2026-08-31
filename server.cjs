@@ -1117,7 +1117,7 @@ function ensureMedicineTask(visitId) {
       VALUES (?, ?, ?, ?, ?, '', '')
     `);
 
-    // AUDIT FIX: Wrap task + items in single transaction (was split — task outside, items inside)
+    // Wrap task + items in single transaction (was split — task outside, items inside)
     db.transaction(() => {
       db.prepare(`
         INSERT INTO medicine_tasks (id, visitId, patientId, patientName, status, createdBy, createdAt, updatedAt)
