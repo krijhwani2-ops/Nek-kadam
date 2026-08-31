@@ -1182,16 +1182,37 @@ app.post('/rpc/insert', async (req, res) => {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      for (const item of items) {
-        if (!item.id) item.id = uuid();
-        const cols = Object.keys(item);
-        const params = Object.values(item);
-        const ph = cols.map((_, i) => `$${i + 1}`).join(',');
-        await client.query(
-          `INSERT INTO "${table}" (${cols.map((c) => `"${c}"`).join(',')}) VALUES (${ph})`,
-          params
-        );
+
+      if (items.length > 0) {
+        for (const item of items) {
+          if (!item.id) item.id = uuid();
+        }
+
+        const colsSet = new Set();
+        for (const item of items) {
+          for (const key of Object.keys(item)) {
+            colsSet.add(key);
+          }
+        }
+        const cols = Array.from(colsSet);
+
+        const params = [];
+        const valueChunks = [];
+        let paramIndex = 1;
+
+        for (const item of items) {
+          const chunk = [];
+          for (const col of cols) {
+            params.push(item[col] !== undefined ? item[col] : null);
+            chunk.push(`$${paramIndex++}`);
+          }
+          valueChunks.push(`(${chunk.join(',')})`);
+        }
+
+        const sql = `INSERT INTO "${table}" (${cols.map((c) => `"${c}"`).join(',')}) VALUES ${valueChunks.join(',')}`;
+        await client.query(sql, params);
       }
+
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');
@@ -1214,21 +1235,45 @@ app.post('/rpc/upsert', async (req, res) => {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      for (const item of items) {
-        if (!item.id) item.id = uuid();
-        const cols = Object.keys(item);
-        const params = Object.values(item);
-        const ph = cols.map((_, i) => `$${i + 1}`).join(',');
+
+      if (items.length > 0) {
+        for (const item of items) {
+          if (!item.id) item.id = uuid();
+        }
+
+        const colsSet = new Set();
+        for (const item of items) {
+          for (const key of Object.keys(item)) {
+            colsSet.add(key);
+          }
+        }
+        const cols = Array.from(colsSet);
+
+        const params = [];
+        const valueChunks = [];
+        let paramIndex = 1;
+
+        for (const item of items) {
+          const chunk = [];
+          for (const col of cols) {
+            params.push(item[col] !== undefined ? item[col] : null);
+            chunk.push(`$${paramIndex++}`);
+          }
+          valueChunks.push(`(${chunk.join(',')})`);
+        }
+
         const upd = cols
           .filter((c) => c !== conflict)
           .map((c) => `"${c}"=EXCLUDED."${c}"`)
           .join(',');
+
         const sql = `
           INSERT INTO "${table}" (${cols.map((c) => `"${c}"`).join(',')})
-          VALUES (${ph})
+          VALUES ${valueChunks.join(',')}
           ON CONFLICT ("${conflict}") DO UPDATE SET ${upd}`;
         await client.query(sql, params);
       }
+
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');
@@ -1339,11 +1384,18 @@ app.post('/api/visits/save-full', async (req, res) => {
       );
       
       // 6. create medicine task items
-      for (const m of allMedsForTask) {
+      if (allMedsForTask.length > 0) {
+        const params = [];
+        const chunks = [];
+        let pIdx = 1;
+        for (const m of allMedsForTask) {
+          chunks.push(`($${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++})`);
+          params.push(uuid(), taskId, m.code, m.name || m.code, m.dosage, m.duration, m.instructions);
+        }
         await client.query(
           `INSERT INTO medicine_task_items (id, "taskId", "medicineCode", "medicineName", dosage, duration, instructions)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [uuid(), taskId, m.code, m.name || m.code, m.dosage, m.duration, m.instructions]
+           VALUES ${chunks.join(',')}`,
+          params
         );
       }
       
