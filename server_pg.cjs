@@ -463,7 +463,7 @@ app.get('/api/chat/history', async (req, res) => {
 app.get('/api/patients/:identifier/visits', async (req, res) => {
   try {
     let { identifier } = req.params;
-    if (identifier && identifier.endsWith('.0')) identifier = identifier.slice(0, -2);
+    identifier = cleanDotZeroId(identifier);
     const patient = await qr1lite('SELECT id, card_number FROM patients WHERE id = ? OR card_number = ?', [identifier, identifier]);
     const cardNumber = patient ? patient.card_number : identifier;
 

@@ -562,21 +562,18 @@ app.get('/api/patients/:identifier/visits', (req, res) => {
     let { identifier } = req.params;
     
     // CRITICAL FIX: Mobile app IndexedDB cache might still have '.0' at the end of patient IDs
-    if (identifier && identifier.endsWith('.0')) {
-        identifier = identifier.substring(0, identifier.length - 2);
-    }
+    identifier = cleanDotZeroId(identifier);
     
     console.log(`[API] Fetching visits for identifier: "${identifier}"`);
     
-    const patient = db.prepare('SELECT id, card_number FROM patients WHERE id = ? OR card_number = ? OR card_number = ?').get(identifier, identifier, cleanDotZeroId(identifier));
+    const patient = db.prepare('SELECT id, card_number FROM patients WHERE id = ? OR card_number = ?').get(identifier, identifier);
     const cardNumber = patient ? patient.card_number : identifier;
     const patientUUID = patient ? patient.id : identifier;
-    const cleanId = cleanDotZeroId(identifier);
     console.log(`[API] Resolved identifier to card_number: "${cardNumber}", UUID: "${patientUUID}"`);
 
     const visits = db.prepare(
-      'SELECT * FROM visits WHERE patient_id = ? OR patient_id = ? OR patient_id = ? ORDER BY date DESC'
-    ).all(cardNumber, patientUUID, cleanId);
+      'SELECT * FROM visits WHERE patient_id = ? OR patient_id = ? ORDER BY date DESC'
+    ).all(cardNumber, patientUUID);
     console.log(`[API] Found ${visits.length} visits for card_number: "${cardNumber}"`);
 
     // 2. For each visit, get prescription_groups + group_medicines in bulk
