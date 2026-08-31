@@ -8,13 +8,15 @@ const path = require('path');
 
 async function runPgMigrations(pool, migrationsDir) {
   const abs = path.resolve(migrationsDir);
-  if (!fs.existsSync(abs)) {
+  try {
+    await fs.promises.access(abs);
+  } catch (err) {
     console.warn('[MIGRATE] migrations dir missing:', abs);
     return;
   }
 
-  const files = fs
-    .readdirSync(abs)
+  const dirents = await fs.promises.readdir(abs);
+  const files = dirents
     .filter((f) => /^\d+_.+\.sql$/i.test(f))
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
@@ -34,7 +36,7 @@ async function runPgMigrations(pool, migrationsDir) {
       if (rec.rowCount) continue;
 
       const fullPath = path.join(abs, filename);
-      const sql = fs.readFileSync(fullPath, 'utf8');
+      const sql = await fs.promises.readFile(fullPath, 'utf8');
 
       console.log('[MIGRATE] applying', filename);
       await client.query('BEGIN');
