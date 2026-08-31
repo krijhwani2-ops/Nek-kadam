@@ -272,11 +272,12 @@ app.get('/api/departments', async (_req, res) => {
 
 app.get('/api/pc-login', async (_req, res) => {
   try {
+    // AUDIT FIX: Guard against missing admin user (was crashing with TypeError)
     const user = await qr1lite(
-      `SELECT u.*, d.code as deptCode FROM users u LEFT JOIN departments d ON u."departmentId" = d.id WHERE upper(u.role::text) = 'ADMIN' LIMIT 1`,
+      `SELECT u.*, d.code as deptCode FROM users u JOIN departments d ON u."departmentId" = d.id WHERE upper(u.role::text) = 'ADMIN' LIMIT 1`,
       []
     );
-    if (!user) return res.status(503).json({ error: 'No admin user' });
+    if (!user) return res.status(404).json({ error: 'No admin user found. Create one first.' });
     const token = uuid();
     activeSessions.set(token, {
       userId: user.id,
