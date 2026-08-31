@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { db, checkServerOnline, saveVisitOffline, getPendingVisitsForPatient, cleanPatientId } from '../lib/db';
 import { getBaseUrl } from '../lib/session';
 import { Phone, CreditCard, Plus, Clock, Trash2, X, Printer, FileText, Calendar, Stethoscope, RefreshCw } from 'lucide-react';
-import { Spinner } from '../components/ui';
 
 interface PrescribedMed {
   code: string;
@@ -976,7 +975,7 @@ export default function PatientProfile() {
             >
               {addingVisit ? (
                 <>
-                  <Spinner size="sm" color="currentColor" />
+                  <div className="spinner border-slate-200 dark:border-slate-800 border-t-emerald-500 w-4 h-4" />
                   <span>SYNCHRONIZING...</span>
                 </>
               ) : (
