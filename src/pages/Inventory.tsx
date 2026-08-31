@@ -1,17 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMedicines } from '../hooks/useMedicines';
 import { db } from '../lib/db';
 import { Package, AlertTriangle, Search, Plus, X, Save } from 'lucide-react';
 
-interface Medicine {
-  code: string;
-  name: string;
-  stock_level: number;
-  reorder_level: number;
-}
-
 export default function Inventory() {
-  const [medicines, setMedicines] = useState<Medicine[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { medicines, loading, refetch, setMedicines } = useMedicines();
   const [searchTerm, setSearchTerm] = useState('');
   
   // Edit State
@@ -21,22 +14,6 @@ export default function Inventory() {
   // Add New State
   const [showAddForm, setShowAddForm] = useState(false);
   const [newMed, setNewMed] = useState({ code: '', name: '', stock_level: 0, reorder_level: 10 });
-
-  useEffect(() => {
-    fetchMedicines();
-  }, []);
-
-  async function fetchMedicines() {
-    const { data, error } = await db
-      .from('medicines')
-      .select('*')
-      .order('code');
-    
-    if (!error && data) {
-      setMedicines(data);
-    }
-    setLoading(false);
-  }
 
   async function handleUpdate(code: string) {
     const { error } = await db
@@ -71,7 +48,7 @@ export default function Inventory() {
       }]);
 
     if (!error) {
-      fetchMedicines();
+      refetch();
       setShowAddForm(false);
       setNewMed({ code: '', name: '', stock_level: 0, reorder_level: 10 });
     } else {
