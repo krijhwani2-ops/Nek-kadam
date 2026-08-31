@@ -306,7 +306,7 @@ app.post('/api/login', async (req, res) => {
     const { name, passcode } = req.body || {};
     const hash = crypto.createHash('sha256').update(passcode || '').digest('hex');
     const user = await qr1lite(
-      `SELECT u.*, d.code as deptCode FROM users u JOIN departments d ON u.departmentId = d.id WHERE u.name = ? AND u.passcode = ?`,
+      `SELECT u.*, d.code as deptCode FROM users u LEFT JOIN departments d ON u.departmentId = d.id WHERE u.name = ? AND u.passcode = ?`,
       [name, hash]
     );
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
