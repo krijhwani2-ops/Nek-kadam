@@ -191,12 +191,12 @@ export default function PatientProfile() {
         if (pendingVisits.length > 0) {
           console.log('[API DEBUG] Merging', pendingVisits.length, 'pending unsynced visits into display');
           // Add pending visits that aren't already in the list
+          const existingVisits = new Set(enrichedVisits.map((v: any) => `${v.date}_${v.doctor_name}`));
           for (const pv of pendingVisits) {
-            const alreadyExists = enrichedVisits.some((v: any) => 
-              v.date === pv.date && v.doctor_name === pv.doctor_name
-            );
-            if (!alreadyExists) {
+            const key = `${pv.date}_${pv.doctor_name}`;
+            if (!existingVisits.has(key)) {
               enrichedVisits.unshift(pv);
+              existingVisits.add(key);
             }
           }
         }
