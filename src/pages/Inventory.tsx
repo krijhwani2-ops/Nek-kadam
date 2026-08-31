@@ -1,13 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../lib/db';
 import { Package, AlertTriangle, Search, Plus, X, Save } from 'lucide-react';
-
-interface Medicine {
-  code: string;
-  name: string;
-  stock_level: number;
-  reorder_level: number;
-}
+import { Medicine } from '../types/medicine';
 
 export default function Inventory() {
   const [medicines, setMedicines] = useState<Medicine[]>([]);

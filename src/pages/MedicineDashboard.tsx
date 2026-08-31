@@ -6,35 +6,7 @@ import {
   Send, RefreshCw, AlertCircle, Sparkles, Loader2 
 } from 'lucide-react';
 import { safeParseDate } from '../lib/dateUtils';
-
-interface TaskItem {
-  id: string;
-  taskId: string;
-  medicineCode: string;
-  medicineName: string;
-  dosage?: string;
-  duration?: string;
-  instructions?: string;
-}
-
-interface MedicineTask {
-  id: string;
-  visitId: string;
-  patientId: string;
-  patientName: string;
-  status: 'PENDING' | 'IN_PROGRESS' | 'READY' | 'DELIVERED';
-  claimedBy?: string;
-  completedBy?: string;
-  deliveredBy?: string;
-  claimedAt?: string;
-  completedAt?: string;
-  deliveredAt?: string;
-  startedAt?: string;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-  items?: TaskItem[];
-}
+import { MedicineTask } from '../types/medicine';
 
 export default function MedicineDashboard() {
   const { session } = useAuth();
