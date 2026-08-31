@@ -1314,19 +1314,30 @@ app.post('/api/visits/save-full', async (req, res) => {
         [groupId, visitId, group.power || null, group.dosage || 'BD']
       );
       
-      for (const med of group.meds) {
-        await client.query(
-          `INSERT INTO group_medicines (group_id, medicine_code) VALUES ($1, $2)`,
-          [groupId, med.code]
-        );
-        allMedsForTask.push({
+
+      if (group.meds.length > 0) {
+        const valueStrings = [];
+        const queryParams = [];
+        let paramIndex = 1;
+        for (const med of group.meds) {
+          valueStrings.push(`(${paramIndex}, ${paramIndex + 1})`);
+          queryParams.push(groupId, med.code);
+          paramIndex += 2;
+
+          allMedsForTask.push({
           code: med.code,
           name: med.name,
           dosage: group.dosage || 'BD',
           duration: group.duration || '',
           instructions: group.instructions || ''
         });
+        }
+        await client.query(
+          `INSERT INTO group_medicines (group_id, medicine_code) VALUES ${valueStrings.join(',')}`,
+          queryParams
+        );
       }
+
     }
     
     // 5. create medicine task if meds exist
@@ -1339,13 +1350,23 @@ app.post('/api/visits/save-full', async (req, res) => {
       );
       
       // 6. create medicine task items
-      for (const m of allMedsForTask) {
+
+      if (allMedsForTask.length > 0) {
+        const valueStrings = [];
+        const queryParams = [];
+        let paramIndex = 1;
+        for (const m of allMedsForTask) {
+          valueStrings.push(`(${paramIndex}, ${paramIndex + 1}, ${paramIndex + 2}, ${paramIndex + 3}, ${paramIndex + 4}, ${paramIndex + 5}, ${paramIndex + 6})`);
+          queryParams.push(uuid(), taskId, m.code, m.name || m.code, m.dosage, m.duration, m.instructions);
+          paramIndex += 7;
+        }
         await client.query(
           `INSERT INTO medicine_task_items (id, "taskId", "medicineCode", "medicineName", dosage, duration, instructions)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [uuid(), taskId, m.code, m.name || m.code, m.dosage, m.duration, m.instructions]
+           VALUES ${valueStrings.join(',')}`,
+          queryParams
         );
       }
+
       
       // 7. create activity log
       await client.query(
