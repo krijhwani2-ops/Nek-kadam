@@ -5,35 +5,7 @@ import {
   Clock, Play, CheckCircle2, Clipboard, 
   User, RefreshCw, AlertCircle, Sparkles 
 } from 'lucide-react';
-
-interface TaskItem {
-  id: string;
-  taskId: string;
-  medicineCode: string;
-  medicineName: string;
-  dosage?: string;
-  duration?: string;
-  instructions?: string;
-}
-
-interface MedicineTask {
-  id: string;
-  visitId: string;
-  patientId: string;
-  patientName: string;
-  status: 'PENDING' | 'IN_PROGRESS' | 'READY' | 'DELIVERED';
-  claimedBy?: string;
-  completedBy?: string;
-  deliveredBy?: string;
-  claimedAt?: string;
-  completedAt?: string;
-  deliveredAt?: string;
-  startedAt?: string;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-  items?: TaskItem[];
-}
+import { MedicineTask } from '../types/medicine';
 
 export default function MedicineQueue() {
   const { session, updatePresence } = useAuth();

@@ -5,31 +5,7 @@ import {
   Activity, BarChart3 
 } from 'lucide-react';
 import { getBaseUrl } from '../lib/session';
-
-interface TaskItem {
-  id: string;
-  taskId: string;
-  medicineCode: string;
-  medicineName: string;
-}
-
-interface MedicineTask {
-  id: string;
-  visitId: string;
-  patientId: string;
-  patientName: string;
-  status: 'PENDING' | 'IN_PROGRESS' | 'READY' | 'DELIVERED';
-  claimedBy?: string;
-  completedBy?: string;
-  deliveredBy?: string;
-  claimedAt?: string;
-  completedAt?: string;
-  deliveredAt?: string;
-  startedAt?: string;
-  createdAt: string;
-  updatedAt: string;
-  items?: TaskItem[];
-}
+import { MedicineTask } from '../types/medicine';
 
 interface UserPresence {
   userId: string;
