@@ -264,12 +264,15 @@ export async function saveVisitOffline(payload: {
   // 3. Clear query caches for affected tables so reads pick up new data
   const idb = await dbPromise;
   const keys = await idb.getAllKeys('keyval');
+  const tx = idb.transaction('keyval', 'readwrite');
+  const store = tx.objectStore('keyval');
   for (const k of keys) {
     if (typeof k === 'string' && k.startsWith('nk_cache_query_') && 
         (k.includes('"table":"visits"') || k.includes('"table":"prescription_groups"') || k.includes('"table":"group_medicines"'))) {
-      await idb.delete('keyval', k);
+      store.delete(k);
     }
   }
+  await tx.done;
   
   // 4. Queue SINGLE compound save-full operation (NOT 3 separate RPC inserts)
   await addPendingOp({
@@ -911,11 +914,14 @@ class DBQueryBuilder {
         // CRITICAL: Clear specific query caches for this table to ensure visibility
         const db = await dbPromise;
         const keys = await db.getAllKeys('keyval');
+        const tx = db.transaction('keyval', 'readwrite');
+        const store = tx.objectStore('keyval');
         for (const k of keys) {
           if (typeof k === 'string' && k.startsWith(`nk_cache_query_`) && k.includes(`"table":"${this.table}"`)) {
-            await db.delete('keyval', k);
+            store.delete(k);
           }
         }
+        await tx.done;
         
         // Trigger background sync proactively
         setTimeout(async () => {
