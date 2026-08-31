@@ -1166,8 +1166,16 @@ app.post('/rpc/query', async (req, res) => {
     let sql = `SELECT ${select || '*'} FROM "${table}"`;
     if (whereSql) sql += ` ${whereSql}`;
     if (order) sql += ` ORDER BY "${order.column}" ${order.ascending !== false ? 'ASC' : 'DESC'}`;
-    const limNum = parseInt(String(limit ?? ''), 10);
-    if (!Number.isNaN(limNum) && limNum > 0) sql += ` LIMIT ${limNum}`;
+    if (limit) {
+      const parsedLimit = parseInt(limit, 10);
+      if (isNaN(parsedLimit) || parsedLimit < 0) {
+        throw new Error('Invalid limit parameter');
+      }
+      sql += ` LIMIT ${parsedLimit}`;
+    } else {
+      // AUDIT FIX: Default LIMIT 50000 to prevent truncating large tables during full sync (11,700+ prescription_groups)
+      sql += ' LIMIT 50000';
+    }
     const { rows } = await pool.query(sql, params);
     res.json({ data: single ? rows[0] ?? null : rows });
   } catch (e) {
