@@ -468,7 +468,6 @@ app.get('/api/pc-login', (req, res) => {
 app.post('/api/login', (req, res) => {
   const { name, passcode } = req.body;
   const hash = crypto.createHash('sha256').update(passcode).digest('hex');
-  // AUDIT FIX: Use LEFT JOIN so login works even if user has no department assigned
   const user = db.prepare('SELECT u.*, d.code as deptCode FROM users u LEFT JOIN departments d ON u.departmentId = d.id WHERE u.name = ? AND u.passcode = ?').get(name, hash);
   if (!user) return res.status(401).json({ error: 'Invalid credentials' });
   const token = uuid();
