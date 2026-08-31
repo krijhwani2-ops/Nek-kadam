@@ -428,20 +428,26 @@ export async function discoverLocalServer(): Promise<string | null> {
       if (!scanList.includes(sub)) scanList.push(sub);
     }
     
-    for (const subnet of scanList) {
-      const foundIp = await scanSubnetForServer(subnet);
-      if (foundIp) {
-        console.log(`[AUTO-DISCOVERY] Nek Kadam Server FOUND at: http://${foundIp}:3001`);
-        localStorage.setItem('NEK_KADAM_SERVER_IP', foundIp);
-        activeApiUrl = `http://${foundIp}:${SERVER_PORT}/rpc`;
-        _serverOnline = true;
-        _lastCheck = Date.now();
-        
-        window.dispatchEvent(new Event('nk_live_sync_completed'));
-        window.dispatchEvent(new CustomEvent('nk_server_ip_changed', { detail: foundIp }));
-        isAutoDiscovering = false;
-        return foundIp;
-      }
+    const scanPromises = scanList.map(async (subnet) => {
+      const ip = await scanSubnetForServer(subnet);
+      if (ip) return ip;
+      throw new Error('Not found in subnet');
+    });
+
+    try {
+      const foundIp = await Promise.any(scanPromises);
+      console.log(`[AUTO-DISCOVERY] Nek Kadam Server FOUND at: http://${foundIp}:3001`);
+      localStorage.setItem('NEK_KADAM_SERVER_IP', foundIp);
+      activeApiUrl = `http://${foundIp}:${SERVER_PORT}/rpc`;
+      _serverOnline = true;
+      _lastCheck = Date.now();
+
+      window.dispatchEvent(new Event('nk_live_sync_completed'));
+      window.dispatchEvent(new CustomEvent('nk_server_ip_changed', { detail: foundIp }));
+      isAutoDiscovering = false;
+      return foundIp;
+    } catch (err) {
+      // All subnets failed to find a server
     }
   } catch (e) {
     console.error('[AUTO-DISCOVERY] Error during network scanning:', e);
