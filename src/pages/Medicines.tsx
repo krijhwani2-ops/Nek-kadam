@@ -1,16 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useMedicines } from '../hooks/useMedicines';
 import { db } from '../lib/db';
 import { Pill, Search, Plus, X, FileText, CheckCircle, AlertCircle } from 'lucide-react';
 
-interface Medicine {
-  code: string;
-  name: string;
-  stock_level?: number;
-}
-
 export default function Medicines() {
-  const [medicines, setMedicines] = useState<Medicine[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { medicines, loading, refetch } = useMedicines();
   const [searchTerm, setSearchTerm] = useState('');
   
   // Add New State
@@ -20,22 +14,6 @@ export default function Medicines() {
   const [bulkText, setBulkText] = useState('');
   const [importing, setImporting] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
-
-  useEffect(() => {
-    fetchMedicines();
-  }, []);
-
-  async function fetchMedicines() {
-    const { data, error } = await db
-      .from('medicines')
-      .select('*')
-      .order('code');
-    
-    if (!error && data) {
-      setMedicines(data);
-    }
-    setLoading(false);
-  }
 
   async function handleAddMed() {
     if (!newMed.code || !newMed.name) {
@@ -51,7 +29,7 @@ export default function Medicines() {
       }]);
 
     if (!error) {
-      fetchMedicines();
+      refetch();
       setShowAddForm(false);
       setNewMed({ code: '', name: '' });
       setMessage({ text: "Medicine added successfully!", type: 'success' });
@@ -105,7 +83,7 @@ export default function Medicines() {
       setMessage({ text: `Successfully imported ${medsToInsert.length} medicines!`, type: 'success' });
       setBulkText('');
       setShowBulkForm(false);
-      fetchMedicines();
+      refetch();
     } catch (err: any) {
       setMessage({ text: err.message, type: 'error' });
     } finally {
