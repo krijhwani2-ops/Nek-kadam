@@ -3,7 +3,7 @@ services:
     name: nekkadam
     runtime: node
     plan: free
-    buildCommand: npm install --include=dev && npm run build
+    buildCommand: ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm install --include=dev --no-audit --no-fund && npm run build
     startCommand: node server_pg.cjs
     envVars:
       - key: DATABASE_URL
@@ -12,3 +12,7 @@ services:
         value: production
       - key: NPM_CONFIG_PRODUCTION
         value: "false"
+      - key: ELECTRON_SKIP_BINARY_DOWNLOAD
+        value: "1"
+      - key: NODE_VERSION
+        value: "20.18.0"
