@@ -203,8 +203,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener('click', resetActivity);
     window.addEventListener('touchstart', resetActivity);
 
-    // 2. Heartbeat interval (every 12 seconds)
+    // 2. Heartbeat interval — AUDIT FIX: Increased from 12s→30s, added online guard
     const heartbeatTimer = setInterval(() => {
+      // Skip heartbeat if offline to avoid wasting battery on failed fetch calls
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
       void sendHeartbeat(
         session,
         screenRef.current,
@@ -212,15 +214,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         taskIdRef.current,
         patientRef.current
       );
-    }, 12000);
+    }, 30000);
 
-    // 3. Idle timeout checker (every 2 seconds)
+    // 3. Idle timeout checker — AUDIT FIX: Reduced from 2s→30s (was excessive for idle detection)
     const idleCheckTimer = setInterval(() => {
       const inactiveMs = Date.now() - lastActivityRef.current;
       if (inactiveMs >= 180000 && statusRef.current !== 'IDLE') { // 3 minutes
         updatePresence(screenRef.current, 'IDLE', taskIdRef.current, patientRef.current);
       }
-    }, 2000);
+    }, 30000);
 
     return () => {
       window.removeEventListener('mousemove', resetActivity);

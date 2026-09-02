@@ -409,12 +409,12 @@ function TopBar({ onSync, syncing, onToggleMenu }: { onSync: () => void, syncing
   }, []);
 
   return (
-    <header className="h-14 flex items-center justify-between px-3 bg-emerald-600 text-white shadow-sm shrink-0">
-      <div className="flex items-center gap-2">
+    <header className="h-14 flex items-center justify-between px-3 bg-emerald-600 text-white shadow-sm shrink-0 min-w-0 overflow-hidden">
+      <div className="flex items-center gap-2 min-w-0 shrink">
         {session && (
           <button 
             onClick={onToggleMenu}
-            className="md:hidden p-2 rounded-lg hover:bg-emerald-700 active:bg-emerald-800"
+            className="md:hidden p-2 rounded-lg hover:bg-emerald-700 active:bg-emerald-800 shrink-0"
             aria-label="Toggle Menu"
           >
             <Menu size={22} />
@@ -423,30 +423,30 @@ function TopBar({ onSync, syncing, onToggleMenu }: { onSync: () => void, syncing
         {!isHome && (
           <button 
             onClick={() => navigate(-1)} 
-            className="p-2 rounded-full hover:bg-emerald-700 active:bg-emerald-800"
+            className="p-2 rounded-full hover:bg-emerald-700 active:bg-emerald-800 shrink-0"
           >
             <ChevronLeft size={22} />
           </button>
         )}
-        <h1 className="text-lg font-bold tracking-tight">Nek Kadam</h1>
+        <h1 className="text-lg font-bold tracking-tight truncate shrink-0">Nek Kadam</h1>
         {session && (
-          <span className="hidden sm:inline-block bg-emerald-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border border-emerald-500/40 ml-2">
+          <span className="hidden sm:inline-block bg-emerald-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border border-emerald-500/40 ml-2 truncate max-w-[160px] min-w-0 shrink">
             Using as: {session.userName}
           </span>
         )}
         {onlineCount > 0 && (
-          <span className="flex items-center gap-1.5 ml-2 bg-emerald-800/50 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-500/20">
+          <span className="flex items-center gap-1.5 ml-1 sm:ml-2 bg-emerald-800/50 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-500/20 shrink-0">
             <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></div>
-            {onlineCount} Online
+            <span className="truncate">{onlineCount} Online</span>
           </span>
         )}
       </div>
       
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         {session && (
           <button 
             onClick={logout} 
-            className="px-2.5 py-1.5 bg-emerald-700 text-white rounded-lg flex items-center gap-1.5 font-bold text-xs active:bg-emerald-950 border border-emerald-500/30"
+            className="px-2.5 py-1.5 bg-emerald-700 text-white rounded-lg flex items-center gap-1.5 font-bold text-xs active:bg-emerald-950 border border-emerald-500/30 shrink-0"
           >
             {t('switchUser')}
           </button>
@@ -454,7 +454,7 @@ function TopBar({ onSync, syncing, onToggleMenu }: { onSync: () => void, syncing
         <button 
           onClick={onSync} 
           disabled={syncing}
-          className="px-3 py-1.5 bg-emerald-700 text-white rounded-lg flex items-center gap-2 font-bold text-xs active:bg-emerald-900"
+          className="px-3 py-1.5 bg-emerald-700 text-white rounded-lg flex items-center gap-2 font-bold text-xs active:bg-emerald-900 shrink-0"
         >
            <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
            {syncing ? 'Syncing...' : 'Sync'}

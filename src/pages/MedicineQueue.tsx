@@ -353,7 +353,7 @@ export default function MedicineQueue() {
 
               <div className="space-y-4">
                 {pendingTasks.length === 0 ? (
-                  <div className="text-center py-20 border border-slate-850 rounded-2xl bg-slate-900/10 flex flex-col items-center justify-center">
+                  <div className="text-center py-20 border border-slate-800 rounded-2xl bg-slate-900/10 flex flex-col items-center justify-center">
                     <CheckCircle2 className="text-emerald-500 w-16 h-16 mb-4 animate-bounce-subtle" />
                     <p className="text-slate-300 font-black text-base">Queue Fully Cleared</p>
                     <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-wider font-semibold">Ready for new Doctor checkups</p>
@@ -408,7 +408,7 @@ export default function MedicineQueue() {
                 </h3>
                 <div className="space-y-2">
                   {otherInProgressTasks.map(task => (
-                    <div key={task.id} className="bg-slate-900 border border-slate-850 p-3 rounded-xl flex items-center justify-between text-xs">
+                    <div key={task.id} className="bg-slate-900 border border-slate-800 p-3 rounded-xl flex items-center justify-between text-xs">
                       <div>
                         <p className="font-black text-slate-200">{task.patientName}</p>
                         <p className="text-[9px] text-slate-500 mt-0.5">Claimed by: {task.claimedBy}</p>
@@ -432,7 +432,7 @@ export default function MedicineQueue() {
                   <p className="text-xs text-slate-600 font-bold italic text-center py-6">No recent dispatches</p>
                 ) : (
                   finishedTasks.map(task => (
-                    <div key={task.id} className="bg-slate-905/30 border border-slate-850 p-3 rounded-xl space-y-1 hover:border-slate-800 transition-all">
+                    <div key={task.id} className="bg-slate-900/30 border border-slate-800 p-3 rounded-xl space-y-1 hover:border-slate-700 transition-all">
                       <div className="flex justify-between items-center">
                         <p className="font-black text-slate-300 text-xs truncate max-w-[120px]">{task.patientName}</p>
                         <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase shrink-0 ${
