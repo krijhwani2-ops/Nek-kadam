@@ -1605,7 +1605,7 @@ app.post('/api/presence/heartbeat', async (req, res) => {
 
 // Catch-all route for React SPA routing
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api') || req.path.startsWith('/rpc') || req.path.startsWith('/static')) {
+  if (req.path.startsWith('/api') || req.path.startsWith('/rpc') || req.path.startsWith('/static') || req.path.startsWith('/apk')) {
     return next();
   }
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));

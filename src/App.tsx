@@ -36,22 +36,33 @@ function BackButtonHandler() {
   const location = useLocation();
 
   useEffect(() => {
-    const handler = CapApp.addListener('backButton', () => {
-      // If we're on the dashboard (home), minimize the app instead of closing
-      if (location.pathname === '/' || location.pathname === '/dashboard') {
-        CapApp.minimizeApp();
-      } else {
-        // Go back in React Router history safely
-        if (window.history.state && window.history.state.idx > 0) {
-          navigate(-1);
+    const cap = (window as any)?.Capacitor;
+    const isNative = cap && (cap.isNativePlatform === true || cap.getPlatform?.() === 'android' || cap.getPlatform?.() === 'ios');
+    if (!isNative) return;
+
+    let removeListener: (() => void) | null = null;
+    try {
+      CapApp.addListener('backButton', () => {
+        if (location.pathname === '/' || location.pathname === '/dashboard') {
+          CapApp.minimizeApp().catch(() => {});
         } else {
-          navigate('/', { replace: true }); // Fallback to home instead of exiting
+          if (window.history.state && window.history.state.idx > 0) {
+            navigate(-1);
+          } else {
+            navigate('/', { replace: true });
+          }
         }
-      }
-    });
+      }).then(h => {
+        removeListener = () => h.remove();
+      }).catch(err => {
+        console.warn('[BACK BUTTON] Not supported on this platform:', err);
+      });
+    } catch (_e) {
+      // Ignored on non-native platforms
+    }
 
     return () => {
-      handler.then(h => h.remove());
+      if (removeListener) removeListener();
     };
   }, [navigate, location.pathname]);
 
@@ -584,12 +595,9 @@ function AppLayout() {
       }
     });
 
-    import('./lib/db').then(({ getServerIp, fullDataSync }) => {
-      const SERVER_PORT = 3001;
-      const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
-      const ip = isLocalhost ? window.location.hostname : getServerIp();
-      const socketUrl = `http://${ip}:${SERVER_PORT}`;
-      socket = io(socketUrl, { reconnection: true });
+    import('./lib/db').then(({ fullDataSync }) => {
+      const socketUrl = getBaseUrl();
+      socket = io(socketUrl, { reconnection: true, transports: ['websocket', 'polling'] });
       
       socket.on('connect', () => {
         console.log('[LIVE SYNC] Connected to server socket. Catching up...');
