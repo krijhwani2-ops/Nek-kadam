@@ -34,18 +34,43 @@ export function getServerIp() {
 const CLOUD_URL = 'https://nek-kadam.onrender.com';
 
 export function getBaseUrl(): string {
+  const mode = (typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_NETWORK_MODE') : null) || 'auto';
+  const savedIp = typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_SERVER_IP') : null;
+
+  // Explicit Internet Mode: always use Cloud URL
+  if (mode === 'internet') {
+    if (typeof window !== 'undefined' && window.location.hostname && !isPrivateNetwork(window.location.hostname)) {
+      return ''; // Already on cloud web app -> relative
+    }
+    return CLOUD_URL;
+  }
+
+  // Explicit LAN Mode: always use LAN IP or localhost
+  if (mode === 'lan') {
+    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      if (typeof (window as any)?.Capacitor !== 'undefined') {
+        return `http://${savedIp || '192.168.29.180'}:${SERVER_PORT}`;
+      }
+      return `http://localhost:${SERVER_PORT}`;
+    }
+    if (savedIp) return `http://${savedIp}:${SERVER_PORT}`;
+    if (typeof window !== 'undefined' && window.location.hostname && isPrivateNetwork(window.location.hostname)) {
+      return `${window.location.protocol}//${window.location.hostname}:${SERVER_PORT}`;
+    }
+    return `http://192.168.29.180:${SERVER_PORT}`;
+  }
+
+  // Auto Mode (default)
   // 1. If running in browser/Electron on the server machine (localhost)
   if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
     if (typeof (window as any)?.Capacitor !== 'undefined') {
-      const savedIp = localStorage.getItem('NEK_KADAM_SERVER_IP');
       if (savedIp) return `http://${savedIp}:${SERVER_PORT}`;
       return CLOUD_URL; // APK on mobile connects to Cloud URL by default
     }
     return `http://localhost:${SERVER_PORT}`;
   }
 
-  // 2. If a custom IP is manually saved in Settings, respect it unconditionally
-  const savedIp = typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_SERVER_IP') : null;
+  // 2. If a custom IP is manually saved in Settings, respect it
   if (savedIp) {
     return `http://${savedIp}:${SERVER_PORT}`;
   }

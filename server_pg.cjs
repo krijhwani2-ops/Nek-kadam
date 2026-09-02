@@ -306,7 +306,7 @@ app.post('/api/login', async (req, res) => {
     const { name, passcode } = req.body || {};
     const hash = crypto.createHash('sha256').update(passcode || '').digest('hex');
     const user = await qr1lite(
-      `SELECT u.*, d.code as deptCode FROM users u JOIN departments d ON u.departmentId = d.id WHERE u.name = ? AND u.passcode = ?`,
+      `SELECT u.*, d.code as deptCode FROM users u JOIN departments d ON u."departmentId" = d.id WHERE u.name = ? AND u.passcode = ?`,
       [name, hash]
     );
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
@@ -512,9 +512,9 @@ app.get('/api/patients/:identifier/visits', async (req, res) => {
 app.get('/api/admin/users', async (_req, res) => {
   try {
     const users = await qr(`
-      SELECT u.id, u.name, u.role, u.departmentId, u.isActive, u.passcode, d.name AS department
+      SELECT u.id, u.name, u.role, u."departmentId", u."isActive", u.passcode, d.name AS department
       FROM users u
-      LEFT JOIN departments d ON u.departmentId = d.id
+      LEFT JOIN departments d ON u."departmentId" = d.id
       ORDER BY u.name
     `);
     res.json({ data: users });
@@ -547,7 +547,7 @@ app.post('/api/admin/users/create', async (req, res) => {
       deptId = firstDept?.id || null;
     }
     await q(
-      `INSERT INTO users (id, name, passcode, departmentId, role, isActive) VALUES ($1,$2,$3,$4,$5,1)`,
+      `INSERT INTO users (id, name, passcode, "departmentId", role, "isActive") VALUES ($1,$2,$3,$4,$5,1)`,
       [uuid(), name, hash, deptId, String(role).toUpperCase()]
     );
     res.json({ ok: true });
@@ -562,7 +562,7 @@ app.post('/api/admin/users/update', async (req, res) => {
     const dept = await qr1lite('SELECT id FROM departments WHERE name = ? OR code = ?', [department, department]);
     const deptId = dept?.id || null;
     const params = [name, String(role).toUpperCase(), is_active ? 1 : 0];
-    let sql = 'UPDATE users SET name = $1, role = $2, isActive = $3';
+    let sql = 'UPDATE users SET name = $1, role = $2, "isActive" = $3';
     let idx = 4;
     if (passcode && String(passcode).length > 0) {
       const hash = crypto.createHash('sha256').update(passcode).digest('hex');
@@ -570,7 +570,7 @@ app.post('/api/admin/users/update', async (req, res) => {
       params.push(hash);
     }
     if (deptId) {
-      sql += `, departmentId = $${idx++}`;
+      sql += `, "departmentId" = $${idx++}`;
       params.push(deptId);
     }
     sql += ` WHERE id = $${idx}`;
@@ -619,7 +619,7 @@ async function loadTokenWithDept(id) {
     `
     SELECT t.*, d.code AS "departmentCode"
     FROM tokens t
-    JOIN departments d ON t.currentDepartmentId = d.id
+    JOIN departments d ON t."currentDepartmentId" = d.id
     WHERE t.id = $1
     `,
     [id]
@@ -635,34 +635,34 @@ app.get('/api/tokens/dashboard', async (_req, res) => {
     const statsRows = await qr(
       `
       SELECT
-        currentDepartmentId AS "currentDepartmentId",
+        "currentDepartmentId" AS "currentDepartmentId",
         COALESCE(SUM(CASE WHEN status = 'WAITING' THEN 1 ELSE 0 END),0)::int AS waiting,
         COALESCE(SUM(CASE WHEN status = 'IN_PROGRESS' THEN 1 ELSE 0 END),0)::int AS inprogress,
         COALESCE(SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END),0)::int AS done,
         COALESCE(SUM(CASE WHEN status = 'SKIPPED' THEN 1 ELSE 0 END),0)::int AS skipped
       FROM tokens
-      WHERE dateKey = $1 AND isDeleted = 0
-      GROUP BY currentDepartmentId
+      WHERE "dateKey" = $1 AND "isDeleted" = 0
+      GROUP BY "currentDepartmentId"
       `,
       [dateKey]
     );
 
     const currentRows = await qr(
       `
-      SELECT DISTINCT ON (t.currentDepartmentId) t.*, d.code AS "departmentCode"
-      FROM tokens t JOIN departments d ON t.currentDepartmentId = d.id
-      WHERE t.dateKey = $1 AND t.status = 'IN_PROGRESS' AND t.isDeleted = 0
-      ORDER BY t.currentDepartmentId, t.id
+      SELECT DISTINCT ON (t."currentDepartmentId") t.*, d.code AS "departmentCode"
+      FROM tokens t JOIN departments d ON t."currentDepartmentId" = d.id
+      WHERE t."dateKey" = $1 AND t.status = 'IN_PROGRESS' AND t."isDeleted" = 0
+      ORDER BY t."currentDepartmentId", t.id
       `,
       [dateKey]
     );
 
     const nextRows = await qr(
       `
-      SELECT DISTINCT ON (t.currentDepartmentId) t.*, d.code AS "departmentCode"
-      FROM tokens t JOIN departments d ON t.currentDepartmentId = d.id
-      WHERE t.dateKey = $1 AND t.status = 'WAITING' AND t.isDeleted = 0
-      ORDER BY t.currentDepartmentId, t.priority DESC, t.sequenceIndex ASC
+      SELECT DISTINCT ON (t."currentDepartmentId") t.*, d.code AS "departmentCode"
+      FROM tokens t JOIN departments d ON t."currentDepartmentId" = d.id
+      WHERE t."dateKey" = $1 AND t.status = 'WAITING' AND t."isDeleted" = 0
+      ORDER BY t."currentDepartmentId", t.priority DESC, t."sequenceIndex" ASC
       `,
       [dateKey]
     );
@@ -718,7 +718,7 @@ app.get('/api/tokens/dashboard', async (_req, res) => {
         COUNT(*)::int AS total,
         COALESCE(SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END),0)::int AS done
       FROM tokens
-      WHERE dateKey = $1 AND isDeleted = 0
+      WHERE "dateKey" = $1 AND "isDeleted" = 0
       `,
       [dateKey]
     );
@@ -744,18 +744,18 @@ app.get('/api/tokens', async (req, res) => {
     let sql = `
       SELECT t.*, d.code AS "departmentCode"
       FROM tokens t
-      JOIN departments d ON t.currentDepartmentId = d.id
-      WHERE t.dateKey = $1 AND t.isDeleted = 0
+      JOIN departments d ON t."currentDepartmentId" = d.id
+      WHERE t."dateKey" = $1 AND t."isDeleted" = 0
     `;
     if (departmentId) {
-      sql += ` AND t.currentDepartmentId = $${params.length + 1}`;
+      sql += ` AND t."currentDepartmentId" = $${params.length + 1}`;
       params.push(departmentId);
     }
     if (status) {
       sql += ` AND t.status = $${params.length + 1}`;
       params.push(status);
     }
-    sql += ` ORDER BY t.priority DESC, t.sequenceIndex ASC`;
+    sql += ` ORDER BY t.priority DESC, t."sequenceIndex" ASC`;
     const rows = await qr(sql, params);
     res.json({
       data: rows.map((r) => mapTokenRow(r)),
@@ -782,7 +782,7 @@ app.post('/api/tokens/create', async (req, res) => {
     const { personId, personName, personCard, priority } = req.body || {};
     const dateKey = todayKey();
     const exists = await qr1lite(
-      'SELECT id, tokenNumber, status FROM tokens WHERE personId = ? AND dateKey = ? AND isDeleted = 0',
+      'SELECT id, "tokenNumber", status FROM tokens WHERE "personId" = ? AND "dateKey" = ? AND "isDeleted" = 0',
       [personId, dateKey]
     );
     if (exists) return res.json({ error: `Token #${exists.tokennumber || exists.tokenNumber} already exists today (Status: ${exists.status})` });
@@ -791,16 +791,16 @@ app.post('/api/tokens/create', async (req, res) => {
     if (!receptionRow?.id) receptionRow = await qr1('SELECT id FROM departments ORDER BY code LIMIT 1', []);
     const receptionId = receptionRow?.id;
     if (!receptionId) return res.status(503).json({ error: 'No departments configured' });
-    const maxNumRow = await qr1('SELECT MAX(tokenNumber) AS m FROM tokens WHERE dateKey = $1', [dateKey]);
+    const maxNumRow = await qr1('SELECT MAX("tokenNumber") AS m FROM tokens WHERE "dateKey" = $1', [dateKey]);
     const nextNum = (maxNumRow?.m || 0) + 1;
     const maxSeqRow = await qr1(
-      'SELECT MAX(sequenceIndex) AS m FROM tokens WHERE currentDepartmentId = $1 AND dateKey = $2',
+      'SELECT MAX("sequenceIndex") AS m FROM tokens WHERE "currentDepartmentId" = $1 AND "dateKey" = $2',
       [receptionId, dateKey]
     );
     const nextSeq = (maxSeqRow?.m || 0) + 1;
     const tokenId = uuid();
     await q(
-      `INSERT INTO tokens (id, tokenNumber, dateKey, personId, personName, personCard, currentDepartmentId, status, priority, sequenceIndex, isDeleted)
+      `INSERT INTO tokens (id, "tokenNumber", "dateKey", "personId", "personName", "personCard", "currentDepartmentId", status, priority, "sequenceIndex", "isDeleted")
        VALUES ($1,$2,$3,$4,$5,$6,$7,'WAITING',$8,$9,0)`,
       [tokenId, nextNum, dateKey, personId, personName, personCard || personId, receptionId, priority || 'NORMAL', nextSeq]
     );
@@ -817,14 +817,14 @@ app.post('/api/tokens/start', async (req, res) => {
     const dateKey = todayKey();
     await q(
       `UPDATE tokens SET status = 'DONE'
-       WHERE currentDepartmentId = $1 AND dateKey = $2 AND status = 'IN_PROGRESS'`,
+       WHERE "currentDepartmentId" = $1 AND "dateKey" = $2 AND status = 'IN_PROGRESS'`,
       [departmentId, dateKey]
     );
     let targetId = tokenId;
     if (!targetId) {
       const next = await qr1(
-        `SELECT id FROM tokens WHERE currentDepartmentId = $1 AND dateKey = $2 AND status = 'WAITING' AND isDeleted = 0
-         ORDER BY priority DESC, sequenceIndex ASC LIMIT 1`,
+        `SELECT id FROM tokens WHERE "currentDepartmentId" = $1 AND "dateKey" = $2 AND status = 'WAITING' AND "isDeleted" = 0
+         ORDER BY priority DESC, "sequenceIndex" ASC LIMIT 1`,
         [departmentId, dateKey]
       );
       if (!next) return res.json({ error: 'No waiting tokens' });
@@ -855,12 +855,12 @@ app.post('/api/tokens/move', async (req, res) => {
     if (ix >= 0 && ix < order.length - 1) {
       const nextDept = order[ix + 1];
       const maxSeqRow = await qr1(
-        'SELECT MAX(sequenceIndex) AS m FROM tokens WHERE currentDepartmentId = $1 AND dateKey = $2',
+        'SELECT MAX("sequenceIndex") AS m FROM tokens WHERE "currentDepartmentId" = $1 AND "dateKey" = $2',
         [nextDept, dk]
       );
       const nextSeq = (maxSeqRow?.m || 0) + 1;
       await q(
-        `UPDATE tokens SET currentDepartmentId = $2, status = 'WAITING', priority = priority, sequenceIndex = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+        `UPDATE tokens SET "currentDepartmentId" = $2, status = 'WAITING', priority = priority, "sequenceIndex" = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
         [tokenId, nextDept, nextSeq]
       );
     } else {
@@ -893,7 +893,7 @@ app.post('/api/tokens/requeue', async (req, res) => {
 
 app.post('/api/tokens/cancel', async (req, res) => {
   try {
-    await q(`UPDATE tokens SET status = 'CANCELLED', isDeleted = 1, updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [req.body?.tokenId]);
+    await q(`UPDATE tokens SET status = 'CANCELLED', "isDeleted" = 1, updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [req.body?.tokenId]);
     res.json({ data: await loadTokenWithDept(req.body?.tokenId) });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1149,12 +1149,41 @@ function extendWhere(filters, params, clauses) {
 app.post('/rpc/query', async (req, res) => {
   const { table, select, filters, order, single, limit, head, count, or: orClause } = req.body || {};
   try {
-    if (orClause && typeof orClause === 'string') {
-      return res.status(400).json({ error: 'OR filters not supported on PG RPC endpoint.' });
-    }
     const params = [];
     const clauses = [];
     extendWhere(filters, params, clauses);
+
+    if (orClause && typeof orClause === 'string') {
+      const cleanOr = orClause.replace(/^\(|\)$/g, '');
+      const parts = cleanOr.split(',');
+      const orClauses = [];
+      for (const part of parts) {
+        const match = part.trim().match(/^([a-zA-Z0-9_-]+)\.(eq|neq|ilike|gte|lte)\.(.*)$/);
+        if (match) {
+          const [, col, op, val] = match;
+          if (op === 'eq') {
+            params.push(val);
+            orClauses.push(`"${col}" = $${params.length}`);
+          } else if (op === 'neq') {
+            params.push(val);
+            orClauses.push(`"${col}" <> $${params.length}`);
+          } else if (op === 'ilike') {
+            params.push(val);
+            orClauses.push(`"${col}"::text ILIKE $${params.length}`);
+          } else if (op === 'gte') {
+            params.push(val);
+            orClauses.push(`"${col}" >= $${params.length}`);
+          } else if (op === 'lte') {
+            params.push(val);
+            orClauses.push(`"${col}" <= $${params.length}`);
+          }
+        }
+      }
+      if (orClauses.length > 0) {
+        clauses.push(`(${orClauses.join(' OR ')})`);
+      }
+    }
+
     const whereSql = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
 
     if (head || count) {

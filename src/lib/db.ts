@@ -7,9 +7,42 @@ import { getStoredSession, setStoredSession, getBaseUrl, isPrivateNetwork } from
 // Allow overriding the server IP for mobile connectivity
 const SERVER_PORT = 3001;
 const API_URL_LOCAL = '/rpc';
+const CLOUD_URL = 'https://nek-kadam.onrender.com';
+
+export type NetworkMode = 'auto' | 'lan' | 'internet';
+
+export function getNetworkMode(): NetworkMode {
+  if (typeof window === 'undefined') return 'auto';
+  const saved = localStorage.getItem('NEK_KADAM_NETWORK_MODE') as NetworkMode;
+  if (saved === 'lan' || saved === 'internet' || saved === 'auto') return saved;
+  return 'auto';
+}
+
+export function setNetworkMode(mode: NetworkMode) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('NEK_KADAM_NETWORK_MODE', mode);
+  _serverOnline = null;
+  _lastCheck = 0;
+  if (mode === 'internet') {
+    activeApiUrl = `${CLOUD_URL}/rpc`;
+  } else if (mode === 'lan') {
+    const savedIp = localStorage.getItem('NEK_KADAM_SERVER_IP');
+    activeApiUrl = savedIp ? `http://${savedIp}:${SERVER_PORT}/rpc` : getRemoteApiUrl();
+  } else {
+    activeApiUrl = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      ? API_URL_LOCAL
+      : getRemoteApiUrl();
+  }
+  window.dispatchEvent(new CustomEvent('nk_network_mode_changed', { detail: mode }));
+}
 
 function getRemoteApiUrl(): string {
-  // 1. If custom IP is manually configured in Settings, use it unconditionally
+  const mode = getNetworkMode();
+  if (mode === 'internet') {
+    return `${CLOUD_URL}/rpc`;
+  }
+
+  // 1. If custom IP is manually configured in Settings, use it
   const savedIp = typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_SERVER_IP') : null;
   if (savedIp) {
     return `http://${savedIp}:${SERVER_PORT}/rpc`;
@@ -41,15 +74,22 @@ export function setServerIp(ip: string) {
     activeApiUrl = `http://${ip}:${SERVER_PORT}/rpc`;
   } else {
     localStorage.removeItem('NEK_KADAM_SERVER_IP');
-    activeApiUrl = `http://192.168.29.180:${SERVER_PORT}/rpc`;
+    activeApiUrl = getRemoteApiUrl();
   }
+  _serverOnline = null;
+  _lastCheck = 0;
+  window.dispatchEvent(new CustomEvent('nk_server_ip_changed', { detail: ip }));
 }
 
 export function getServerIp() {
-  return localStorage.getItem('NEK_KADAM_SERVER_IP') || '192.168.29.180';
+  return localStorage.getItem('NEK_KADAM_SERVER_IP') || '';
 }
 
 function getApiUrl(): string {
+  const mode = getNetworkMode();
+  if (mode === 'internet') {
+    return `${CLOUD_URL}/rpc`;
+  }
   if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
     return API_URL_LOCAL;
   }
@@ -450,11 +490,11 @@ export async function discoverLocalServer(): Promise<string | null> {
   return null;
 }
 
-const CLOUD_URL = 'https://nek-kadam.onrender.com';
-
 export async function checkServerOnline(): Promise<boolean> {
   if (_serverOnline !== null && Date.now() - _lastCheck < 5000) return _serverOnline;
   
+  const mode = getNetworkMode();
+
   const tryPing = async (urlToTry: string) => {
     try {
       const controller = new AbortController();
@@ -474,28 +514,57 @@ export async function checkServerOnline(): Promise<boolean> {
     } catch { return false; }
   };
 
-  // 1. Try local LAN server first (super fast offline Wi-Fi)
-  const remoteUrl = getRemoteApiUrl();
-  let online = await tryPing(remoteUrl);
-  if (online) {
-    activeApiUrl = remoteUrl;
-  } else {
-    // 2. Fallback to Cloud Server URL (works over 4G/5G mobile data anywhere!)
+  let online = false;
+
+  if (mode === 'internet') {
+    // Force Cloud Mode only
     const cloudApiUrl = `${CLOUD_URL}/rpc`;
     online = await tryPing(cloudApiUrl);
     if (online) {
       activeApiUrl = cloudApiUrl;
     } else {
-      // 3. Fallback to same-origin relative /rpc
+      online = await tryPing(API_URL_LOCAL);
+      if (online) activeApiUrl = API_URL_LOCAL;
+    }
+  } else if (mode === 'lan') {
+    // Force LAN Mode only
+    const remoteUrl = getRemoteApiUrl();
+    online = await tryPing(remoteUrl);
+    if (online) {
+      activeApiUrl = remoteUrl;
+    } else {
       online = await tryPing(API_URL_LOCAL);
       if (online) {
         activeApiUrl = API_URL_LOCAL;
       } else {
-        // Trigger silent background network scanning
         if (!isAutoDiscovering) {
           discoverLocalServer().catch(err => {
             console.error('[AUTO-DISCOVERY] Background scan failed:', err);
           });
+        }
+      }
+    }
+  } else {
+    // AUTO Mode: Try LAN first -> Cloud -> Local relative -> Auto-discovery
+    const remoteUrl = getRemoteApiUrl();
+    online = await tryPing(remoteUrl);
+    if (online) {
+      activeApiUrl = remoteUrl;
+    } else {
+      const cloudApiUrl = `${CLOUD_URL}/rpc`;
+      online = await tryPing(cloudApiUrl);
+      if (online) {
+        activeApiUrl = cloudApiUrl;
+      } else {
+        online = await tryPing(API_URL_LOCAL);
+        if (online) {
+          activeApiUrl = API_URL_LOCAL;
+        } else {
+          if (!isAutoDiscovering) {
+            discoverLocalServer().catch(err => {
+              console.error('[AUTO-DISCOVERY] Background scan failed:', err);
+            });
+          }
         }
       }
     }
@@ -601,7 +670,7 @@ export async function fullDataSync(): Promise<{ success: boolean; message: strin
     'patients', 'visits', 'medicines', 'prescription_groups', 'group_medicines', 
     'medicine_logs', 'dosage_frequency', 'tokens', 'token_events', 'batches', 
     'education_students', 'attendance', 'inventory', 'departments',
-    'medicine_tasks', 'medicine_task_items'
+    'medicine_tasks', 'medicine_task_items', 'chat_messages'
   ];
   const url = getApiUrl();
   let totalRows = 0;

@@ -138,30 +138,30 @@ export default function PatientsList() {
             <Link
               key={p.id}
               to={`/patients/${p.card_number}`}
-              className="flex flex-col md:flex-row justify-between items-start md:items-center p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800/80 hover:border-emerald-300 dark:hover:border-slate-700 hover:-translate-y-0.5 group gap-3 transition-all shadow-sm"
+              className="flex flex-col md:flex-row justify-between items-start md:items-center p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800/80 hover:border-emerald-300 dark:hover:border-slate-700 hover:-translate-y-0.5 group gap-3 transition-all shadow-sm w-full min-w-0 overflow-hidden"
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 min-w-0 flex-1 w-full md:w-auto">
                 {/* Avatar */}
                 <div className="w-11 h-11 rounded-xl bg-gradient-primary flex items-center justify-center text-white font-extrabold text-lg shadow-md shadow-emerald-200 dark:shadow-emerald-950 group-hover:scale-105 transition-transform duration-300 flex-shrink-0">
-                  {p.name.charAt(0).toUpperCase()}
+                  {(p.name || 'P').charAt(0).toUpperCase()}
                 </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-800 dark:text-slate-100 text-base group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
-                    {p.name}
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-extrabold text-slate-800 dark:text-slate-100 text-base group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors truncate">
+                    {p.name || 'Unnamed Patient'}
                   </h3>
-                  <p className="text-xs text-slate-400 dark:text-slate-500 font-medium mt-0.5">
+                  <p className="text-xs text-slate-400 dark:text-slate-500 font-medium mt-0.5 truncate">
                     {p.phone || 'No phone'}
                   </p>
                 </div>
               </div>
 
               {/* Visit Date Column */}
-              <div className="hidden md:flex flex-col items-center">
+              <div className="hidden md:flex flex-col items-center shrink-0">
                 {p.last_visit_date ? (
                   <>
                     <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Last Visit</p>
-                    <span className="flex items-center gap-1.5 text-sm font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/50 px-3 py-1 rounded-xl border border-slate-100 dark:border-slate-800">
-                      <Calendar size={14} className="text-orange-500" /> {safeFormatDate(p.last_visit_date, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    <span className="flex items-center gap-1.5 text-sm font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/50 px-3 py-1 rounded-xl border border-slate-100 dark:border-slate-800 truncate">
+                      <Calendar size={14} className="text-orange-500 shrink-0" /> {safeFormatDate(p.last_visit_date, { month: 'short', day: 'numeric', year: 'numeric' })}
                     </span>
                   </>
                 ) : (
@@ -169,18 +169,18 @@ export default function PatientsList() {
                 )}
               </div>
 
-              <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end">
+              <div className="flex items-center gap-3 sm:gap-6 w-full md:w-auto justify-between md:justify-end min-w-0 shrink-0">
                 {/* Mobile Visit Date */}
-                <div className="md:hidden">
+                <div className="md:hidden min-w-0 shrink">
                   {p.last_visit_date && (
-                    <span className="flex items-center gap-1 text-[10px] font-bold text-orange-500 bg-orange-50 dark:bg-orange-950 px-2 py-0.5 rounded-lg border border-orange-100 dark:border-orange-900">
-                      <Calendar size={10} /> {safeFormatDate(p.last_visit_date)}
+                    <span className="flex items-center gap-1 text-[10px] font-bold text-orange-500 bg-orange-50 dark:bg-orange-950 px-2 py-0.5 rounded-lg border border-orange-100 dark:border-orange-900 truncate">
+                      <Calendar size={10} className="shrink-0" /> {safeFormatDate(p.last_visit_date)}
                     </span>
                   )}
                 </div>
                 
                 <span
-                  className="px-4 py-2 rounded-xl font-bold text-sm"
+                  className="px-4 py-2 rounded-xl font-bold text-sm truncate max-w-[140px] sm:max-w-none shrink-0"
                   style={{
                     background: 'linear-gradient(135deg,#fb923c,#f97316)',
                     color: 'white',
@@ -189,7 +189,7 @@ export default function PatientsList() {
                 >
                   {p.card_number && p.card_number.toString().startsWith('TEMP-') ? 'No ID' : `#${p.card_number}`}
                 </span>
-                <ChevronRight size={18} className="text-slate-300 dark:text-slate-600 group-hover:text-emerald-500 group-hover:translate-x-1 transition-all duration-250" />
+                <ChevronRight size={18} className="text-slate-300 dark:text-slate-600 group-hover:text-emerald-500 group-hover:translate-x-1 transition-all duration-250 shrink-0" />
               </div>
             </Link>
           ))}

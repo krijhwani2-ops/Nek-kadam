@@ -1,9 +1,11 @@
 -- 001_init.sql: Complete PostgreSQL Schema for Nek Kadam
+-- MUST match server_pg.cjs queries exactly
 
 CREATE TABLE IF NOT EXISTS departments (
   id TEXT PRIMARY KEY,
   code TEXT UNIQUE NOT NULL,
   name TEXT NOT NULL,
+  "isActive" INTEGER DEFAULT 1,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -12,7 +14,8 @@ CREATE TABLE IF NOT EXISTS users (
   name TEXT NOT NULL,
   passcode TEXT,
   role TEXT NOT NULL DEFAULT 'Volunteer',
-  "departmentId" TEXT,
+  "departmentId" TEXT REFERENCES departments(id),
+  "isActive" INTEGER DEFAULT 1,
   "deviceId" TEXT,
   "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -20,16 +23,19 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS activity_logs (
   id TEXT PRIMARY KEY,
-  "user_id" TEXT,
+  user_id TEXT,
   "userId" TEXT,
   "departmentId" TEXT,
   action TEXT NOT NULL,
+  entity TEXT,
+  entity_id TEXT,
   details TEXT,
   timestamp TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS patients (
   id TEXT PRIMARY KEY,
+  card_number TEXT,
   identifier TEXT,
   name TEXT,
   age TEXT,
@@ -37,7 +43,7 @@ CREATE TABLE IF NOT EXISTS patients (
   phone TEXT,
   city TEXT,
   village TEXT,
-  "adhar_no" TEXT,
+  adhar_no TEXT,
   photo TEXT,
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -58,10 +64,9 @@ CREATE TABLE IF NOT EXISTS medicines (
 
 CREATE TABLE IF NOT EXISTS visits (
   id TEXT PRIMARY KEY,
-  "patientId" TEXT,
   patient_id TEXT,
   date TEXT,
-  "doctorName" TEXT,
+  doctor_name TEXT,
   symptoms TEXT,
   diagnosis TEXT,
   notes TEXT,
@@ -70,19 +75,16 @@ CREATE TABLE IF NOT EXISTS visits (
 
 CREATE TABLE IF NOT EXISTS prescription_groups (
   id TEXT PRIMARY KEY,
-  "visitId" TEXT,
-  "patientId" TEXT,
-  "groupName" TEXT,
-  date TEXT,
-  doctor TEXT,
-  status TEXT DEFAULT 'PENDING',
+  visit_id TEXT,
+  power TEXT,
+  dosage_code TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS group_medicines (
   id SERIAL PRIMARY KEY,
-  "groupId" TEXT,
-  "medicineId" TEXT,
+  group_id TEXT,
+  medicine_code TEXT,
   dosage TEXT,
   frequency TEXT,
   duration TEXT,
@@ -94,27 +96,45 @@ CREATE TABLE IF NOT EXISTS group_medicines (
 CREATE TABLE IF NOT EXISTS tokens (
   id TEXT PRIMARY KEY,
   "tokenNumber" INTEGER,
-  "patientId" TEXT,
-  "patientName" TEXT,
-  department TEXT,
+  "dateKey" TEXT,
+  "personId" TEXT,
+  "personName" TEXT,
+  "personCard" TEXT,
+  "currentDepartmentId" TEXT REFERENCES departments(id),
+  "sourceDepartmentId" TEXT,
   status TEXT DEFAULT 'WAITING',
-  date TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  priority TEXT DEFAULT 'NORMAL',
+  "sequenceIndex" INTEGER DEFAULT 0,
+  "isDeleted" INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS token_events (
+  id TEXT PRIMARY KEY,
+  "tokenId" TEXT,
+  "userId" TEXT,
+  "departmentId" TEXT,
+  event TEXT,
+  metadata TEXT,
+  timestamp TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS batches (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  "isActive" BOOLEAN DEFAULT TRUE,
+  timing TEXT,
+  "isActive" INTEGER DEFAULT 1,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS education_students (
   id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
+  name TEXT,
   "patientId" TEXT,
   "batchId" TEXT,
-  "isActive" BOOLEAN DEFAULT TRUE,
+  tag TEXT DEFAULT 'Regular',
+  "isActive" INTEGER DEFAULT 1,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -123,8 +143,11 @@ CREATE TABLE IF NOT EXISTS attendance (
   "studentId" TEXT,
   date TEXT,
   status TEXT,
+  note TEXT,
   "markedBy" TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE ("studentId", date)
 );
 
 CREATE TABLE IF NOT EXISTS dosage_frequency (
@@ -150,15 +173,6 @@ CREATE TABLE IF NOT EXISTS inventory (
   batch_number TEXT,
   expiry_date TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS token_events (
-  id TEXT PRIMARY KEY,
-  "tokenId" TEXT,
-  "userId" TEXT,
-  "departmentId" TEXT,
-  event_type TEXT,
-  timestamp TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS chat_messages (
@@ -187,4 +201,33 @@ CREATE TABLE IF NOT EXISTS user_presence (
   "isOnline" INTEGER DEFAULT 1,
   "deviceId" TEXT,
   "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS medicine_tasks (
+  id TEXT PRIMARY KEY,
+  "visitId" TEXT,
+  "patientId" TEXT,
+  "patientName" TEXT,
+  status TEXT DEFAULT 'PENDING',
+  "createdBy" TEXT,
+  "claimedBy" TEXT,
+  "claimedAt" TIMESTAMPTZ,
+  "startedAt" TIMESTAMPTZ,
+  "completedBy" TEXT,
+  "completedAt" TIMESTAMPTZ,
+  "deliveredBy" TEXT,
+  "deliveredAt" TIMESTAMPTZ,
+  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS medicine_task_items (
+  id TEXT PRIMARY KEY,
+  "taskId" TEXT REFERENCES medicine_tasks(id),
+  "medicineCode" TEXT,
+  "medicineName" TEXT,
+  dosage TEXT,
+  duration TEXT,
+  instructions TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
