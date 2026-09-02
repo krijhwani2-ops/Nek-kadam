@@ -88,7 +88,7 @@ app.use((req, res, next) => {
 // AUDIT FIX: Serve only the dist folder, not the entire project root (was exposing nekkadam.db, source code, .env)
 app.use('/static', express.static('dist'));
 app.use('/apk', express.static(__dirname + '/apk'));
-app.get('/api/version', (req, res) => res.json({ version: '1.0.8', apkUrl: '/apk/nek-kadam.apk' }));
+app.get('/api/version', (req, res) => res.json({ version: '1.0.9', apkUrl: '/apk/nek-kadam.apk' }));
 
 // ─────────────────────────────────────
 //  ECOSYSTEM: Request Logger

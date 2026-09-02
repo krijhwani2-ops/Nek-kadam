@@ -121,7 +121,9 @@ app.use((req, res, next) => {
 });
 
 app.use('/static', express.static('dist'));
+app.use('/apk', express.static(path.join(__dirname, 'apk')));
 app.use(express.static(path.join(__dirname, 'dist')));
+app.get('/api/version', (_req, res) => res.json({ version: '1.0.9', apkUrl: '/apk/nek-kadam.apk' }));
 
 app.use((req, res, next) => {
   const start = Date.now();
