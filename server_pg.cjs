@@ -1603,11 +1603,14 @@ app.post('/api/presence/heartbeat', async (req, res) => {
   }
 });
 
-// Catch-all route for React SPA routing
+// Catch-all route for React SPA routing (never cache index.html)
 app.use((req, res, next) => {
   if (req.path.startsWith('/api') || req.path.startsWith('/rpc') || req.path.startsWith('/static') || req.path.startsWith('/apk')) {
     return next();
   }
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
