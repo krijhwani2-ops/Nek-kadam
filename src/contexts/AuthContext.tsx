@@ -28,8 +28,17 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<NKSession | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState<NKSession | null>(() => {
+    try {
+      const stored = localStorage.getItem('nk_current_user');
+      const token = localStorage.getItem('nk_token');
+      if (token && token !== 'null' && token !== 'undefined' && stored) {
+        return JSON.parse(stored);
+      }
+    } catch (_) {}
+    return null;
+  });
+  const [loading, setLoading] = useState(false);
 
   // Presence Tracking States
   const [currentScreen, setCurrentScreen] = useState('Dashboard');

@@ -4,12 +4,10 @@ import { HeartPulse, GraduationCap, Users, HeartHandshake } from 'lucide-react';
 import logoUrl from '../assets/logo.jpg';
 
 export default function SplashScreen() {
-  const [show, setShow] = useState(false);
+  const [show, setShow] = useState(true);
 
   useEffect(() => {
-    // Slight delay before animating in to ensure DOM is ready
-    const timer = setTimeout(() => setShow(true), 50);
-    return () => clearTimeout(timer);
+    // Keep visible
   }, []);
 
   return (
