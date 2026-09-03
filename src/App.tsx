@@ -69,7 +69,7 @@ function BackButtonHandler() {
   return null;
 }
 
-const APP_VERSION = "1.0.8"; // Increment this in future builds
+const APP_VERSION = "1.1.0"; // Current release version
 
 function OTAUpdater() {
   const [updateAvailable, setUpdateAvailable] = useState<{version: string, apkUrl: string} | null>(null);
@@ -596,7 +596,7 @@ function AppLayout() {
     });
 
     import('./lib/db').then(({ fullDataSync }) => {
-      const socketUrl = getBaseUrl();
+      const socketUrl = getBaseUrl() || (typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://nek-kadam.onrender.com');
       socket = io(socketUrl, { reconnection: true, transports: ['websocket', 'polling'] });
       
       socket.on('connect', () => {

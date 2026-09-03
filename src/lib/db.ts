@@ -86,14 +86,8 @@ export function getServerIp() {
 }
 
 function getApiUrl(): string {
-  const mode = getNetworkMode();
-  if (mode === 'internet') {
-    return `${CLOUD_URL}/rpc`;
-  }
-  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    return API_URL_LOCAL;
-  }
-  return activeApiUrl;
+  const base = getBaseUrl();
+  return base ? `${base}/rpc` : '/rpc';
 }
 
 export function cleanPatientId(id: string | number | undefined | null): string {
@@ -491,88 +485,24 @@ export async function discoverLocalServer(): Promise<string | null> {
 }
 
 export async function checkServerOnline(): Promise<boolean> {
-  if (_serverOnline !== null && Date.now() - _lastCheck < 5000) return _serverOnline;
-  
-  const mode = getNetworkMode();
+  if (_serverOnline !== null && Date.now() - _lastCheck < 8000) return _serverOnline;
 
-  const tryPing = async (urlToTry: string) => {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 2500);
-      const session = await getStoredSession();
-      const res = await fetch(`${urlToTry}/query`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': session ? `Bearer ${session.sessionId}` : ''
-        },
-        body: JSON.stringify({ table: 'patients', select: '*', limit: 1 }),
-        signal: controller.signal
-      });
-      clearTimeout(timeout);
-      return res.ok;
-    } catch { return false; }
-  };
+  const base = getBaseUrl();
+  const urlToPing = base ? `${base}/api/health` : '/api/health';
 
-  let online = false;
-
-  if (mode === 'internet') {
-    // Force Cloud Mode only
-    const cloudApiUrl = `${CLOUD_URL}/rpc`;
-    online = await tryPing(cloudApiUrl);
-    if (online) {
-      activeApiUrl = cloudApiUrl;
-    } else {
-      online = await tryPing(API_URL_LOCAL);
-      if (online) activeApiUrl = API_URL_LOCAL;
-    }
-  } else if (mode === 'lan') {
-    // Force LAN Mode only
-    const remoteUrl = getRemoteApiUrl();
-    online = await tryPing(remoteUrl);
-    if (online) {
-      activeApiUrl = remoteUrl;
-    } else {
-      online = await tryPing(API_URL_LOCAL);
-      if (online) {
-        activeApiUrl = API_URL_LOCAL;
-      } else {
-        if (!isAutoDiscovering) {
-          discoverLocalServer().catch(err => {
-            console.error('[AUTO-DISCOVERY] Background scan failed:', err);
-          });
-        }
-      }
-    }
-  } else {
-    // AUTO Mode: Try LAN first -> Cloud -> Local relative -> Auto-discovery
-    const remoteUrl = getRemoteApiUrl();
-    online = await tryPing(remoteUrl);
-    if (online) {
-      activeApiUrl = remoteUrl;
-    } else {
-      const cloudApiUrl = `${CLOUD_URL}/rpc`;
-      online = await tryPing(cloudApiUrl);
-      if (online) {
-        activeApiUrl = cloudApiUrl;
-      } else {
-        online = await tryPing(API_URL_LOCAL);
-        if (online) {
-          activeApiUrl = API_URL_LOCAL;
-        } else {
-          if (!isAutoDiscovering) {
-            discoverLocalServer().catch(err => {
-              console.error('[AUTO-DISCOVERY] Background scan failed:', err);
-            });
-          }
-        }
-      }
-    }
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(urlToPing, { signal: controller.signal });
+    clearTimeout(timeout);
+    _serverOnline = res.ok;
+    _lastCheck = Date.now();
+    return res.ok;
+  } catch {
+    _serverOnline = false;
+    _lastCheck = Date.now();
+    return false;
   }
-
-  _serverOnline = online;
-  _lastCheck = Date.now();
-  return _serverOnline;
 }
 
 // ─── Sync Engine ───

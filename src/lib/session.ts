@@ -36,56 +36,46 @@ const CLOUD_URL = 'https://nek-kadam.onrender.com';
 export function getBaseUrl(): string {
   const mode = (typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_NETWORK_MODE') : null) || 'auto';
   const savedIp = typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_SERVER_IP') : null;
+  const cap = typeof window !== 'undefined' ? (window as any)?.Capacitor : undefined;
+  const isCapacitor = !!(cap && (cap.isNativePlatform === true || cap.getPlatform?.() === 'android' || cap.getPlatform?.() === 'ios'));
 
-  // Explicit Internet Mode: always use Cloud URL
+  // 1. Explicit Internet Mode: always use Cloud URL
   if (mode === 'internet') {
-    if (typeof window !== 'undefined' && window.location.hostname && !isPrivateNetwork(window.location.hostname)) {
+    if (!isCapacitor && typeof window !== 'undefined' && window.location.hostname && !isPrivateNetwork(window.location.hostname)) {
       return ''; // Already on cloud web app -> relative
     }
     return CLOUD_URL;
   }
 
-  // Explicit LAN Mode: always use LAN IP or localhost
+  // 2. Explicit LAN Mode: always use LAN IP or localhost
   if (mode === 'lan') {
-    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-      if (typeof (window as any)?.Capacitor !== 'undefined') {
-        return `http://${savedIp || '192.168.29.180'}:${SERVER_PORT}`;
-      }
+    if (savedIp) return `http://${savedIp}:${SERVER_PORT}`;
+    if (!isCapacitor && typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
       return `http://localhost:${SERVER_PORT}`;
     }
-    if (savedIp) return `http://${savedIp}:${SERVER_PORT}`;
     if (typeof window !== 'undefined' && window.location.hostname && isPrivateNetwork(window.location.hostname)) {
       return `${window.location.protocol}//${window.location.hostname}:${SERVER_PORT}`;
     }
     return `http://192.168.29.180:${SERVER_PORT}`;
   }
 
-  // Auto Mode (default)
-  // 1. If running in browser/Electron on the server machine (localhost)
-  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    if (typeof (window as any)?.Capacitor !== 'undefined') {
-      if (savedIp) return `http://${savedIp}:${SERVER_PORT}`;
-      return CLOUD_URL; // APK on mobile connects to Cloud URL by default
-    }
-    return `http://localhost:${SERVER_PORT}`;
-  }
-
-  // 2. If a custom IP is manually saved in Settings, respect it
-  if (savedIp) {
-    return `http://${savedIp}:${SERVER_PORT}`;
-  }
-
-  // 3. For mobile / Capacitor APK
-  if (typeof (window as any)?.Capacitor !== 'undefined') {
+  // 3. Auto Mode (default)
+  // For mobile / Capacitor APK: default to Cloud URL so it syncs live with the web app
+  if (isCapacitor) {
     return CLOUD_URL;
   }
 
-  // 4. If accessed in browser on LAN (e.g. phone browser on http://192.168.29.180:5173)
+  // Server machine local browser (localhost)
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return `http://localhost:${SERVER_PORT}`;
+  }
+
+  // Access in browser on LAN (e.g. phone browser on http://192.168.29.180:5173)
   if (typeof window !== 'undefined' && window.location.hostname) {
     if (isPrivateNetwork(window.location.hostname)) {
       return `${window.location.protocol}//${window.location.hostname}:${SERVER_PORT}`;
     }
-    // Public cloud domain (e.g. Render / Custom domain) -> relative same origin
+    // Public cloud domain (e.g. Render) -> relative same origin
     return '';
   }
 
