@@ -654,7 +654,16 @@ function AppLayout() {
     };
   }, [isLoggedIn]);
 
-  if (loading) {
+  // Safety watchdog: ensure loading screen NEVER stays stuck for more than 2 seconds
+  const [splashTimedOut, setSplashTimedOut] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSplashTimedOut(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (loading && !splashTimedOut) {
     return <SplashScreen />;
   }
 
