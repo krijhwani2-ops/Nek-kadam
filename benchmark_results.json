@@ -1,0 +1,66 @@
+{
+  "dashboardQuery_before": {
+    "totalMs": 162.787,
+    "avgMs": 0.8139
+  },
+  "tokenPerson_before": {
+    "totalMs": 140.726,
+    "avgMs": 0.7036
+  },
+  "tokenSeq_before": {
+    "totalMs": 217.99,
+    "avgMs": 1.0899
+  },
+  "visitsPatient_before": {
+    "totalMs": 206.248,
+    "avgMs": 1.0312
+  },
+  "pgroupsMed_before": {
+    "totalMs": 551.791,
+    "avgMs": 2.759
+  },
+  "actLogs_before": {
+    "totalMs": 373.246,
+    "avgMs": 1.8662
+  },
+  "ensureMedicineTask_untransactioned": {
+    "totalMs": 10548.351,
+    "avgMs": 210.967
+  },
+  "ensureMedicineTask_transactioned": {
+    "totalMs": 1885.769,
+    "avgMs": 37.7154
+  },
+  "saveFull_unprepared": {
+    "totalMs": 1614.192,
+    "avgMs": 32.2838
+  },
+  "saveFull_prepared": {
+    "totalMs": 954.397,
+    "avgMs": 19.0879
+  },
+  "dashboardQuery_after": {
+    "totalMs": 117.176,
+    "avgMs": 0.5859
+  },
+  "tokenPerson_after": {
+    "totalMs": 68.372,
+    "avgMs": 0.3419
+  },
+  "tokenSeq_after": {
+    "totalMs": 71.413,
+    "avgMs": 0.3571
+  },
+  "visitsPatient_after": {
+    "totalMs": 83.776,
+    "avgMs": 0.4189
+  },
+  "pgroupsMed_after": {
+    "totalMs": 171.396,
+    "avgMs": 0.857
+  },
+  "actLogs_after": {
+    "totalMs": 91.972,
+    "avgMs": 0.4599
+  }
+}
