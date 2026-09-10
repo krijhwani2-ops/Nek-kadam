@@ -20,7 +20,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({
   session: null,
-  loading: true,
+  loading: false,
   isLoggedIn: false,
   login: () => {},
   logout: () => {},
@@ -28,8 +28,17 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<NKSession | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState<NKSession | null>(() => {
+    try {
+      const stored = localStorage.getItem('nk_current_user');
+      const token = localStorage.getItem('nk_token');
+      if (token && token !== 'null' && token !== 'undefined' && stored) {
+        return JSON.parse(stored);
+      }
+    } catch (_) {}
+    return null;
+  });
+  const [loading, setLoading] = useState(false);
 
   // Presence Tracking States
   const [currentScreen, setCurrentScreen] = useState('Dashboard');
@@ -72,6 +81,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [session]);
 
+  const lastHeartbeatFailedRef = useRef(false);
+
   const sendHeartbeat = async (
     currentSession: NKSession,
     scr: string,
@@ -79,12 +90,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     tId?: string,
     pName?: string
   ) => {
+    // If offline or previous attempt failed, avoid flooding the console
+    const token = localStorage.getItem('nk_token');
+    if (!token || (token.startsWith('offline-token-') && lastHeartbeatFailedRef.current)) {
+      return;
+    }
+
     try {
-      await fetch(`${getBaseUrl()}/api/presence/heartbeat`, {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+      const res = await fetch(`${getBaseUrl()}/api/presence/heartbeat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('nk_token') || ''}`
+          'Authorization': `Bearer ${token || ''}`
         },
         body: JSON.stringify({
           userId: currentSession.userId,
@@ -95,31 +115,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           currentPatientName: pName || null,
           currentStatus: stat,
           deviceId: 'local-device'
-        })
+        }),
+        signal: controller.signal
       });
-    } catch (e) {
-      console.warn('[HEARTBEAT] Connection failed:', e);
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        lastHeartbeatFailedRef.current = false;
+      } else {
+        lastHeartbeatFailedRef.current = true;
+      }
+    } catch {
+      lastHeartbeatFailedRef.current = true;
+      // Silently handle offline network failure
     }
   };
 
   // On mount: check for existing local profile and sync with IndexedDB
   useEffect(() => {
     const stored = localStorage.getItem('nk_current_user');
-    const token = localStorage.getItem('nk_token');
+    let token = localStorage.getItem('nk_token');
     
-    // Self-healing check for invalid stuck tokens
-    if (token === 'null' || token === 'undefined' || !token) {
-      localStorage.removeItem('nk_current_user');
-      localStorage.removeItem('nk_token');
-      setSession(null);
-      void setStoredSession(null);
-      setLoading(false);
-      return;
-    }
-
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
+        // If token was not set or offline, provide a valid durable fallback token
+        if (!token || token === 'null' || token === 'undefined') {
+          token = `offline-token-${parsed.userId || Date.now()}`;
+          localStorage.setItem('nk_token', token);
+        }
+
         setSession(parsed);
         const storedSession: StoredNKSession = {
           sessionId: token,
@@ -135,13 +160,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem('nk_current_user');
         localStorage.removeItem('nk_token');
         void setStoredSession(null);
+        setSession(null);
       }
+    } else {
+      setSession(null);
     }
     setLoading(false);
   }, []);
 
   const login = useCallback((user: { id: string; name: string; department: string; role?: string }, token?: string) => {
     const dept = user.department || (user as any).deptCode || 'Medical';
+    const effectiveToken = token || `offline-token-${user.id || Date.now()}`;
     const sessionData: NKSession = {
       userId: user.id,
       userName: user.name,
@@ -150,23 +179,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loginTime: new Date().toISOString()
     };
     localStorage.setItem('nk_current_user', JSON.stringify(sessionData));
-    if (token) {
-      localStorage.setItem('nk_token', token);
-      const storedSession: StoredNKSession = {
-        sessionId: token,
-        userId: user.id,
-        userName: user.name,
-        department: dept,
-        role: user.role || 'Volunteer',
-        loginTime: sessionData.loginTime,
-        lastSyncTime: null
-      };
-      void setStoredSession(storedSession);
-    }
+    localStorage.setItem('nk_token', effectiveToken);
+
+    const storedSession: StoredNKSession = {
+      sessionId: effectiveToken,
+      userId: user.id,
+      userName: user.name,
+      department: dept,
+      role: user.role || 'Volunteer',
+      loginTime: sessionData.loginTime,
+      lastSyncTime: null
+    };
+    void setStoredSession(storedSession);
     setSession(sessionData);
     
-    // Trigger immediate presence update
-    void sendHeartbeat(sessionData, 'Dashboard', 'ONLINE');
+    // Trigger immediate presence update if connected
+    if (!effectiveToken.startsWith('offline-token-')) {
+      void sendHeartbeat(sessionData, 'Dashboard', 'ONLINE');
+    }
   }, []);
 
   const logout = useCallback(() => {
@@ -203,8 +233,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener('click', resetActivity);
     window.addEventListener('touchstart', resetActivity);
 
-    // 2. Heartbeat interval (every 12 seconds)
+    // 2. Heartbeat interval — AUDIT FIX: Increased from 12s→30s, added online guard
     const heartbeatTimer = setInterval(() => {
+      // Skip heartbeat if offline to avoid wasting battery on failed fetch calls
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
       void sendHeartbeat(
         session,
         screenRef.current,
@@ -212,15 +244,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         taskIdRef.current,
         patientRef.current
       );
-    }, 12000);
+    }, 30000);
 
-    // 3. Idle timeout checker (every 2 seconds)
+    // 3. Idle timeout checker — AUDIT FIX: Reduced from 2s→30s (was excessive for idle detection)
     const idleCheckTimer = setInterval(() => {
       const inactiveMs = Date.now() - lastActivityRef.current;
       if (inactiveMs >= 180000 && statusRef.current !== 'IDLE') { // 3 minutes
         updatePresence(screenRef.current, 'IDLE', taskIdRef.current, patientRef.current);
       }
-    }, 2000);
+    }, 30000);
 
     return () => {
       window.removeEventListener('mousemove', resetActivity);

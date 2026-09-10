@@ -8,11 +8,13 @@ import {
   Database, RefreshCw, Wifi, WifiOff,
   UserPlus, HeartPulse, FileDown,
   LayoutDashboard, ChevronLeft, ListChecks,
-  ClipboardList, Monitor, Menu, X, MessageSquare
+  ClipboardList, Monitor, Menu, X, MessageSquare,
+  Smartphone, QrCode
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { useApp } from './contexts/AppContext';
 import { QRCodeSVG } from 'qrcode.react';
+import BarcodeScannerModal from './components/BarcodeScannerModal';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -29,6 +31,7 @@ import MedicineQueue from './pages/MedicineQueue';
 import MedicineDashboard from './pages/MedicineDashboard';
 import UserProfile from './pages/UserProfile';
 import Chat from './pages/Chat';
+import ApkDemoApp from './demo/ApkDemoApp';
 
 // ─── BACK BUTTON HANDLER (Android Hardware Back) ───
 function BackButtonHandler() {
@@ -36,29 +39,47 @@ function BackButtonHandler() {
   const location = useLocation();
 
   useEffect(() => {
-    const handler = CapApp.addListener('backButton', () => {
-      // If we're on the dashboard (home), minimize the app instead of closing
-      if (location.pathname === '/' || location.pathname === '/dashboard') {
-        CapApp.minimizeApp();
-      } else {
-        // Go back in React Router history safely
-        if (window.history.state && window.history.state.idx > 0) {
-          navigate(-1);
-        } else {
-          navigate('/', { replace: true }); // Fallback to home instead of exiting
+    const cap = (window as any)?.Capacitor;
+    const isNative = cap && (cap.isNativePlatform === true || cap.getPlatform?.() === 'android' || cap.getPlatform?.() === 'ios');
+    if (!isNative) return;
+
+    let removeListener: (() => void) | null = null;
+    try {
+      CapApp.addListener('backButton', () => {
+        // If mobile drawer or modal is open, dismiss it first
+        const closeBtn = document.querySelector('button[aria-label="Close menu"]') as HTMLButtonElement | null;
+        if (closeBtn && closeBtn.offsetParent !== null) {
+          closeBtn.click();
+          return;
         }
-      }
-    });
+
+        if (location.pathname === '/' || location.pathname === '/dashboard') {
+          CapApp.minimizeApp().catch(() => {});
+        } else {
+          if (window.history.state && window.history.state.idx > 0) {
+            navigate(-1);
+          } else {
+            navigate('/', { replace: true });
+          }
+        }
+      }).then(h => {
+        removeListener = () => h.remove();
+      }).catch(err => {
+        console.warn('[BACK BUTTON] Not supported on this platform:', err);
+      });
+    } catch (_e) {
+      // Ignored on non-native platforms
+    }
 
     return () => {
-      handler.then(h => h.remove());
+      if (removeListener) removeListener();
     };
   }, [navigate, location.pathname]);
 
   return null;
 }
 
-const APP_VERSION = "1.0.8"; // Increment this in future builds
+const APP_VERSION = "1.1.0"; // Current release version
 
 function OTAUpdater() {
   const [updateAvailable, setUpdateAvailable] = useState<{version: string, apkUrl: string} | null>(null);
@@ -285,6 +306,7 @@ function Sidebar() {
         <p className="px-4 text-[10px] uppercase tracking-widest font-bold text-slate-400 mb-2">{t('tools')}</p>
         <NavLink to="/import" icon={FileDown} label={t('dataImport')} />
         <NavLink to="/settings" icon={Settings} label={t('settings')} />
+        <NavLink to="/demo" icon={Smartphone} label="APK Modern Demo" />
       </div>
 
       <div className="mt-auto pt-8 flex flex-col gap-3">
@@ -384,7 +406,7 @@ function Sidebar() {
   );
 }
 
-function TopBar({ onSync, syncing, onToggleMenu }: { onSync: () => void, syncing: boolean, onToggleMenu: () => void }) {
+function TopBar({ onSync, syncing, onToggleMenu, onOpenScanner }: { onSync: () => void, syncing: boolean, onToggleMenu: () => void, onOpenScanner: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
   const isHome = location.pathname === '/' || location.pathname === '/dashboard';
@@ -393,71 +415,90 @@ function TopBar({ onSync, syncing, onToggleMenu }: { onSync: () => void, syncing
   const [onlineCount, setOnlineCount] = useState(0);
 
   useEffect(() => {
+    let isMounted = true;
     const fetchPresence = async () => {
       try {
         const { getBaseUrl } = await import('./lib/session');
-        const res = await fetch(`${getBaseUrl()}/api/presence`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch(`${getBaseUrl()}/api/presence`, { signal: controller.signal });
+        clearTimeout(timeoutId);
         const json = await res.json();
-        if (json.data) {
+        if (isMounted && json.data) {
            setOnlineCount(json.data.filter((u: any) => u.isOnline).length);
         }
-      } catch (e) { }
+      } catch { /* silent when backend unreachable */ }
     };
     fetchPresence();
-    const interval = setInterval(fetchPresence, 10000);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchPresence, 30000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   return (
-    <header className="h-14 flex items-center justify-between px-3 bg-emerald-600 text-white shadow-sm shrink-0">
-      <div className="flex items-center gap-2">
+    <header className="h-14 flex items-center justify-between px-3 bg-emerald-600 text-white shadow-sm shrink-0 min-w-0">
+      <div className="flex items-center gap-1.5 min-w-0 shrink">
         {session && (
           <button 
             onClick={onToggleMenu}
-            className="md:hidden p-2 rounded-lg hover:bg-emerald-700 active:bg-emerald-800"
+            className="md:hidden p-1.5 rounded-lg hover:bg-emerald-700 active:bg-emerald-800 shrink-0"
             aria-label="Toggle Menu"
           >
-            <Menu size={22} />
+            <Menu size={20} />
           </button>
         )}
         {!isHome && (
           <button 
             onClick={() => navigate(-1)} 
-            className="p-2 rounded-full hover:bg-emerald-700 active:bg-emerald-800"
+            className="p-1.5 rounded-full hover:bg-emerald-700 active:bg-emerald-800 shrink-0"
+            aria-label="Go Back"
           >
-            <ChevronLeft size={22} />
+            <ChevronLeft size={20} />
           </button>
         )}
-        <h1 className="text-lg font-bold tracking-tight">Nek Kadam</h1>
+        <h1 className="text-base font-black tracking-tight truncate shrink-0">Nek Kadam</h1>
         {session && (
-          <span className="hidden sm:inline-block bg-emerald-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border border-emerald-500/40 ml-2">
-            Using as: {session.userName}
+          <span className="hidden sm:inline-block bg-emerald-700 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border border-emerald-500/40 ml-1 truncate max-w-[140px]">
+            {session.userName}
           </span>
         )}
         {onlineCount > 0 && (
-          <span className="flex items-center gap-1.5 ml-2 bg-emerald-800/50 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-500/20">
+          <span className="hidden xs:flex items-center gap-1 ml-1 bg-emerald-800/50 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-500/20 shrink-0">
             <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></div>
-            {onlineCount} Online
+            <span>{onlineCount}</span>
           </span>
         )}
       </div>
       
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5 shrink-0">
         {session && (
           <button 
             onClick={logout} 
-            className="px-2.5 py-1.5 bg-emerald-700 text-white rounded-lg flex items-center gap-1.5 font-bold text-xs active:bg-emerald-950 border border-emerald-500/30"
+            className="px-2 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg flex items-center gap-1 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0"
+            title="Switch User"
           >
-            {t('switchUser')}
+            <LogOut size={13} />
+            <span className="hidden sm:inline">{t('switchUser')}</span>
           </button>
         )}
         <button 
+          onClick={onOpenScanner} 
+          className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg flex items-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0"
+          title="Scan OPD Card QR / Barcode"
+        >
+           <QrCode size={13} className="text-emerald-200" />
+           <span className="hidden sm:inline">Scan</span>
+        </button>
+        <button 
           onClick={onSync} 
           disabled={syncing}
-          className="px-3 py-1.5 bg-emerald-700 text-white rounded-lg flex items-center gap-2 font-bold text-xs active:bg-emerald-900"
+          className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg flex items-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0"
+          title="Sync Records"
         >
-           <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
-           {syncing ? 'Syncing...' : 'Sync'}
+           <RefreshCw size={13} className={syncing ? 'animate-spin' : ''} />
+           <span className="hidden sm:inline">{syncing ? 'Syncing...' : 'Sync'}</span>
         </button>
       </div>
     </header>
@@ -469,17 +510,31 @@ function MobileBottomNav() {
   const { t } = useApp();
   
   const NavItem = ({ to, icon: Icon, label }: { to: string; icon: any; label: string }) => {
-    const isActive = location.pathname === to || (to !== '/' && location.pathname.startsWith(to));
+    const isActive = to === '/'
+      ? location.pathname === '/' || location.pathname === '/dashboard'
+      : to === '/patients'
+      ? location.pathname === '/patients'
+      : location.pathname.startsWith(to);
+
     return (
-      <Link to={to} className={`flex flex-col items-center justify-center w-full py-2 ${isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
-        <Icon size={22} />
-        <span className="text-[10px] font-bold mt-0.5">{label}</span>
+      <Link 
+        to={to} 
+        className={`flex flex-col items-center justify-center w-full py-1.5 transition-colors ${
+          isActive 
+            ? 'text-emerald-600 dark:text-emerald-400 font-bold' 
+            : 'text-slate-500 dark:text-slate-400 font-medium'
+        }`}
+      >
+        <div className={`p-1 rounded-xl transition-all ${isActive ? 'bg-emerald-50 dark:bg-emerald-950/40 scale-105' : ''}`}>
+          <Icon size={20} />
+        </div>
+        <span className="text-[10px] tracking-tight">{label}</span>
       </Link>
     );
   };
 
   return (
-    <div className="md:hidden flex items-center justify-around bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 h-14 shrink-0 pb-safe">
+    <div className="md:hidden flex items-center justify-around bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 h-16 shrink-0 pb-safe shadow-[0_-2px_10px_rgba(0,0,0,0.03)]">
       <NavItem to="/" icon={LayoutDashboard} label={t('home')} />
       <NavItem to="/patients" icon={Users} label={t('patients')} />
       <NavItem to="/patients/new" icon={UserPlus} label={t('new')} />
@@ -494,6 +549,7 @@ function AppLayout() {
   const { t } = useApp();
   const [syncing, setSyncing] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isGlobalScannerOpen, setIsGlobalScannerOpen] = useState(false);
   const location = useLocation();
 
   // Screen/module transition tracking
@@ -584,12 +640,10 @@ function AppLayout() {
       }
     });
 
-    import('./lib/db').then(({ getServerIp, fullDataSync }) => {
-      const SERVER_PORT = 3001;
-      const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
-      const ip = isLocalhost ? window.location.hostname : getServerIp();
-      const socketUrl = `http://${ip}:${SERVER_PORT}`;
-      socket = io(socketUrl, { reconnection: true });
+    import('./lib/db').then(({ fullDataSync }) => {
+      const base = getBaseUrl();
+      const socketUrl = base || (typeof window !== 'undefined' && window.location.origin && !window.location.origin.includes('localhost') && !window.location.origin.startsWith('capacitor:') ? window.location.origin : 'https://nek-kadam.onrender.com');
+      socket = io(socketUrl, { reconnection: true, transports: ['websocket', 'polling'] });
       
       socket.on('connect', () => {
         console.log('[LIVE SYNC] Connected to server socket. Catching up...');
@@ -646,8 +700,21 @@ function AppLayout() {
     };
   }, [isLoggedIn]);
 
-  if (loading) {
+  // Safety watchdog: ensure loading screen NEVER stays stuck for more than 2 seconds
+  const [splashTimedOut, setSplashTimedOut] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSplashTimedOut(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (loading && !splashTimedOut) {
     return <SplashScreen />;
+  }
+
+  if (location.pathname.startsWith('/demo')) {
+    return <ApkDemoApp />;
   }
 
   // Protect routes
@@ -656,7 +723,7 @@ function AppLayout() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+    <div className="flex min-h-screen h-[100dvh] overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
       <BackButtonHandler />
       <OTAUpdater />
 
@@ -708,6 +775,7 @@ function AppLayout() {
                 <p className="px-4 text-[9px] uppercase tracking-widest font-bold text-slate-400 dark:text-slate-500 mb-2">{t('tools')}</p>
                 <NavLink to="/import" icon={FileDown} label={t('dataImport')} />
                 <NavLink to="/settings" icon={Settings} label={t('settings')} />
+                <NavLink to="/demo" icon={Smartphone} label="APK Modern Demo" />
               </div>
             </div>
             
@@ -726,10 +794,17 @@ function AppLayout() {
       )}
       
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-slate-50 dark:bg-slate-950">
-        {isLoggedIn && <TopBar onSync={handleSync} syncing={syncing} onToggleMenu={() => setMobileMenuOpen(true)} />}
+        {isLoggedIn && (
+          <TopBar 
+            onSync={handleSync} 
+            syncing={syncing} 
+            onToggleMenu={() => setMobileMenuOpen(true)} 
+            onOpenScanner={() => setIsGlobalScannerOpen(true)}
+          />
+        )}
         
-        <main className={`flex-1 min-h-0 relative ${location.pathname === '/chat' ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}`}>
-          <div className={`mx-auto pb-20 md:pb-0 ${location.pathname === '/chat' ? 'p-0 w-full h-full max-w-none flex-grow flex flex-col' : 'max-w-7xl p-4 md:p-6 lg:p-8'}`}>
+        <main className={`flex-1 min-h-0 relative ${location.pathname === '/chat' ? 'overflow-hidden flex flex-col' : 'overflow-y-auto overscroll-contain'}`} style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div className={`mx-auto pb-28 md:pb-8 ${location.pathname === '/chat' ? 'p-0 w-full h-full max-w-none flex-grow flex flex-col' : 'max-w-7xl p-3 sm:p-4 md:p-6 lg:p-8'}`}>
             <Routes>
               <Route path="/login" element={!isLoggedIn ? <Login /> : <Navigate to="/" replace />} />
               
@@ -758,6 +833,12 @@ function AppLayout() {
         
         {isLoggedIn && <MobileBottomNav />}
       </div>
+
+      {/* Universal 1-Tap Barcode & QR Scanner Modal */}
+      <BarcodeScannerModal
+        isOpen={isGlobalScannerOpen}
+        onClose={() => setIsGlobalScannerOpen(false)}
+      />
     </div>
   );
 }

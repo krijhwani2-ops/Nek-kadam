@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { db, checkServerOnline, saveVisitOffline, getPendingVisitsForPatient } from '../lib/db';
+import { db, checkServerOnline, saveVisitOffline, getPendingVisitsForPatient, cleanPatientId } from '../lib/db';
 import { getBaseUrl } from '../lib/session';
-import { Phone, CreditCard, Plus, Clock, Trash2, X, Printer, FileText, Calendar, Stethoscope, RefreshCw } from 'lucide-react';
+import { Phone, CreditCard, Plus, Clock, Trash2, X, Printer, FileText, Calendar, Stethoscope, RefreshCw, QrCode } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
+import { Spinner } from '../components/ui';
 
 interface PrescribedMed {
   code: string;
@@ -17,32 +19,49 @@ interface MedGroup {
 }
 
 /** Load visit history from LOCAL IndexedDB cache only (no server call). */
-async function loadVisitsFromIndexedDB(cardNumber: string): Promise<any[]> {
+async function loadVisitsFromIndexedDB(cardNumber: string, patientUUID?: string): Promise<any[]> {
+  const cleanCard = cleanPatientId(cardNumber);
+
   // Query local IndexedDB cache tables to reconstruct full visit prescriptions
   const { data: visitsData } = await db
     .from('visits')
-    .select('*')
-    .eq('patient_id', cardNumber)
-    .order('date', { ascending: false });
+    .select('*');
 
   if (!visitsData || visitsData.length === 0) return [];
 
-  try {
-    // Read cached tables from IndexedDB to perform local joins in memory
-    const { data: allGroups } = await db.from('prescription_groups').select('*');
-    const { data: allGroupMeds } = await db.from('group_medicines').select('*');
-    const { data: allMeds } = await db.from('medicines').select('*');
+  // Filter in memory to handle potential '.0' suffix mismatches or UUID vs card_number in local DB
+  const filteredVisits = visitsData.filter((v: any) => {
+    const vPatientId = String(v.patient_id || v.patientId || '').trim();
+    const cleanVId = cleanPatientId(vPatientId);
+    return cleanVId === cleanCard || vPatientId === cardNumber || (patientUUID && vPatientId === patientUUID);
+  });
 
+  // Sort visits descending by date
+  filteredVisits.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  if (filteredVisits.length === 0) return [];
+
+  const visitIds = new Set(filteredVisits.map((v: any) => v.id));
+
+  try {
+    const { data: allGroups } = await db.from('prescription_groups').select('*');
+    const filteredGroups = (allGroups || []).filter((g: any) => visitIds.has(g.visit_id || g.visitId));
+    const groupIds = new Set(filteredGroups.map((g: any) => g.id));
+
+    const { data: allGroupMeds } = await db.from('group_medicines').select('*');
+    const filteredGroupMeds = (allGroupMeds || []).filter((gm: any) => groupIds.has(gm.group_id || gm.groupId));
+
+    const { data: allMeds } = await db.from('medicines').select('*');
     const medsMap = new Map((allMeds || []).map((m: any) => [m.code, m.name]));
 
-    return (visitsData || []).map((v: any) => {
-      const groups = (allGroups || []).filter((g: any) => g.visit_id === v.id);
+    return filteredVisits.map((v: any) => {
+      const groups = filteredGroups.filter((g: any) => (g.visit_id || g.visitId) === v.id);
       const enrichedGroups = groups.map((g: any) => {
-        const meds = (allGroupMeds || [])
-          .filter((gm: any) => gm.group_id === g.id)
+        const meds = filteredGroupMeds
+          .filter((gm: any) => (gm.group_id || gm.groupId) === g.id)
           .map((gm: any) => ({
             ...gm,
-            medicine_name: medsMap.get(gm.medicine_code) || gm.medicine_code
+            medicine_name: medsMap.get(gm.medicine_code || gm.medicineCode) || gm.medicine_code || gm.medicineCode
           }));
         return { ...g, group_medicines: meds };
       });
@@ -50,7 +69,7 @@ async function loadVisitsFromIndexedDB(cardNumber: string): Promise<any[]> {
     });
   } catch (enrichErr) {
     console.error('[OFFLINE VISIT ENRICHMENT] Failed:', enrichErr);
-    return visitsData || [];
+    return filteredVisits;
   }
 }
 
@@ -62,6 +81,8 @@ export default function PatientProfile() {
   const [visits, setVisits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dosages, setDosages] = useState<any[]>([]);
+  const [mobileActiveTab, setMobileActiveTab] = useState<'history' | 'prescription'>('history');
+  const [showOpdSlip, setShowOpdSlip] = useState(false);
 
   // New Visit State
   const [doctorName, setDoctorName] = useState('');
@@ -128,9 +149,10 @@ export default function PatientProfile() {
 
   const fetchPatientData = useCallback(async () => {
     try {
+      const cleanId = cleanPatientId(id);
       const { data: patientData, error: pError } = await db.from('patients')
         .select('*')
-        .or(`id.eq.${id},card_number.eq.${id}`)
+        .or(`id.eq.${id},card_number.eq.${id},id.eq.${cleanId},card_number.eq.${cleanId}`)
         .maybeSingle();
 
       if (pError || !patientData) {
@@ -141,8 +163,9 @@ export default function PatientProfile() {
       
       let enrichedVisits: any[] = [];
       try {
-        console.log('[API DEBUG] Fetching history for:', patientData.card_number);
-        const res = await fetch(`${getBaseUrl()}/api/patients/${patientData.card_number}/visits`, {
+        const cardParam = patientData.card_number || patientData.id || cleanId;
+        console.log('[API DEBUG] Fetching history for:', cardParam);
+        const res = await fetch(`${getBaseUrl()}/api/patients/${cardParam}/visits`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('nk_token') || ''}`
           }
@@ -161,7 +184,7 @@ export default function PatientProfile() {
       
       // Always check local IndexedDB cache and merge
       if (enrichedVisits.length === 0) {
-        const localVisits = await loadVisitsFromIndexedDB(patientData.card_number);
+        const localVisits = await loadVisitsFromIndexedDB(patientData.card_number, patientData.id);
         if (localVisits.length > 0) enrichedVisits = localVisits;
       }
       
@@ -186,6 +209,9 @@ export default function PatientProfile() {
 
       setPatient(patientData);
       setVisits(enrichedVisits);
+      if (enrichedVisits.length === 0) {
+        setMobileActiveTab('prescription');
+      }
     } catch (e) {
       console.error('Failed to fetch patient data:', e);
     }
@@ -373,6 +399,40 @@ export default function PatientProfile() {
     setActiveGroupIndex(0);
   };
 
+  // Real-time pharmacy broadcast trigger
+  const broadcastPrescriptionCreated = (patientNameStr: string, patientCardStr: string, doctorNameStr: string) => {
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('nk_pharmacy_control');
+        bc.postMessage({
+          type: 'NEW_PRESCRIPTION',
+          patientName: patientNameStr,
+          patientId: patientCardStr,
+          doctorName: doctorNameStr || 'Doctor',
+          timestamp: Date.now()
+        });
+        bc.close();
+      }
+    } catch (bcErr) {
+      console.warn('[PHARMACY BROADCAST] BroadcastChannel error:', bcErr);
+    }
+
+    try {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('nk_prescription_created', {
+          detail: {
+            patientName: patientNameStr,
+            patientId: patientCardStr,
+            doctorName: doctorNameStr || 'Doctor',
+            timestamp: Date.now()
+          }
+        }));
+      }
+    } catch (evErr) {
+      console.warn('[PHARMACY BROADCAST] CustomEvent error:', evErr);
+    }
+  };
+
   async function handleSaveVisit() {
     console.log('[VISIT SAVE] Starting save process...');
     const hasMeds = medicineGroups.some(g => g.meds.length > 0);
@@ -402,6 +462,7 @@ export default function PatientProfile() {
       if (!isServerOnline) {
         // OFFLINE: Use atomic compound save (writes to cache + queues single sync op)
         await saveVisitOffline(payload);
+        broadcastPrescriptionCreated(patient.name, patient.card_number, doctorName || 'NGO Doctor');
         
         // Reset states
         setMedicineGroups([{ power: '', dosage: 'BD', meds: [] }]);
@@ -430,6 +491,7 @@ export default function PatientProfile() {
       }
 
       console.log('[VISIT SAVE] Successfully saved via API:', result.visitId);
+      broadcastPrescriptionCreated(patient.name, patient.card_number, doctorName || 'NGO Doctor');
       
       setMedicineGroups([{ power: '', dosage: 'BD', meds: [] }]);
       setActiveGroupIndex(0);
@@ -444,6 +506,7 @@ export default function PatientProfile() {
       // If API failed for ANY reason, save offline as fallback
       try {
         await saveVisitOffline(payload);
+        broadcastPrescriptionCreated(patient.name, patient.card_number, doctorName || 'NGO Doctor');
         
         setMedicineGroups([{ power: '', dosage: 'BD', meds: [] }]);
         setActiveGroupIndex(0);
@@ -586,6 +649,7 @@ export default function PatientProfile() {
         throw new Error(result.error || 'Failed to update visit details');
       }
 
+      broadcastPrescriptionCreated(patient.name, patient.card_number, editVisitDoctor || 'NGO Doctor');
       alert('Visit details updated successfully!');
       setIsEditingVisit(false);
       setSelectedVisit(null);
@@ -708,7 +772,7 @@ export default function PatientProfile() {
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setIsEditingProfile(false)} className="px-4 py-2 bg-slate-150 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-black transition-all">
+                <button onClick={() => setIsEditingProfile(false)} className="px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-black transition-all">
                   Cancel
                 </button>
                 <button onClick={saveProfileChanges} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all shadow-sm">
@@ -719,23 +783,71 @@ export default function PatientProfile() {
           )}
 
  
-          <div className="flex gap-3">
-            <div className="bg-white/80 dark:bg-slate-900/80 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm text-center min-w-[80px]">
+          <div className="flex items-center gap-3 flex-wrap justify-center md:justify-end">
+            <div className="bg-white/80 dark:bg-slate-900/80 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm text-center min-w-[70px]">
               <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">Visits</p>
               <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{visits.length}</p>
             </div>
-            <div className="bg-white/80 dark:bg-slate-900/80 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm text-center min-w-[80px] flex flex-col items-center justify-center">
+            <div className="bg-white/80 dark:bg-slate-900/80 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm text-center min-w-[70px] flex flex-col items-center justify-center">
               <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">Age</p>
               <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{patient.age || '—'}</p>
+            </div>
+
+            {/* Patient OPD QR Token Card */}
+            <div 
+              onClick={() => setShowOpdSlip(true)}
+              className="bg-white dark:bg-slate-900 p-2.5 rounded-2xl border border-emerald-500/30 dark:border-emerald-500/20 shadow-sm hover:shadow-md cursor-pointer group transition-all flex flex-col items-center gap-1.5"
+              title="Click to print OPD QR Slip"
+            >
+              <div className="bg-white p-1 rounded-xl shadow-inner border border-slate-100">
+                <QRCodeSVG 
+                  value={String(patient.card_number || patient.id || '')} 
+                  size={46} 
+                  level="M" 
+                  bgColor="#ffffff"
+                  fgColor="#0f172a"
+                />
+              </div>
+              <span className="text-[9px] font-black text-emerald-700 dark:text-emerald-400 flex items-center gap-1 uppercase tracking-wider group-hover:underline">
+                <Printer size={10} /> Print Slip
+              </span>
             </div>
           </div>
         </div>
       </div>
  
+      {/* Mobile Tab Selector */}
+      <div className="flex lg:hidden bg-slate-200/70 dark:bg-slate-800/80 p-1.5 rounded-2xl gap-1.5 shadow-inner">
+        <button
+          type="button"
+          onClick={() => setMobileActiveTab('history')}
+          className={`flex-1 py-2.5 px-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+            mobileActiveTab === 'history'
+              ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-800'
+          }`}
+        >
+          <Clock size={15} />
+          <span>Clinical History ({visits.length})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileActiveTab('prescription')}
+          className={`flex-1 py-2.5 px-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+            mobileActiveTab === 'prescription'
+              ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-800'
+          }`}
+        >
+          <Plus size={15} />
+          <span>New Prescription</span>
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         
         {/* Left Column: Logging Form */}
-        <div className="lg:col-span-8 space-y-4">
+        <div className={`lg:col-span-8 space-y-4 ${mobileActiveTab === 'prescription' ? 'block' : 'hidden lg:block'}`}>
           
 
 
@@ -791,7 +903,7 @@ export default function PatientProfile() {
                       key={idx}
                       type="button"
                       onClick={() => setActiveGroupIndex(idx)}
-                      className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${activeGroupIndex === idx ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200 scale-105' : 'bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-100 dark:border-slate-800 hover:text-slate-600 dark:hover:text-slate-350'}`}
+                      className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${activeGroupIndex === idx ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200 scale-105' : 'bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-100 dark:border-slate-800 hover:text-slate-600 dark:hover:text-slate-300'}`}
                     >
                       Combination {idx + 1}
                     </button>
@@ -809,78 +921,89 @@ export default function PatientProfile() {
                 </div>
               </div>
 
-              <div className="p-3 bg-slate-50/50 dark:bg-slate-900/20 rounded-2xl border-2 border-dashed border-slate-200/60 dark:border-slate-800 space-y-4">
+              <div className="p-3 bg-slate-50/50 dark:bg-slate-900/20 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 space-y-4">
                 
-                <div className="flex flex-col md:flex-row flex-wrap lg:flex-nowrap items-center gap-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-1.5 shadow-sm relative" ref={searchRef}>
-                  <select value={medicineGroups[activeGroupIndex].power} onChange={e => {
-                        const updated = [...medicineGroups];
-                        updated[activeGroupIndex].power = e.target.value;
-                        setMedicineGroups(updated);
-                  }} className="w-full md:w-24 px-2 py-2 bg-transparent outline-none font-black text-slate-700 dark:text-slate-300 text-xs">
-                    <option value="">Power</option>
-                    <option value="Q">Q</option>
-                    <option value="3X">3X</option>
-                    <option value="6X">6X</option>
-                    <option value="30C">30C</option>
-                    <option value="200C">200C</option>
-                    <option value="1M">1M</option>
-                    <option value="10M">10M</option>
-                  </select>
+                {/* Combination Input Bar */}
+                <div className="flex flex-col sm:flex-row flex-wrap lg:flex-nowrap items-stretch sm:items-center gap-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-2 shadow-sm relative" ref={searchRef}>
                   
-                  <div className="hidden md:block w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                  {/* Power & Dosage Controls */}
+                  <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto shrink-0">
+                    <select value={medicineGroups[activeGroupIndex].power} onChange={e => {
+                          const updated = [...medicineGroups];
+                          updated[activeGroupIndex].power = e.target.value;
+                          setMedicineGroups(updated);
+                    }} className="w-full sm:w-24 px-2.5 py-2 bg-slate-50 sm:bg-transparent dark:bg-slate-900 sm:dark:bg-transparent border border-slate-200 sm:border-0 dark:border-slate-700 rounded-lg sm:rounded-none outline-none font-black text-slate-700 dark:text-slate-300 text-xs cursor-pointer">
+                      <option value="">Power</option>
+                      <option value="Q">Q</option>
+                      <option value="3X">3X</option>
+                      <option value="6X">6X</option>
+                      <option value="30C">30C</option>
+                      <option value="200C">200C</option>
+                      <option value="1M">1M</option>
+                      <option value="10M">10M</option>
+                    </select>
+                    
+                    <div className="hidden sm:block w-px h-6 bg-slate-200 dark:bg-slate-700 mx-0.5"></div>
 
-                  <select value={medicineGroups[activeGroupIndex].dosage} onChange={e => {
-                        const updated = [...medicineGroups];
-                        updated[activeGroupIndex].dosage = e.target.value;
-                        setMedicineGroups(updated);
-                  }} className="w-full md:w-32 px-2 py-2 bg-transparent outline-none font-black text-slate-700 dark:text-slate-300 text-xs">
-                    {dosages.map(d => <option key={d.code} value={d.code}>{d.code}</option>)}
-                  </select>
+                    <select value={medicineGroups[activeGroupIndex].dosage} onChange={e => {
+                          const updated = [...medicineGroups];
+                          updated[activeGroupIndex].dosage = e.target.value;
+                          setMedicineGroups(updated);
+                    }} className="w-full sm:w-28 px-2.5 py-2 bg-slate-50 sm:bg-transparent dark:bg-slate-900 sm:dark:bg-transparent border border-slate-200 sm:border-0 dark:border-slate-700 rounded-lg sm:rounded-none outline-none font-black text-slate-700 dark:text-slate-300 text-xs cursor-pointer">
+                      {dosages.map(d => <option key={d.code} value={d.code}>{d.code}</option>)}
+                    </select>
+                  </div>
 
-                  <div className="hidden md:block w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                  <div className="hidden sm:block w-px h-6 bg-slate-200 dark:bg-slate-700 mx-0.5"></div>
 
-                  <input 
-                    value={currentCode}
-                    onChange={(e) => setCurrentCode(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddMedicine();
-                      } else if (e.key === '+') {
-                        e.preventDefault();
-                        if (!currentCode.trim()) {
-                          addGroup();
-                        } else {
+                  {/* Code & Search Inputs */}
+                  <div className="flex items-center gap-2 flex-1 w-full sm:w-auto min-w-0">
+                    <input 
+                      value={currentCode}
+                      onChange={(e) => setCurrentCode(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
                           handleAddMedicine();
+                        } else if (e.key === '+') {
+                          e.preventDefault();
+                          if (!currentCode.trim()) {
+                            addGroup();
+                          } else {
+                            handleAddMedicine();
+                          }
                         }
-                      }
-                    }}
-                    placeholder="CODE"
-                    className="w-full md:w-20 px-2 py-2 bg-slate-50 dark:bg-slate-900 rounded-xl outline-none uppercase font-black text-center text-xs text-slate-800 dark:text-slate-100"
-                  />
+                      }}
+                      placeholder="CODE"
+                      className="w-20 sm:w-20 px-2 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 sm:border-0 dark:border-slate-700 rounded-xl outline-none uppercase font-black text-center text-xs text-slate-800 dark:text-slate-100 shrink-0"
+                    />
 
-                  <input 
-                    value={currentName}
-                    onChange={(e) => {
-                      setCurrentName(e.target.value);
-                      setSearchQuery(e.target.value);
-                      if (!e.target.value.trim()) {
-                        setShowResults(false);
-                      } else {
-                        setShowResults(true);
-                      }
-                    }}
-                    onFocus={() => {
-                      if (currentName.trim() && !currentCode.trim()) {
-                        setSearchQuery(currentName);
-                        setShowResults(true);
-                      }
-                    }}
-                    readOnly={!isNewMedicine && !!currentCode.trim()}
-                    placeholder={isNewMedicine ? "New medicine..." : "Search..."}
-                    className={`flex-1 px-3 py-2 outline-none font-black text-sm rounded-xl ${(!isNewMedicine && currentCode.trim()) ? 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300' : 'bg-transparent text-slate-800 dark:text-slate-100'}`}
-                  />
+                    <div className="flex-1 min-w-0 relative">
+                      <input 
+                        value={currentName}
+                        onChange={(e) => {
+                          setCurrentName(e.target.value);
+                          setSearchQuery(e.target.value);
+                          if (!e.target.value.trim()) {
+                            setShowResults(false);
+                          } else {
+                            setShowResults(true);
+                          }
+                        }}
+                        onFocus={() => {
+                          if (currentName.trim() && !currentCode.trim()) {
+                            setSearchQuery(currentName);
+                            setShowResults(true);
+                          }
+                        }}
+                        readOnly={!isNewMedicine && !!currentCode.trim()}
+                        placeholder={isNewMedicine ? "New medicine..." : "Search..."}
+                        className={`w-full px-3 py-2 outline-none font-black text-sm rounded-xl transition-all ${(!isNewMedicine && currentCode.trim()) ? 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300' : 'bg-transparent text-slate-800 dark:text-slate-100'}`}
+                      />
+                    </div>
+                  </div>
 
+                  {/* Search Autocomplete Results Dropdown */}
                   {showResults && searchResults.length > 0 && (
                     <div className="absolute z-50 left-0 right-0 top-full mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl overflow-hidden max-h-60 overflow-y-auto">
                       {searchResults.map((res, i) => (
@@ -895,14 +1018,18 @@ export default function PatientProfile() {
                     </div>
                   )}
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  {/* Quantity & Add Action */}
+                  <div className="flex items-center gap-2 shrink-0 justify-end w-full sm:w-auto pt-1 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-700/50">
+                    <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest sm:hidden">Qty:</span>
                     <input type="number" min="1" value={currentQuantity} onChange={(e) => setCurrentQuantity(parseInt(e.target.value) || 1)} className="w-16 px-2 py-2 bg-slate-50 dark:bg-slate-900 rounded-xl outline-none font-black text-center text-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100" />
                     
-                    <button type="button" onClick={handleAddMedicine} disabled={!currentCode.trim() || !currentName.trim()} className="px-4 py-2 bg-emerald-600 text-white rounded-xl disabled:opacity-50 font-black flex items-center justify-center shrink-0">
+                    <button type="button" onClick={handleAddMedicine} disabled={!currentCode.trim() || !currentName.trim()} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl disabled:opacity-50 font-black flex items-center justify-center shrink-0 transition-all">
                       <Plus size={20} strokeWidth={3} />
                     </button>
                   </div>
-                </div>                <div className="space-y-2">
+                </div>
+
+                <div className="space-y-2">
                   <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-2">Selected in Combination {activeGroupIndex + 1}</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {medicineGroups[activeGroupIndex].meds.length > 0 ? (
@@ -934,13 +1061,24 @@ export default function PatientProfile() {
               </div>
             </div>
  
-            <button onClick={handleSaveVisit} disabled={addingVisit} className="w-full bg-emerald-600 text-white font-black py-3 rounded-xl disabled:opacity-50 text-base tracking-tight">
-              {addingVisit ? 'SYNCHRONIZING...' : 'SAVE PRESCRIPTION'}
+            <button 
+              onClick={handleSaveVisit} 
+              disabled={addingVisit} 
+              className="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-black py-3 px-4 rounded-xl disabled:opacity-50 text-base tracking-tight flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/10 transition-all"
+            >
+              {addingVisit ? (
+                <>
+                  <Spinner size="sm" color="currentColor" />
+                  <span>SYNCHRONIZING...</span>
+                </>
+              ) : (
+                'SAVE PRESCRIPTION'
+              )}
             </button>
           </div>
         </div>
              {/* Right Column: History & Details */}
-        <div className="lg:col-span-4 space-y-4">
+        <div className={`lg:col-span-4 space-y-4 ${mobileActiveTab === 'history' ? 'block' : 'hidden lg:block'}`}>
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 p-5 rounded-2xl shadow-sm max-h-[750px] overflow-y-auto custom-scrollbar">
             <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100 dark:border-slate-800">
               <h4 className="font-black text-slate-800 dark:text-slate-100 flex items-center gap-2 text-sm">
@@ -950,9 +1088,18 @@ export default function PatientProfile() {
                 {visits.length} Visits
               </span>
             </div>
-            <div className="relative pl-4 border-l-2 border-slate-150 dark:border-slate-800 space-y-5">
+            <div className="relative pl-4 border-l-2 border-slate-200 dark:border-slate-800 space-y-5">
               {visits.length === 0 ? (
-                <p className="text-xs text-slate-400 italic pl-2">No clinical history found.</p>
+                <div className="text-center py-8">
+                  <p className="text-xs text-slate-400 italic">No clinical history found.</p>
+                  <button
+                    type="button"
+                    onClick={() => setMobileActiveTab('prescription')}
+                    className="mt-3 px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-sm"
+                  >
+                    + Write First Prescription
+                  </button>
+                </div>
               ) : (
                 visits.map((visit) => (
                   <div 
@@ -971,19 +1118,19 @@ export default function PatientProfile() {
                     {/* Bullet dot connector */}
                     <div className="absolute left-[-23px] top-[18px] w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-700 group-hover:bg-emerald-500 border-2 border-white dark:border-slate-950 transition-colors shadow-sm"></div>
                     
-                    <div className="flex justify-between items-start flex-col sm:flex-row sm:items-center gap-1.5 border-b border-slate-150/60 dark:border-slate-800/60 pb-1.5">
-                      <span className="text-xs font-black text-slate-800 dark:text-slate-100">
+                    <div className="flex justify-between items-start flex-col sm:flex-row sm:items-center gap-1.5 border-b border-slate-200/60 dark:border-slate-800/60 pb-2">
+                      <span className="text-sm sm:text-base font-black text-slate-800 dark:text-slate-100">
                         {new Date(visit.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                       </span>
-                      <span className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider truncate max-w-[120px] border border-emerald-100/50 dark:border-emerald-900/20">
+                      <span className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wider truncate max-w-[140px] border border-emerald-100/50 dark:border-emerald-900/20">
                         {visit.doctor_name || 'NGO Doctor'}
                       </span>
                     </div>
-                    {visit.notes && <p className="text-xs text-slate-655 dark:text-slate-300 font-medium line-clamp-2 leading-relaxed">{visit.notes}</p>}
-                    <div className="flex flex-wrap gap-1 pt-1">
+                    {visit.notes && <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 font-medium line-clamp-2 leading-relaxed">{visit.notes}</p>}
+                    <div className="flex flex-wrap gap-1.5 pt-1">
                       {visit.prescription_groups?.map((group: any, gIdx: number) => 
                         group.group_medicines?.map((med: any, mIdx: number) => (
-                          <span key={`${gIdx}-${mIdx}`} className="bg-white dark:bg-slate-850 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-lg text-[10px] font-bold border border-slate-205 dark:border-slate-750 shadow-sm">
+                          <span key={`${gIdx}-${mIdx}`} className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2.5 py-1 rounded-lg text-xs sm:text-sm font-bold border border-slate-200 dark:border-slate-700 shadow-sm">
                             {med.medicine_name || med.medicine_code}
                           </span>
                         ))
@@ -1024,23 +1171,23 @@ export default function PatientProfile() {
                 {/* Modal Body */}
                 <div className="flex-1 overflow-y-auto p-6 md:p-10 space-y-6 custom-scrollbar dark:text-slate-100">
                   {/* Doctor & Notes */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border border-slate-150/50 dark:border-slate-800/50">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border border-slate-200/50 dark:border-slate-800/50">
                     <div className="space-y-1">
                        <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Attending Doctor</p>
-                       <p className="text-base font-black text-slate-850 dark:text-slate-100">{selectedVisit.doctor_name || 'NGO Clinic Doctor'}</p>
+                       <p className="text-base font-black text-slate-800 dark:text-slate-100">{selectedVisit.doctor_name || 'NGO Clinic Doctor'}</p>
                     </div>
                     <div className="space-y-1">
                        <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Observations</p>
-                       <p className="text-sm font-bold text-slate-655 dark:text-slate-300 leading-relaxed">{selectedVisit.notes || 'Routine follow-up visit.'}</p>
+                       <p className="text-sm font-bold text-slate-600 dark:text-slate-300 leading-relaxed">{selectedVisit.notes || 'Routine follow-up visit.'}</p>
                     </div>
                   </div>
 
                   {/* Prescription Section */}
-                  <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-850">
-                    <h4 className="text-xs font-black text-slate-450 dark:text-slate-500 uppercase tracking-[0.2em]">Prescribed Medicines</h4>
+                  <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                    <h4 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Prescribed Medicines</h4>
                     <div className="space-y-4">
                       {selectedVisit.prescription_groups?.map((group: any, idx: number) => (
-                        <div key={idx} className="bg-slate-50 dark:bg-slate-950/60 p-5 rounded-2xl border border-slate-150/60 dark:border-slate-850 flex flex-col gap-4">
+                        <div key={idx} className="bg-slate-50 dark:bg-slate-950/60 p-5 rounded-2xl border border-slate-200/60 dark:border-slate-800 flex flex-col gap-4">
                           <div className="flex justify-between items-center">
                             <div className="flex items-center gap-2">
                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-400"></span>
@@ -1051,7 +1198,7 @@ export default function PatientProfile() {
                           
                           <div className="flex flex-wrap gap-2">
                             {group.group_medicines?.map((med: any, mIdx: number) => (
-                              <div key={mIdx} className="bg-white dark:bg-slate-850 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-750 text-sm font-black text-slate-700 dark:text-slate-355 shadow-sm">
+                              <div key={mIdx} className="bg-white dark:bg-slate-800 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-black text-slate-700 dark:text-slate-300 shadow-sm">
                                 {med.medicine_name || med.medicine_code}
                               </div>
                             ))}
@@ -1059,8 +1206,8 @@ export default function PatientProfile() {
 
                           {group.power && (
                             <div className="flex items-center gap-2 mt-1 border-t border-slate-100 dark:border-slate-900 pt-2">
-                              <span className="text-[10px] font-black text-slate-450 dark:text-slate-500 uppercase tracking-widest">Potency:</span>
-                              <span className="text-xs font-black text-emerald-600 dark:text-emerald-450">{group.power}</span>
+                              <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Potency:</span>
+                              <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">{group.power}</span>
                             </div>
                           )}
                         </div>
@@ -1124,13 +1271,13 @@ export default function PatientProfile() {
                       value={editVisitNotes} 
                       onChange={e => setEditVisitNotes(e.target.value)} 
                       rows={2}
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-800 rounded-xl outline-none font-bold text-sm focus:border-emerald-500 dark:focus:border-emerald-500 transition-all resize-none text-slate-800 dark:text-slate-100"
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl outline-none font-bold text-sm focus:border-emerald-500 dark:focus:border-emerald-500 transition-all resize-none text-slate-800 dark:text-slate-100"
                       placeholder="Add observations..."
                     />
                   </div>
 
                   {/* Edit Prescribed Medicines Combinations */}
-                  <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-850">
+                  <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
                     <div className="flex items-center justify-between">
                       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                         {editVisitMeds.map((_, idx) => (
@@ -1138,7 +1285,7 @@ export default function PatientProfile() {
                             key={idx}
                             type="button"
                             onClick={() => setEditActiveGroupIndex(idx)}
-                            className={`px-3 py-1.5 rounded-lg font-black text-xs uppercase tracking-widest transition-all ${editActiveGroupIndex === idx ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:text-slate-655'}`}
+                            className={`px-3 py-1.5 rounded-lg font-black text-xs uppercase tracking-widest transition-all ${editActiveGroupIndex === idx ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:text-slate-600'}`}
                           >
                             Combination {idx + 1}
                           </button>
@@ -1146,11 +1293,11 @@ export default function PatientProfile() {
                       </div>
                       <div className="flex gap-1.5">
                         {editVisitMeds.length > 1 && (
-                          <button type="button" onClick={() => removeEditGroup(editActiveGroupIndex)} className="p-2 bg-red-50 dark:bg-red-955/20 text-red-500 dark:text-red-400 rounded-lg hover:bg-red-500 dark:hover:bg-red-600 hover:text-white transition-all">
+                          <button type="button" onClick={() => removeEditGroup(editActiveGroupIndex)} className="p-2 bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 rounded-lg hover:bg-red-500 dark:hover:bg-red-600 hover:text-white transition-all">
                             <Trash2 size={14} />
                           </button>
                         )}
-                        <button type="button" onClick={addEditGroup} className="p-2 bg-emerald-50 dark:bg-emerald-955/20 text-emerald-500 dark:text-emerald-400 rounded-lg hover:bg-emerald-500 dark:hover:bg-emerald-600 hover:text-white transition-all">
+                        <button type="button" onClick={addEditGroup} className="p-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 dark:text-emerald-400 rounded-lg hover:bg-emerald-500 dark:hover:bg-emerald-600 hover:text-white transition-all">
                           <Plus size={14} />
                         </button>
                       </div>
@@ -1158,10 +1305,10 @@ export default function PatientProfile() {
 
                     {/* Active combination edits */}
                     {editVisitMeds[editActiveGroupIndex] && (
-                      <div className="p-4 bg-slate-50 dark:bg-slate-955/40 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+                      <div className="p-4 bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1">
-                            <label className="block text-xs font-black text-slate-450 dark:text-slate-500 uppercase ml-1">Potency (Power)</label>
+                            <label className="block text-xs font-black text-slate-400 dark:text-slate-500 uppercase ml-1">Potency (Power)</label>
                             <input 
                               type="text" 
                               placeholder="e.g. 30, 200, Q"
@@ -1175,7 +1322,7 @@ export default function PatientProfile() {
                             />
                           </div>
                           <div className="space-y-1">
-                            <label className="block text-xs font-black text-slate-450 dark:text-slate-500 uppercase ml-1">Dosage Frequency</label>
+                            <label className="block text-xs font-black text-slate-400 dark:text-slate-500 uppercase ml-1">Dosage Frequency</label>
                             <select 
                               value={editVisitMeds[editActiveGroupIndex].dosage} 
                               onChange={e => {
@@ -1194,7 +1341,7 @@ export default function PatientProfile() {
 
                         {/* Medicine Autocomplete search for edit mode */}
                         <div className="space-y-2 relative" ref={editSearchRef}>
-                          <label className="block text-xs font-black text-slate-450 dark:text-slate-500 uppercase ml-1">Search & Add Medicines</label>
+                          <label className="block text-xs font-black text-slate-400 dark:text-slate-500 uppercase ml-1">Search & Add Medicines</label>
                           <input 
                             type="text" 
                             placeholder="Type medicine name to search..."
@@ -1225,7 +1372,7 @@ export default function PatientProfile() {
 
                         {/* Selected medicines list in editing group */}
                         <div className="space-y-2">
-                          <label className="block text-xs font-black text-slate-450 dark:text-slate-500 uppercase ml-1">Selected Medicines</label>
+                          <label className="block text-xs font-black text-slate-400 dark:text-slate-500 uppercase ml-1">Selected Medicines</label>
                           {editVisitMeds[editActiveGroupIndex].meds.length === 0 ? (
                             <p className="text-xs text-slate-400 dark:text-slate-500 italic ml-1">No medicines added to this combination yet.</p>
                           ) : (
@@ -1236,7 +1383,7 @@ export default function PatientProfile() {
                                   <button 
                                     type="button" 
                                     onClick={() => removeMedFromEditGroup(med.code)}
-                                    className="text-red-550 hover:text-red-700 transition-all font-black text-base px-1 ml-1"
+                                    className="text-red-500 hover:text-red-700 transition-all font-black text-base px-1 ml-1"
                                     aria-label={`Remove ${med.name || med.code}`}
                                   >
                                     ×
@@ -1330,6 +1477,90 @@ export default function PatientProfile() {
           <div className="mt-16 pt-8 border-t border-slate-200 flex justify-between items-center text-xs font-bold text-slate-400">
             <p>Generated by Nek Kadam Clinic System</p>
             <p>Signature: _______________________</p>
+          </div>
+        </div>
+      )}
+
+      {/* ─── R4: PATIENT-SPECIFIC OPD TOKEN / QR SLIP MODAL ─── */}
+      {showOpdSlip && patient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-6 relative overflow-hidden">
+            {/* Top Close Button */}
+            <button
+              onClick={() => setShowOpdSlip(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all print:hidden"
+            >
+              <X size={18} />
+            </button>
+
+            {/* Printable OPD Slip Card */}
+            <div id="opd-qr-slip" className="bg-gradient-to-b from-emerald-50/50 to-white dark:from-slate-900 dark:to-slate-950 p-6 rounded-2xl border-2 border-emerald-500/30 text-center space-y-4">
+              {/* Header */}
+              <div className="border-b border-dashed border-emerald-500/30 pb-3">
+                <h3 className="text-base font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-tight">
+                  Nek Kadam Medical Camp
+                </h3>
+                <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                  Charitable OPD Patient Token
+                </p>
+              </div>
+
+              {/* Scannable High-Res QR Code */}
+              <div className="flex justify-center py-2">
+                <div className="bg-white p-3 rounded-2xl shadow-md border-2 border-slate-900/10 flex flex-col items-center">
+                  <QRCodeSVG 
+                    value={String(patient.card_number || patient.id || '')} 
+                    size={160} 
+                    level="H" 
+                    includeMargin={true}
+                    bgColor="#ffffff"
+                    fgColor="#0f172a"
+                  />
+                  <span className="mt-2 text-xs font-black font-mono tracking-widest text-slate-900">
+                    CARD #{patient.card_number?.startsWith('TEMP-') ? 'N/A' : patient.card_number}
+                  </span>
+                </div>
+              </div>
+
+              {/* Patient Core Details */}
+              <div className="space-y-1 text-slate-800 dark:text-slate-100">
+                <h4 className="text-lg font-black">{patient.name}</h4>
+                <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                  Age: {patient.age || '—'} yrs • Gender: {patient.gender || '—'} {patient.blood_group ? `• Blood: ${patient.blood_group}` : ''}
+                </p>
+                {patient.phone && (
+                  <p className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300">
+                    Phone: {patient.phone}
+                  </p>
+                )}
+                {patient.address && (
+                  <p className="text-[11px] text-slate-500 truncate max-w-xs mx-auto">
+                    📍 {patient.address}
+                  </p>
+                )}
+              </div>
+
+              {/* Footer instruction */}
+              <div className="pt-3 border-t border-dashed border-emerald-500/30 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                Present this QR slip at OPD Registration, Doctor Desk & Pharmacy for instant lookup.
+              </div>
+            </div>
+
+            {/* Actions (Hidden during print) */}
+            <div className="flex gap-3 print:hidden">
+              <button
+                onClick={() => setShowOpdSlip(false)}
+                className="flex-1 py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-black text-xs uppercase tracking-wider hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="flex-1 py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition-all"
+              >
+                <Printer size={16} /> Print Token
+              </button>
+            </div>
           </div>
         </div>
       )}

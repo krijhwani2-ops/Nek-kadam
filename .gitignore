@@ -87,3 +87,6 @@ generate_ppt.js
 # Misc generated
 skills-lock.json
 coverage/
+.agents/
+.claude/
+.claude-plugin/

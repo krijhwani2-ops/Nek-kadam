@@ -1,20 +1,18 @@
 /**
- * Shared PostgreSQL pool factory for LAN / single-server deployments.
- * Tuning favors stability on modest hardware; override via PGPOOL_* env vars.
+ * Shared PostgreSQL pool factory for LAN / cloud deployments.
+ * Auto-enables SSL for remote cloud databases (e.g. Supabase, Neon, Render).
  */
 
 require('dotenv').config();
 const { Pool } = require('pg');
+
+const DEFAULT_CLOUD_DB = 'postgresql://postgres.quzmtmvymlrwprewszkr:nekkadam2026@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres';
 
 function parsePositiveInt(raw, fallback) {
   const n = parseInt(String(raw ?? '').trim(), 10);
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-/**
- * Low-level Client options (migrate scripts); uses DATABASE_URL or discrete PG* vars.
- * Optional overrides: `.database`, `.host`, `.connectionString` (e.g. POSTGRES_SUPER_URL for setup).
- */
 function getDirectClientOptions(override = {}) {
   const { connectionString: csOverride, database: dbOverride, ...rest } = override;
   const connStr = csOverride || rest.connectionString;
@@ -22,29 +20,28 @@ function getDirectClientOptions(override = {}) {
   delete removedDup.connectionString;
 
   const superUrl = process.env.POSTGRES_SUPER_URL;
-  if (connStr || superUrl) {
-    return { connectionString: connStr || superUrl, ...removedDup };
+  const targetUrl = connStr || superUrl || process.env.DATABASE_URL || DEFAULT_CLOUD_DB;
+
+  const sslOption = { rejectUnauthorized: false };
+
+  if (targetUrl) {
+    return {
+      connectionString: targetUrl,
+      ssl: sslOption,
+      ...removedDup
+    };
   }
-  if (process.env.DATABASE_URL && !dbOverride) {
-    return { connectionString: process.env.DATABASE_URL, ...removedDup };
-  }
-  /* discrete */
-  let database = dbOverride ?? (process.env.PGDATABASE || 'nekkadam');
-  if (process.env.DATABASE_URL && dbOverride) {
-    try {
-      const u = new URL(process.env.DATABASE_URL);
-      u.pathname = `/${dbOverride}`;
-      return { connectionString: u.toString(), ...removedDup };
-    } catch {
-      /* fallback below */
-    }
-  }
+
+  const host = process.env.PGHOST || '127.0.0.1';
+  const isLocalHost = host === '127.0.0.1' || host === 'localhost';
+
   return {
     user: process.env.PGUSER || 'postgres',
     password: process.env.PGPASSWORD ?? '',
-    host: process.env.PGHOST || '127.0.0.1',
+    host,
     port: parsePositiveInt(process.env.PGPORT, 5432),
-    database,
+    database: dbOverride || process.env.PGDATABASE || 'postgres',
+    ssl: isLocalHost ? undefined : { rejectUnauthorized: false },
     ...removedDup,
   };
 }
@@ -58,6 +55,7 @@ function getPoolOptions() {
   if (dc.connectionString) {
     return {
       connectionString: dc.connectionString,
+      ssl: dc.ssl,
       max,
       idleTimeoutMillis,
       connectionTimeoutMillis,
@@ -70,6 +68,7 @@ function getPoolOptions() {
     host: dc.host,
     port: dc.port,
     database: dc.database,
+    ssl: dc.ssl,
     max,
     idleTimeoutMillis,
     connectionTimeoutMillis,

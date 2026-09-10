@@ -1,17 +1,67 @@
 // ─── Nek Kadam: Offline-First Database Client ───
 // Architecture: LOCAL FIRST. All reads/writes go to IndexedDB.
-import { getStoredSession, setStoredSession, getBaseUrl } from './session';
+import { getStoredSession, setStoredSession, getBaseUrl, isPrivateNetwork } from './session';
 // Server sync happens ONLY on manual "Sync" button press.
 // No silent failures. Every operation is try-catched.
 
 // Allow overriding the server IP for mobile connectivity
 const SERVER_PORT = 3001;
 const API_URL_LOCAL = '/rpc';
+const CLOUD_URL = 'https://nek-kadam.onrender.com';
+
+export type NetworkMode = 'auto' | 'lan' | 'internet';
+
+export function getNetworkMode(): NetworkMode {
+  if (typeof window === 'undefined') return 'auto';
+  const saved = localStorage.getItem('NEK_KADAM_NETWORK_MODE') as NetworkMode;
+  if (saved === 'lan' || saved === 'internet' || saved === 'auto') return saved;
+  return 'auto';
+}
+
+export function setNetworkMode(mode: NetworkMode) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('NEK_KADAM_NETWORK_MODE', mode);
+  _serverOnline = null;
+  _lastCheck = 0;
+  if (mode === 'internet') {
+    activeApiUrl = `${CLOUD_URL}/rpc`;
+  } else if (mode === 'lan') {
+    const savedIp = localStorage.getItem('NEK_KADAM_SERVER_IP');
+    activeApiUrl = savedIp ? `http://${savedIp}:${SERVER_PORT}/rpc` : getRemoteApiUrl();
+  } else {
+    activeApiUrl = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      ? API_URL_LOCAL
+      : getRemoteApiUrl();
+  }
+  window.dispatchEvent(new CustomEvent('nk_network_mode_changed', { detail: mode }));
+}
 
 function getRemoteApiUrl(): string {
+  const mode = getNetworkMode();
+  if (mode === 'internet') {
+    return `${CLOUD_URL}/rpc`;
+  }
+
+  // 1. If custom IP is manually configured in Settings, use it
   const savedIp = typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_SERVER_IP') : null;
-  const ip = savedIp || '192.168.29.180';
-  return `http://${ip}:${SERVER_PORT}/rpc`;
+  if (savedIp) {
+    return `http://${savedIp}:${SERVER_PORT}/rpc`;
+  }
+
+  // 2. If running on local LAN browser (e.g. phone browser accessing http://192.168.29.180:5173)
+  if (typeof window !== 'undefined' && window.location.hostname) {
+    if (isPrivateNetwork(window.location.hostname)) {
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return API_URL_LOCAL;
+      }
+      return `${window.location.protocol}//${window.location.hostname}:${SERVER_PORT}/rpc`;
+    }
+    // Public cloud domain (e.g. Render) -> relative same-origin
+    return '/rpc';
+  }
+
+  // 3. Default fallback for local clinic Wi-Fi
+  return `http://192.168.29.180:${SERVER_PORT}/rpc`;
 }
 
 let activeApiUrl = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) 
@@ -24,19 +74,29 @@ export function setServerIp(ip: string) {
     activeApiUrl = `http://${ip}:${SERVER_PORT}/rpc`;
   } else {
     localStorage.removeItem('NEK_KADAM_SERVER_IP');
-    activeApiUrl = `http://192.168.29.180:${SERVER_PORT}/rpc`;
+    activeApiUrl = getRemoteApiUrl();
   }
+  _serverOnline = null;
+  _lastCheck = 0;
+  window.dispatchEvent(new CustomEvent('nk_server_ip_changed', { detail: ip }));
 }
 
 export function getServerIp() {
-  return localStorage.getItem('NEK_KADAM_SERVER_IP') || '192.168.29.180';
+  return localStorage.getItem('NEK_KADAM_SERVER_IP') || '';
 }
 
 function getApiUrl(): string {
-  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    return API_URL_LOCAL;
+  const base = getBaseUrl();
+  return base ? `${base}/rpc` : '/rpc';
+}
+
+export function cleanPatientId(id: string | number | undefined | null): string {
+  if (id === undefined || id === null) return '';
+  const s = String(id).trim();
+  if (s.endsWith('.0')) {
+    return s.slice(0, -2);
   }
-  return activeApiUrl;
+  return s;
 }
 
 // ─── UUID Generator (deterministic, no duplicates) ───
@@ -189,9 +249,11 @@ export async function saveVisitOffline(payload: {
   const visitId = 'VISIT-' + Date.now();
   
   // 1. Write visit to local cache for immediate UI display
+  const cleanId = cleanPatientId(payload.patientId);
+  payload.patientId = cleanId;
   const visitRecord = {
     id: visitId,
-    patient_id: payload.patientId,
+    patient_id: cleanId,
     date: payload.date,
     doctor_name: payload.doctorName,
     notes: payload.notes,
@@ -256,9 +318,10 @@ export async function saveVisitOffline(payload: {
 export async function getPendingVisitsForPatient(patientId: string): Promise<any[]> {
   const ops = await getPendingOps();
   const pendingVisits: any[] = [];
-  
   for (const op of ops) {
-    if (op.action === 'save-full' && op.query?.patientId === patientId) {
+    const opPatientId = cleanPatientId(op.query?.patientId);
+    const targetPatientId = cleanPatientId(patientId);
+    if (op.action === 'save-full' && opPatientId === targetPatientId) {
       // Reconstruct a visit-like object from the save-full payload
       const payload = op.query;
       const visitId = `PENDING-${op.id || op.timestamp}`;
@@ -422,54 +485,24 @@ export async function discoverLocalServer(): Promise<string | null> {
 }
 
 export async function checkServerOnline(): Promise<boolean> {
-  if (_serverOnline !== null && Date.now() - _lastCheck < 5000) return _serverOnline;
-  
-  const tryPing = async (urlToTry: string) => {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 2000);
-      const session = await getStoredSession();
-      const res = await fetch(`${urlToTry}/query`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': session ? `Bearer ${session.sessionId}` : ''
-        },
-        body: JSON.stringify({ table: 'patients', select: '*', limit: 1 }),
-        signal: controller.signal
-      });
-      clearTimeout(timeout);
-      return res.ok;
-    } catch { return false; }
-  };
+  if (_serverOnline !== null && Date.now() - _lastCheck < 8000) return _serverOnline;
 
-  const remoteUrl = getRemoteApiUrl();
-  let online = await tryPing(remoteUrl);
-  if (online) {
-    activeApiUrl = remoteUrl;
-  } else {
-    const originUrl = `${window.location.protocol}//${window.location.hostname}:${SERVER_PORT}/rpc`;
-    online = await tryPing(originUrl);
-    if (online) {
-      activeApiUrl = originUrl;
-    } else {
-      online = await tryPing(API_URL_LOCAL);
-      if (online) {
-        activeApiUrl = API_URL_LOCAL;
-      } else {
-        // Trigger silent background network scanning
-        if (!isAutoDiscovering) {
-          discoverLocalServer().catch(err => {
-            console.error('[AUTO-DISCOVERY] Background scan failed:', err);
-          });
-        }
-      }
-    }
+  const base = getBaseUrl();
+  const urlToPing = base ? `${base}/api/health` : '/api/health';
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(urlToPing, { signal: controller.signal });
+    clearTimeout(timeout);
+    _serverOnline = res.ok;
+    _lastCheck = Date.now();
+    return res.ok;
+  } catch {
+    _serverOnline = false;
+    _lastCheck = Date.now();
+    return false;
   }
-
-  _serverOnline = online;
-  _lastCheck = Date.now();
-  return _serverOnline;
 }
 
 // ─── Sync Engine ───
@@ -567,7 +600,7 @@ export async function fullDataSync(): Promise<{ success: boolean; message: strin
     'patients', 'visits', 'medicines', 'prescription_groups', 'group_medicines', 
     'medicine_logs', 'dosage_frequency', 'tokens', 'token_events', 'batches', 
     'education_students', 'attendance', 'inventory', 'departments',
-    'medicine_tasks', 'medicine_task_items'
+    'medicine_tasks', 'medicine_task_items', 'chat_messages'
   ];
   const url = getApiUrl();
   let totalRows = 0;
@@ -575,7 +608,11 @@ export async function fullDataSync(): Promise<{ success: boolean; message: strin
   // 2. SECOND: Pull all fresh data from the server (which now includes our pushed writes!)
   for (const table of tables) {
     try {
-      const query = { table, select: '*' };
+      // AUDIT FIX: Exclude fileData from chat_messages to avoid downloading binary blobs (was unbounded payload)
+      const selectFields = (table === 'chat_messages') 
+        ? 'id,senderId,senderName,senderDepartment,recipientId,message,timestamp,fileName' 
+        : '*';
+      const query = { table, select: selectFields };
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000); // Increased timeout
       const session = await getStoredSession();
@@ -988,6 +1025,9 @@ export const db = {
 if (typeof window !== 'undefined') {
   const runAutoSync = async () => {
     try {
+      // AUDIT FIX: Skip sync entirely if browser knows it's offline (saves failed fetch timeouts)
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+
       const ops = await getPendingOps();
       if (ops.length > 0) {
         const online = await checkServerOnline();
@@ -1051,6 +1091,6 @@ if (typeof window !== 'undefined') {
   // Sync when window status fires online
   window.addEventListener('online', runAutoSync);
   
-  // Periodically check every 10 seconds
-  setInterval(runAutoSync, 10000);
+  // AUDIT FIX: Reduced from 10s → 30s to cut background network churn by 3x
+  setInterval(runAutoSync, 30000);
 }

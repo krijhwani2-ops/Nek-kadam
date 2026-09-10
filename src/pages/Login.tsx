@@ -48,7 +48,15 @@ export default function Login() {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('nk_token') || ''}` }
         });
         const usersJson = await usersRes.json();
-        setUsers(usersJson.data || []);
+        const rawUsers = usersJson.data || usersJson.users || [];
+        const seen = new Set<string>();
+        const uniqueUsers = rawUsers.filter((u: any) => {
+          const key = (u.name || '').trim().toLowerCase();
+          if (!key || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        setUsers(uniqueUsers);
         setIsServerOffline(false);
       } catch (e: any) {
         console.error('[LOAD ERROR]', e);
@@ -161,8 +169,29 @@ export default function Login() {
       <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none"></div>
       <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none"></div>
 
-      <div className="flex flex-col lg:flex-row gap-6 max-w-4xl w-full items-stretch justify-center relative z-10">
-        <div className="flex-1 max-w-md bg-slate-950/80 backdrop-blur-md rounded-[2.5rem] shadow-2xl border border-slate-800 overflow-hidden relative p-8 md:p-10 space-y-8 animate-in fade-in duration-300">
+      <div className="flex flex-col gap-3 max-w-4xl w-full items-center justify-center relative z-10">
+        {/* Top Demo Quick-Launch Banner */}
+        <div className="w-full max-w-md">
+          <a
+            href="/demo"
+            className="flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-sky-600 via-indigo-600 to-purple-600 hover:from-sky-500 hover:to-purple-500 text-white shadow-xl border border-sky-400/40 transition-all group"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-xl">🚀</span>
+              <div className="text-left">
+                <div className="text-xs font-black tracking-wide flex items-center gap-1.5">
+                  APK UI/UX LABS (3 VARIANTS)
+                  <span className="px-1.5 py-0.5 bg-white/20 rounded text-[9px] font-bold">DEMO</span>
+                </div>
+                <div className="text-[11px] text-sky-100">Tap here to test 🍏 Nordic, ⚡ Obsidian & 🎨 Pebble</div>
+              </div>
+            </div>
+            <ChevronRight size={18} className="text-white/70 group-hover:translate-x-1 transition-transform" />
+          </a>
+        </div>
+
+        <div className="flex flex-col lg:flex-row gap-6 w-full items-stretch justify-center">
+          <div className="flex-1 max-w-md bg-slate-950/80 backdrop-blur-md rounded-[2.5rem] shadow-2xl border border-slate-800 overflow-hidden relative p-8 md:p-10 space-y-8 animate-in fade-in duration-300">
           
           <button 
             onClick={() => setShowConfig(!showConfig)}
@@ -329,14 +358,15 @@ export default function Login() {
              <p className="text-slate-400 text-xs mt-1">Scan this QR Code with your phone to connect to the clinic system.</p>
            </div>
            <div className="p-4 bg-white rounded-3xl shadow-lg shadow-emerald-950/20 border border-slate-200">
-             <QRCodeSVG value={`http://${localIp}:5173`} size={160} level="H" includeMargin={true} />
+             <QRCodeSVG value={typeof window !== 'undefined' && window.location.hostname && !['localhost', '127.0.0.1'].includes(window.location.hostname) && !window.location.hostname.startsWith('192.168.') && !window.location.hostname.startsWith('10.') ? window.location.origin : `http://${localIp}:5173`} size={160} level="H" includeMargin={true} />
            </div>
            <div className="space-y-1">
              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Access Link</p>
-             <p className="text-xs font-mono font-bold text-emerald-400 select-all">http://{localIp}:5173</p>
+             <p className="text-xs font-mono font-bold text-emerald-400 select-all">{typeof window !== 'undefined' && window.location.hostname && !['localhost', '127.0.0.1'].includes(window.location.hostname) && !window.location.hostname.startsWith('192.168.') && !window.location.hostname.startsWith('10.') ? window.location.origin : `http://${localIp}:5173`}</p>
            </div>
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 }

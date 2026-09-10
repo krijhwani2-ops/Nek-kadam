@@ -205,7 +205,7 @@ export default function Chat() {
                 <div 
                   className={`max-w-[65%] rounded-lg px-3 py-2 shadow-[0_1px_0.5px_rgba(0,0,0,0.13)] relative ${
                     isOwn 
-                      ? 'bg-[#d9fdd3] dark:bg-emerald-950 text-[#111b21] dark:text-emerald-100 rounded-tr-none border border-transparent dark:border-emerald-900/40' 
+                      ? 'bg-[#d9fdd3] dark:bg-emerald-900 text-[#111b21] dark:text-emerald-50 rounded-tr-none border border-transparent dark:border-emerald-700/50' 
                       : 'bg-white dark:bg-slate-900 text-[#111b21] dark:text-slate-100 rounded-tl-none border border-slate-100 dark:border-slate-800'
                   }`}
                 >
@@ -227,7 +227,7 @@ export default function Chat() {
                   {msg.fileName && (
                     <div className={`mt-1.5 ${msg.message ? 'border-t pt-1.5 border-slate-200/40 dark:border-slate-700/40' : ''}`}>
                       <div className={`flex items-center justify-between p-2 rounded border text-xs gap-3 ${
-                        isOwn ? 'bg-[#c7f4bd] dark:bg-emerald-900/60 border-emerald-200/20 text-[#111b21] dark:text-emerald-100' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-700 dark:text-slate-300'
+                        isOwn ? 'bg-[#c7f4bd] dark:bg-emerald-950/80 border-emerald-200/20 text-[#111b21] dark:text-emerald-50' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-700 dark:text-slate-300'
                       }`}>
                         <div className="flex items-center gap-2 min-w-0">
                           <FileText size={16} className="text-slate-550 dark:text-slate-400 shrink-0" />

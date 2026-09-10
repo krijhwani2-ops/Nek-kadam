@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { db } from '../lib/db';
 import { Link } from 'react-router-dom';
-import { Users, Search, ChevronRight, Calendar } from 'lucide-react';
+import { Users, Search, ChevronRight, Calendar, QrCode } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { safeFormatDate } from '../lib/dateUtils';
+import BarcodeScannerModal from '../components/BarcodeScannerModal';
 
 export default function PatientsList() {
   const { t } = useApp();
@@ -13,6 +14,7 @@ export default function PatientsList() {
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [visibleCount, setVisibleCount] = useState(30);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const observerTarget = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -89,13 +91,24 @@ export default function PatientsList() {
             {t('patients')}
           </h2>
         </div>
-        <Link to="/patients/new" className="btn-primary text-xs flex items-center gap-1.5 w-fit px-4 py-2">
-          + {t('registerPatient')}
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsScannerOpen(true)}
+            className="px-3.5 py-2 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-sm transition-all active:scale-95"
+            title="Scan Barcode or QR Code on OPD Card"
+          >
+            <QrCode size={16} className="text-emerald-400" />
+            <span>Scan OPD Card</span>
+          </button>
+          <Link to="/patients/new" className="btn-primary text-xs flex items-center gap-1.5 w-fit px-4 py-2">
+            + {t('registerPatient')}
+          </Link>
+        </div>
       </div>
 
       {/* Search */}
-      <div className="glass-card rounded-xl px-4 py-3 flex items-center gap-3 group focus-within:border-emerald-300 dark:border-slate-800"
+      <div className="glass-card rounded-xl px-4 py-2.5 flex items-center gap-3 group focus-within:border-emerald-300 dark:border-slate-800"
            style={{ border: '2px solid rgba(167,243,208,0.4)' }}>
         <Search
           size={18}
@@ -111,11 +124,20 @@ export default function PatientsList() {
         {localQuery && (
           <button
             onClick={() => { setLocalQuery(''); setSearchQuery(''); }}
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-lg leading-none font-bold"
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-lg leading-none font-bold px-1"
           >
             ×
           </button>
         )}
+        <button
+          type="button"
+          onClick={() => setIsScannerOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-black border border-emerald-500/20 transition-all shrink-0 active:scale-95"
+          title="Scan OPD Card QR or Barcode"
+        >
+          <QrCode size={15} />
+          <span className="hidden sm:inline">Scan</span>
+        </button>
       </div>
 
       {/* Count */}
@@ -138,30 +160,30 @@ export default function PatientsList() {
             <Link
               key={p.id}
               to={`/patients/${p.card_number}`}
-              className="flex flex-col md:flex-row justify-between items-start md:items-center p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800/80 hover:border-emerald-300 dark:hover:border-slate-700 hover:-translate-y-0.5 group gap-3 transition-all shadow-sm"
+              className="flex flex-col md:flex-row justify-between items-start md:items-center p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800/80 hover:border-emerald-300 dark:hover:border-slate-700 hover:-translate-y-0.5 group gap-3 transition-all shadow-sm w-full min-w-0 overflow-hidden"
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 min-w-0 flex-1 w-full md:w-auto">
                 {/* Avatar */}
                 <div className="w-11 h-11 rounded-xl bg-gradient-primary flex items-center justify-center text-white font-extrabold text-lg shadow-md shadow-emerald-200 dark:shadow-emerald-950 group-hover:scale-105 transition-transform duration-300 flex-shrink-0">
-                  {p.name.charAt(0).toUpperCase()}
+                  {(p.name || 'P').charAt(0).toUpperCase()}
                 </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-800 dark:text-slate-100 text-base group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
-                    {p.name}
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-extrabold text-slate-800 dark:text-slate-100 text-base group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors truncate">
+                    {p.name || 'Unnamed Patient'}
                   </h3>
-                  <p className="text-xs text-slate-400 dark:text-slate-500 font-medium mt-0.5">
+                  <p className="text-xs text-slate-400 dark:text-slate-500 font-medium mt-0.5 truncate">
                     {p.phone || 'No phone'}
                   </p>
                 </div>
               </div>
 
               {/* Visit Date Column */}
-              <div className="hidden md:flex flex-col items-center">
+              <div className="hidden md:flex flex-col items-center shrink-0">
                 {p.last_visit_date ? (
                   <>
                     <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Last Visit</p>
-                    <span className="flex items-center gap-1.5 text-sm font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/50 px-3 py-1 rounded-xl border border-slate-100 dark:border-slate-800">
-                      <Calendar size={14} className="text-orange-500" /> {safeFormatDate(p.last_visit_date, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    <span className="flex items-center gap-1.5 text-sm font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/50 px-3 py-1 rounded-xl border border-slate-100 dark:border-slate-800 truncate">
+                      <Calendar size={14} className="text-orange-500 shrink-0" /> {safeFormatDate(p.last_visit_date, { month: 'short', day: 'numeric', year: 'numeric' })}
                     </span>
                   </>
                 ) : (
@@ -169,18 +191,18 @@ export default function PatientsList() {
                 )}
               </div>
 
-              <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end">
+              <div className="flex items-center gap-3 sm:gap-6 w-full md:w-auto justify-between md:justify-end min-w-0 shrink-0">
                 {/* Mobile Visit Date */}
-                <div className="md:hidden">
+                <div className="md:hidden min-w-0 shrink">
                   {p.last_visit_date && (
-                    <span className="flex items-center gap-1 text-[10px] font-bold text-orange-500 bg-orange-50 dark:bg-orange-950 px-2 py-0.5 rounded-lg border border-orange-100 dark:border-orange-900">
-                      <Calendar size={10} /> {safeFormatDate(p.last_visit_date)}
+                    <span className="flex items-center gap-1 text-[10px] font-bold text-orange-500 bg-orange-50 dark:bg-orange-950 px-2 py-0.5 rounded-lg border border-orange-100 dark:border-orange-900 truncate">
+                      <Calendar size={10} className="shrink-0" /> {safeFormatDate(p.last_visit_date)}
                     </span>
                   )}
                 </div>
                 
                 <span
-                  className="px-4 py-2 rounded-xl font-bold text-sm"
+                  className="px-4 py-2 rounded-xl font-bold text-sm truncate max-w-[140px] sm:max-w-none shrink-0"
                   style={{
                     background: 'linear-gradient(135deg,#fb923c,#f97316)',
                     color: 'white',
@@ -189,7 +211,7 @@ export default function PatientsList() {
                 >
                   {p.card_number && p.card_number.toString().startsWith('TEMP-') ? 'No ID' : `#${p.card_number}`}
                 </span>
-                <ChevronRight size={18} className="text-slate-300 dark:text-slate-600 group-hover:text-emerald-500 group-hover:translate-x-1 transition-all duration-250" />
+                <ChevronRight size={18} className="text-slate-300 dark:text-slate-600 group-hover:text-emerald-500 group-hover:translate-x-1 transition-all duration-250 shrink-0" />
               </div>
             </Link>
           ))}
@@ -235,6 +257,12 @@ export default function PatientsList() {
           )}
         </div>
       )}
+
+      {/* Live QR & Barcode Camera Scanner Modal */}
+      <BarcodeScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+      />
     </div>
   );
 }

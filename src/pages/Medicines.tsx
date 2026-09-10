@@ -32,7 +32,13 @@ export default function Medicines() {
       .order('code');
     
     if (!error && data) {
-      setMedicines(data);
+      const valid = data.filter((m: any) => {
+        const name = (m.name || '').trim();
+        const code = (m.code || '').trim();
+        if (code.startsWith('###') || code.startsWith('**') || name.startsWith('###') || name.startsWith('**')) return false;
+        return true;
+      });
+      setMedicines(valid);
     }
     setLoading(false);
   }

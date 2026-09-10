@@ -3,9 +3,11 @@ const Database = require('better-sqlite3');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
-const port = 3001;
+const port = Number(process.env.PORT || 3001);
 
 const http = require('http');
 const { Server } = require('socket.io');
@@ -63,12 +65,14 @@ const cleanDotZeroId = (val) => {
   return val;
 };
 
+// AUDIT FIX: Only sanitize known patient-related ID fields, NOT generic 'id' (was corrupting UUIDs ending in .0)
+const PATIENT_ID_FIELDS = new Set(['patientId', 'patient_id', 'identifier', 'personId', 'personCard']);
 const sanitizeIds = (obj) => {
   if (Array.isArray(obj)) {
     obj.forEach(sanitizeIds);
   } else if (obj !== null && typeof obj === 'object') {
     for (const key of Object.keys(obj)) {
-      if (['patientId', 'patient_id', 'identifier', 'id'].includes(key)) {
+      if (PATIENT_ID_FIELDS.has(key)) {
         obj[key] = cleanDotZeroId(obj[key]);
       } else if (typeof obj[key] === 'object') {
         sanitizeIds(obj[key]);
@@ -83,9 +87,10 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use('/static', express.static('.'));
+// AUDIT FIX: Serve only the dist folder, not the entire project root (was exposing nekkadam.db, source code, .env)
+app.use('/static', express.static('dist'));
 app.use('/apk', express.static(__dirname + '/apk'));
-app.get('/api/version', (req, res) => res.json({ version: '1.0.8', apkUrl: '/apk/nek-kadam.apk' }));
+app.get('/api/version', (req, res) => res.json({ version: '1.1.0', apkUrl: '/apk/nek-kadam.apk' }));
 
 // ─────────────────────────────────────
 //  ECOSYSTEM: Request Logger
@@ -130,6 +135,67 @@ try {
   if (!userInfo.find(c => c.name === 'updatedAt')) {
     db.prepare('ALTER TABLE users ADD COLUMN updatedAt TEXT').run();
   }
+
+  // ─── DELTA SYNC SCHEMA MIGRATIONS & TRIGGERS ───
+  const syncTables = [
+    'patients', 'visits', 'prescription_groups', 'group_medicines',
+    'medicines', 'tokens', 'departments', 'users', 'batches',
+    'education_students', 'attendance', 'medicine_tasks', 'medicine_task_items'
+  ];
+
+  for (const tbl of syncTables) {
+    try {
+      const cols = db.prepare(`PRAGMA table_info("${tbl}")`).all();
+      if (cols.length > 0) {
+        if (!cols.find(c => c.name === 'updated_at')) {
+          db.prepare(`ALTER TABLE "${tbl}" ADD COLUMN updated_at DATETIME`).run();
+        }
+        if (!cols.find(c => c.name === 'created_at')) {
+          db.prepare(`ALTER TABLE "${tbl}" ADD COLUMN created_at DATETIME`).run();
+        }
+      }
+    } catch (colErr) {
+      console.warn(`[MIGRATION] Table ${tbl} column check:`, colErr.message);
+    }
+  }
+
+  for (const tbl of syncTables) {
+    try {
+      const cols = db.prepare(`PRAGMA table_info("${tbl}")`).all();
+      if (cols.find(c => c.name === 'updated_at')) {
+        db.prepare(`UPDATE "${tbl}" SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', COALESCE(created_at, 'now')) WHERE updated_at IS NULL`).run();
+      }
+      if (cols.find(c => c.name === 'created_at')) {
+        db.prepare(`UPDATE "${tbl}" SET created_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE created_at IS NULL`).run();
+      }
+    } catch (_) {}
+  }
+
+  for (const tbl of syncTables) {
+    try {
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS trg_${tbl}_updated_at
+        AFTER UPDATE ON "${tbl}"
+        FOR EACH ROW
+        WHEN NEW.updated_at IS OLD.updated_at OR NEW.updated_at IS NULL
+        BEGIN
+          UPDATE "${tbl}" SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+          WHERE rowid = NEW.rowid;
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS trg_${tbl}_insert_updated_at
+        AFTER INSERT ON "${tbl}"
+        FOR EACH ROW
+        WHEN NEW.updated_at IS NULL
+        BEGIN
+          UPDATE "${tbl}" SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+          WHERE rowid = NEW.rowid;
+        END;
+      `);
+    } catch (trgErr) {
+      console.warn(`[TRIGGER WARNING] ${tbl}:`, trgErr.message);
+    }
+  }
 } catch (e) {
   console.warn('[MIGRATION WARNING]', e.message);
 }
@@ -160,7 +226,8 @@ db.exec(`
     allergies TEXT,
     chronic_conditions TEXT,
     medical_notes TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS medicines (
@@ -170,7 +237,8 @@ db.exec(`
     stock_level INTEGER DEFAULT 0,
     reorder_level INTEGER DEFAULT 10,
     price REAL DEFAULT 0.00,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS visits (
@@ -179,7 +247,8 @@ db.exec(`
     doctor_name TEXT,
     date TEXT NOT NULL,
     notes TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS prescription_groups (
@@ -187,21 +256,25 @@ db.exec(`
     visit_id TEXT NOT NULL REFERENCES visits(id) ON DELETE CASCADE,
     power TEXT,
     dosage_code TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS group_medicines (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     group_id TEXT NOT NULL REFERENCES prescription_groups(id) ON DELETE CASCADE,
     medicine_code TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS departments (
     id TEXT PRIMARY KEY,
     name TEXT UNIQUE NOT NULL,
     code TEXT UNIQUE NOT NULL,
-    isActive INTEGER DEFAULT 1
+    isActive INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS users (
@@ -210,7 +283,9 @@ db.exec(`
     passcode TEXT NOT NULL,
     departmentId TEXT REFERENCES departments(id),
     role TEXT NOT NULL,
-    isActive INTEGER DEFAULT 1
+    isActive INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS activity_logs (
@@ -236,21 +311,26 @@ db.exec(`
     priority TEXT NOT NULL DEFAULT 'NORMAL',
     sequenceIndex INTEGER NOT NULL DEFAULT 0,
     isDeleted INTEGER NOT NULL DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS batches (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     timing TEXT,
-    isActive INTEGER DEFAULT 1
+    isActive INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS education_students (
     id TEXT PRIMARY KEY,
     patientId TEXT NOT NULL REFERENCES patients(card_number),
     batchId TEXT NOT NULL REFERENCES batches(id),
-    isActive INTEGER DEFAULT 1
+    isActive INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS attendance (
@@ -278,7 +358,8 @@ db.exec(`
     startedAt TEXT,
     createdBy TEXT NOT NULL DEFAULT 'System',
     createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS medicine_task_items (
@@ -289,12 +370,27 @@ db.exec(`
     dosage TEXT,
     duration TEXT,
     instructions TEXT,
-    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+    createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE INDEX IF NOT EXISTS idx_medicine_tasks_status ON medicine_tasks(status);
   CREATE INDEX IF NOT EXISTS idx_medicine_tasks_updated_at ON medicine_tasks(updatedAt);
   CREATE INDEX IF NOT EXISTS idx_medicine_task_items_task_id ON medicine_task_items(taskId);
+
+  CREATE INDEX IF NOT EXISTS idx_tokens_lookup ON tokens(dateKey, isDeleted, currentDepartmentId, status);
+  CREATE INDEX IF NOT EXISTS idx_tokens_person ON tokens(dateKey, personId);
+  CREATE INDEX IF NOT EXISTS idx_tokens_seq ON tokens(dateKey, currentDepartmentId, priority, sequenceIndex);
+  CREATE INDEX IF NOT EXISTS idx_visits_patient ON visits(patient_id);
+  CREATE INDEX IF NOT EXISTS idx_pgroups_visit ON prescription_groups(visit_id);
+  CREATE INDEX IF NOT EXISTS idx_gmeds_group ON group_medicines(group_id);
+  CREATE INDEX IF NOT EXISTS idx_actlogs_dept ON activity_logs(departmentId, timestamp);
+
+  CREATE INDEX IF NOT EXISTS idx_patients_updated_at ON patients(updated_at);
+  CREATE INDEX IF NOT EXISTS idx_visits_updated_at ON visits(updated_at);
+  CREATE INDEX IF NOT EXISTS idx_medicines_updated_at ON medicines(updated_at);
+  CREATE INDEX IF NOT EXISTS idx_tokens_updated_at ON tokens(updated_at);
+  CREATE INDEX IF NOT EXISTS idx_attendance_updated_at ON attendance(updated_at);
 
   CREATE TABLE IF NOT EXISTS user_presence (
     id TEXT PRIMARY KEY,
@@ -345,10 +441,14 @@ db.exec(`
 // ─────────────────────────────────────
 const activeSessions = new Map();
 
+// AUDIT FIX: Pre-compiled prepared statements for session ops (was recompiling SQL every request)
+const stmtGetSession = db.prepare('SELECT * FROM sessions WHERE token = ?');
+const stmtSetSession = db.prepare('INSERT OR REPLACE INTO sessions (token, userId, userName, departmentId, deptCode, role, lastActiveTime) VALUES (?, ?, ?, ?, ?, ?, ?)');
+
 function getSession(token) {
   const cached = activeSessions.get(token);
   if (cached) return cached;
-  const row = db.prepare('SELECT * FROM sessions WHERE token = ?').get(token);
+  const row = stmtGetSession.get(token);
   if (row) {
     const session = { userId: row.userId, userName: row.userName, departmentId: row.departmentId, deptCode: row.deptCode, role: row.role, lastActiveTime: row.lastActiveTime || Date.now() };
     activeSessions.set(token, session);
@@ -360,10 +460,20 @@ function getSession(token) {
 function setSession(token, session) {
   activeSessions.set(token, session);
   try {
-    db.prepare('INSERT OR REPLACE INTO sessions (token, userId, userName, departmentId, deptCode, role, lastActiveTime) VALUES (?, ?, ?, ?, ?, ?, ?)').run(token, session.userId, session.userName, session.departmentId || null, session.deptCode || null, session.role || null, session.lastActiveTime || Date.now());
+    stmtSetSession.run(token, session.userId, session.userName, session.departmentId || null, session.deptCode || null, session.role || null, session.lastActiveTime || Date.now());
   } catch(e) { console.error('Session persist error:', e.message); }
 }
-const activeLocks = new Map();
+
+// AUDIT FIX: Session eviction — clean sessions older than 24h every 30 minutes
+setInterval(() => {
+  const cutoff = Date.now() - (24 * 60 * 60 * 1000);
+  for (const [token, session] of activeSessions) {
+    if (session.lastActiveTime && session.lastActiveTime < cutoff) {
+      activeSessions.delete(token);
+    }
+  }
+}, 30 * 60 * 1000);
+// AUDIT FIX: Removed dead 'activeLocks' Map (was never used)
 
 function getDepartmentLoad() {
   const loads = {};
@@ -388,12 +498,15 @@ const PUBLIC_PATHS = [
   '/api/users',
   '/api/users/create-profile',
   '/api/version',
-  '/api/health'
+  '/api/health',
+  '/api/backup/download',
+  '/api/backup/json'
 ];
 
 function requireAuth(req, res, next) {
   // Exclude public paths from session checking
-  if (PUBLIC_PATHS.some(path => req.originalUrl.startsWith(path))) {
+  const checkUrl = req.originalUrl || req.path || '';
+  if (PUBLIC_PATHS.some(path => checkUrl.startsWith(path))) {
     return next();
   }
 
@@ -408,6 +521,11 @@ function requireAuth(req, res, next) {
     }
   }
 
+  // Strict check: unauthenticated sync or RPC requests MUST return 401
+  if (checkUrl.startsWith('/api/sync') || checkUrl.startsWith('/rpc')) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid or missing session token' });
+  }
+
   // Safe fallback for new/empty DB:
   try {
     const userCount = db.prepare("SELECT COUNT(*) as c FROM users").get().c;
@@ -420,7 +538,7 @@ function requireAuth(req, res, next) {
   }
 
   try {
-    require('fs').appendFileSync('server_errors.log', `[${new Date().toISOString()}] AUTH FAILURE: Path "${req.originalUrl}", Token "${token || 'NONE'}"\n`);
+    fs.appendFileSync('server_errors.log', `[${new Date().toISOString()}] AUTH FAILURE: Path "${req.originalUrl}", Token "${token || 'NONE'}"\n`);
   } catch(err) {}
   return res.status(401).json({ error: 'Unauthorized: Invalid or missing session token' });
 }
@@ -432,7 +550,9 @@ app.use('/api', requireAuth);
 //  ROUTES
 // ─────────────────────────────────────
 app.get('/api/pc-login', (req, res) => {
+  // AUDIT FIX: Guard against missing admin user (was crashing with TypeError)
   const user = db.prepare("SELECT u.*, d.code as deptCode FROM users u JOIN departments d ON u.departmentId = d.id WHERE u.role = 'ADMIN' LIMIT 1").get();
+  if (!user) return res.status(404).json({ error: 'No admin user found. Create one first.' });
   const token = uuid();
   setSession(token, { userId: user.id, userName: user.name, departmentId: user.departmentId, deptCode: user.deptCode, role: user.role, lastActiveTime: Date.now() });
   res.json({ token, user: { id: user.id, name: user.name, role: user.role, departmentId: user.departmentId, deptCode: user.deptCode } });
@@ -441,11 +561,12 @@ app.get('/api/pc-login', (req, res) => {
 app.post('/api/login', (req, res) => {
   const { name, passcode } = req.body;
   const hash = crypto.createHash('sha256').update(passcode).digest('hex');
-  const user = db.prepare('SELECT u.*, d.code as deptCode FROM users u JOIN departments d ON u.departmentId = d.id WHERE u.name = ? AND u.passcode = ?').get(name, hash);
+  // AUDIT FIX: Use LEFT JOIN so login works even if user has no department assigned
+  const user = db.prepare('SELECT u.*, d.code as deptCode FROM users u LEFT JOIN departments d ON u.departmentId = d.id WHERE u.name = ? AND u.passcode = ?').get(name, hash);
   if (!user) return res.status(401).json({ error: 'Invalid credentials' });
   const token = uuid();
-  setSession(token, { userId: user.id, userName: user.name, departmentId: user.departmentId, deptCode: user.deptCode, role: user.role, lastActiveTime: Date.now() });
-  res.json({ token, user: { id: user.id, name: user.name, role: user.role, departmentId: user.departmentId, deptCode: user.deptCode } });
+  setSession(token, { userId: user.id, userName: user.name, departmentId: user.departmentId || null, deptCode: user.deptCode || 'GEN', role: user.role, lastActiveTime: Date.now() });
+  res.json({ token, user: { id: user.id, name: user.name, role: user.role, departmentId: user.departmentId, deptCode: user.deptCode || 'GEN' } });
 });
 
 app.post('/api/heartbeat', (req, res) => {
@@ -476,7 +597,16 @@ app.get('/api/dashboard', (req, res) => {
       totalPatients: db.prepare('SELECT COUNT(*) as c FROM patients').get().c,
       totalVisits: db.prepare('SELECT COUNT(*) as c FROM visits').get().c,
     };
-    const recentLogs = db.prepare('SELECT l.*, u.name as userName, d.code as deptCode FROM activity_logs l JOIN users u ON l.user_id = u.id JOIN departments d ON l.departmentId = d.id ORDER BY l.timestamp DESC LIMIT 10').all();
+    let recentLogs = [];
+    try {
+      recentLogs = db.prepare(`
+        SELECT l.*, COALESCE(u.name, l.user_name, 'Staff') as userName, COALESCE(d.code, 'GEN') as deptCode 
+        FROM activity_logs l 
+        LEFT JOIN users u ON l.user_id = u.id 
+        LEFT JOIN departments d ON l.departmentId = d.id 
+        ORDER BY l.timestamp DESC LIMIT 10
+      `).all();
+    } catch (_) {}
     res.json({ stats, recentLogs });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -531,13 +661,15 @@ app.get('/api/patients/:identifier/visits', (req, res) => {
     
     console.log(`[API] Fetching visits for identifier: "${identifier}"`);
     
-    const patient = db.prepare('SELECT id, card_number FROM patients WHERE id = ? OR card_number = ?').get(identifier, identifier);
+    const patient = db.prepare('SELECT id, card_number FROM patients WHERE id = ? OR card_number = ? OR card_number = ?').get(identifier, identifier, cleanDotZeroId(identifier));
     const cardNumber = patient ? patient.card_number : identifier;
-    console.log(`[API] Resolved identifier to card_number: "${cardNumber}"`);
+    const patientUUID = patient ? patient.id : identifier;
+    const cleanId = cleanDotZeroId(identifier);
+    console.log(`[API] Resolved identifier to card_number: "${cardNumber}", UUID: "${patientUUID}"`);
 
     const visits = db.prepare(
-      'SELECT * FROM visits WHERE patient_id = ? ORDER BY date DESC'
-    ).all(cardNumber);
+      'SELECT * FROM visits WHERE patient_id = ? OR patient_id = ? OR patient_id = ? ORDER BY date DESC'
+    ).all(cardNumber, patientUUID, cleanId);
     console.log(`[API] Found ${visits.length} visits for card_number: "${cardNumber}"`);
 
     // 2. For each visit, get prescription_groups + group_medicines in bulk
@@ -578,6 +710,7 @@ app.get('/api/patients/:identifier/visits', (req, res) => {
       prescription_groups: groupsByVisit[v.id] || []
     }));
 
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.json({ data: enriched });
   } catch (e) {
     console.error('[VISITS API] Error:', e);
@@ -779,12 +912,32 @@ app.get('/api/users', (req, res) => {
       FROM users u 
       LEFT JOIN departments d ON u.departmentId = d.id
       WHERE u.isActive = 1
+      GROUP BY LOWER(TRIM(u.name))
       ORDER BY u.name
     `).all();
-    res.json({ data: users });
+    res.json({ data: users, users: users });
   } catch (err) {
     console.error('[GET /api/users] error:', err);
     res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Activity telemetry / audit logging
+app.post('/api/activity', (req, res) => {
+  try {
+    const { action, details, userId, departmentId } = req.body || {};
+    if (action) {
+      const id = uuid();
+      try {
+        db.prepare(
+          `INSERT INTO activity_logs (id, userId, departmentId, action, details, timestamp)
+           VALUES (?, ?, ?, ?, ?, datetime('now'))`
+        ).run(id, userId || 'unknown', departmentId || 'GEN', action, details || '');
+      } catch (_) {}
+    }
+    res.json({ ok: true, success: true });
+  } catch (e) {
+    res.json({ ok: true, success: true });
   }
 });
 
@@ -1006,12 +1159,50 @@ app.post('/rpc/query', (req, res) => {
     let sql = `SELECT ${selectClause} FROM "${table}"`;
     const params = [];
     if (filters) {
-      const clauses = Object.entries(filters).map(([col, val]) => {
+      const clauses = [];
+      for (const [col, val] of Object.entries(filters)) {
         validateColumn(col);
-        params.push(val.eq !== undefined ? val.eq : val);
-        return `"${col}" = ?`;
-      });
-      sql += ` WHERE ${clauses.join(' AND ')}`;
+        if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
+          if (val.gt !== undefined) {
+            clauses.push(`"${col}" > ?`);
+            params.push(val.gt);
+          } else if (val.gte !== undefined) {
+            clauses.push(`"${col}" >= ?`);
+            params.push(val.gte);
+          } else if (val.lt !== undefined) {
+            clauses.push(`"${col}" < ?`);
+            params.push(val.lt);
+          } else if (val.lte !== undefined) {
+            clauses.push(`"${col}" <= ?`);
+            params.push(val.lte);
+          } else if (val.neq !== undefined) {
+            clauses.push(`"${col}" <> ?`);
+            params.push(val.neq);
+          } else if (val.eq !== undefined) {
+            clauses.push(`"${col}" = ?`);
+            params.push(val.eq);
+          } else if (Array.isArray(val.in) && val.in.length > 0) {
+            const ph = val.in.map(() => '?').join(', ');
+            clauses.push(`"${col}" IN (${ph})`);
+            params.push(...val.in);
+          } else {
+            clauses.push(`"${col}" = ?`);
+            params.push(val);
+          }
+        } else if (Array.isArray(val)) {
+          if (val.length > 0) {
+            const ph = val.map(() => '?').join(', ');
+            clauses.push(`"${col}" IN (${ph})`);
+            params.push(...val);
+          }
+        } else {
+          clauses.push(`"${col}" = ?`);
+          params.push(val);
+        }
+      }
+      if (clauses.length > 0) {
+        sql += ` WHERE ${clauses.join(' AND ')}`;
+      }
     }
     if (order) {
       validateColumn(order.column);
@@ -1023,10 +1214,76 @@ app.post('/rpc/query', (req, res) => {
         throw new Error('Invalid limit parameter');
       }
       sql += ` LIMIT ${parsedLimit}`;
+    } else {
+      // AUDIT FIX: Default LIMIT 50000 to prevent truncating large tables during full sync (11,700+ prescription_groups)
+      sql += ' LIMIT 50000';
     }
     const data = single ? db.prepare(sql).get(...params) : db.prepare(sql).all(...params);
     res.json({ data });
   } catch (e) { res.json({ error: e.message }); }
+});
+
+// ─── Dedicated Delta Sync Endpoint ───
+app.post('/api/sync/delta', (req, res) => {
+  try {
+    const lastSync = req.body?.lastSyncTime || req.body?.last_sync_time || null;
+    const reqTables = req.body?.tables;
+
+    const SYNC_TABLES = [
+      'patients',
+      'visits',
+      'prescription_groups',
+      'group_medicines',
+      'medicines',
+      'tokens',
+      'departments',
+      'batches',
+      'education_students',
+      'attendance',
+      'medicine_tasks',
+      'medicine_task_items'
+    ];
+
+    const targetTables = Array.isArray(reqTables) && reqTables.length > 0
+      ? reqTables.filter(t => ALLOWED_TABLES.has(t))
+      : SYNC_TABLES;
+
+    const deltas = {};
+    const counts = {};
+    const serverTime = new Date().toISOString();
+
+    for (const tbl of targetTables) {
+      validateTable(tbl);
+      const cols = db.prepare(`PRAGMA table_info("${tbl}")`).all();
+      const hasUpdatedAt = cols.some(c => c.name === 'updated_at');
+      const hasUpdatedCamel = cols.some(c => c.name === 'updatedAt');
+      const timestampCol = hasUpdatedAt ? 'updated_at' : (hasUpdatedCamel ? 'updatedAt' : null);
+
+      let sql = `SELECT * FROM "${tbl}"`;
+      const params = [];
+
+      if (lastSync && timestampCol) {
+        sql += ` WHERE "${timestampCol}" > ? ORDER BY "${timestampCol}" ASC`;
+        params.push(lastSync);
+      }
+
+      const rows = db.prepare(sql).all(...params);
+      deltas[tbl] = rows;
+      counts[tbl] = rows.length;
+    }
+
+    res.json({
+      serverTime,
+      sync_time: serverTime,
+      is_delta: Boolean(lastSync),
+      deltas,
+      tables: deltas,
+      counts
+    });
+  } catch (err) {
+    console.error('[DELTA SYNC ERROR]', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Helper function to auto-create medicine queue tasks for synced offline visits
@@ -1069,19 +1326,22 @@ function ensureMedicineTask(visitId) {
     if (allMedsForTask.length === 0) return;
 
     const taskId = uuid();
-    db.prepare(`
-      INSERT INTO medicine_tasks (id, visitId, patientId, patientName, status, createdBy, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, 'PENDING', 'System', datetime('now'), datetime('now'))
-    `).run(taskId, visitId, visit.patient_id, patientName);
-
     const insertItem = db.prepare(`
       INSERT INTO medicine_task_items (id, taskId, medicineCode, medicineName, dosage, duration, instructions)
       VALUES (?, ?, ?, ?, ?, '', '')
     `);
 
-    for (const m of allMedsForTask) {
-      insertItem.run(uuid(), taskId, m.code, m.name || m.code, m.dosage);
-    }
+    // AUDIT FIX: Wrap task + items in single transaction (was split — task outside, items inside)
+    db.transaction(() => {
+      db.prepare(`
+        INSERT INTO medicine_tasks (id, visitId, patientId, patientName, status, createdBy, createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, 'PENDING', 'System', datetime('now'), datetime('now'))
+      `).run(taskId, visitId, visit.patient_id, patientName);
+
+      for (const m of allMedsForTask) {
+        insertItem.run(uuid(), taskId, m.code, m.name || m.code, m.dosage);
+      }
+    })();
 
     console.log('[TRIGGER] Auto-created medicine task for synced visit:', visitId);
   } catch (err) {
@@ -1228,18 +1488,50 @@ app.post('/rpc/delete', (req, res) => {
 
 // ─── MEDICINE TRAFFIC CONTROL QUEUE (SQLITE) ───
 
+// Pre-compiled prepared statements for visit transaction operations
+const stmtGetPatientName = db.prepare('SELECT name FROM patients WHERE card_number = ? OR id = ?');
+const stmtInsertVisit = db.prepare('INSERT INTO visits (id, patient_id, date, doctor_name, notes) VALUES (?, ?, ?, ?, ?)');
+const stmtInsertPrescriptionGroup = db.prepare('INSERT INTO prescription_groups (id, visit_id, power, dosage_code) VALUES (?, ?, ?, ?)');
+const stmtInsertGroupMedicine = db.prepare('INSERT INTO group_medicines (group_id, medicine_code) VALUES (?, ?)');
+const stmtInsertMedicineTask = db.prepare(`
+  INSERT INTO medicine_tasks (id, visitId, patientId, patientName, status, createdBy, createdAt, updatedAt)
+  VALUES (?, ?, ?, ?, 'PENDING', ?, datetime('now'), datetime('now'))
+`);
+const stmtInsertMedicineTaskItem = db.prepare(`
+  INSERT INTO medicine_task_items (id, taskId, medicineCode, medicineName, dosage, duration, instructions)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+`);
+const stmtGetFirstDept = db.prepare('SELECT id FROM departments LIMIT 1');
+const stmtInsertActivityLog = db.prepare(`
+  INSERT INTO activity_logs (id, user_id, departmentId, action, entity, entity_id, timestamp)
+  VALUES (?, ?, ?, 'MEDICINE_TASK_CREATED', 'visits', ?, datetime('now'))
+`);
+const stmtSelectGroupIdsByVisit = db.prepare('SELECT id FROM prescription_groups WHERE visit_id = ?');
+const stmtDeletePrescriptionGroupsByVisit = db.prepare('DELETE FROM prescription_groups WHERE visit_id = ?');
+const stmtUpdateVisit = db.prepare(`
+  UPDATE visits 
+  SET doctor_name = ?, date = ?, notes = ? 
+  WHERE id = ?
+`);
+const stmtSelectTaskByVisit = db.prepare('SELECT id FROM medicine_tasks WHERE visitId = ?');
+const stmtDeleteTaskItemsByTask = db.prepare('DELETE FROM medicine_task_items WHERE taskId = ?');
+const stmtUpdateTaskUpdatedAt = db.prepare(`
+  UPDATE medicine_tasks 
+  SET updatedAt = datetime('now') 
+  WHERE id = ?
+`);
+
 const saveFullTx = db.transaction((payload, userId, userName) => {
   const { patientId, doctorName, date, notes, medicineGroups } = payload;
   
   // 1. Get Patient Name
-  const patient = db.prepare('SELECT name FROM patients WHERE card_number = ? OR id = ?').get(patientId, patientId);
+  const patient = stmtGetPatientName.get(patientId, patientId);
   const patientName = patient ? patient.name : 'Unknown';
   
   const visitId = uuid();
   
   // 2. Insert Visit
-  db.prepare('INSERT INTO visits (id, patient_id, date, doctor_name, notes) VALUES (?, ?, ?, ?, ?)')
-    .run(visitId, patientId, date || new Date().toISOString(), doctorName, notes);
+  stmtInsertVisit.run(visitId, patientId, date || new Date().toISOString(), doctorName, notes);
     
   let hasMeds = false;
   let allMedsForTask = [];
@@ -1251,12 +1543,10 @@ const saveFullTx = db.transaction((payload, userId, userName) => {
     hasMeds = true;
     
     const groupId = uuid();
-    db.prepare('INSERT INTO prescription_groups (id, visit_id, power, dosage_code) VALUES (?, ?, ?, ?)')
-      .run(groupId, visitId, group.power || null, group.dosage || 'BD');
+    stmtInsertPrescriptionGroup.run(groupId, visitId, group.power || null, group.dosage || 'BD');
       
     for (const med of group.meds) {
-      db.prepare('INSERT INTO group_medicines (group_id, medicine_code) VALUES (?, ?)')
-        .run(groupId, med.code);
+      stmtInsertGroupMedicine.run(groupId, med.code);
         
       allMedsForTask.push({
         code: med.code,
@@ -1268,42 +1558,48 @@ const saveFullTx = db.transaction((payload, userId, userName) => {
     }
   }
   
+  let taskId = null;
+
   // 4. Create Medicine Task
   if (hasMeds) {
-    const taskId = uuid();
-    db.prepare(`
-      INSERT INTO medicine_tasks (id, visitId, patientId, patientName, status, createdBy, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, 'PENDING', ?, datetime('now'), datetime('now'))
-    `).run(taskId, visitId, patientId, patientName, userName || 'System');
+    taskId = uuid();
+    stmtInsertMedicineTask.run(taskId, visitId, patientId, patientName, userName || 'System');
     
     // 5. Create Medicine Task Items
-    const insertItem = db.prepare(`
-      INSERT INTO medicine_task_items (id, taskId, medicineCode, medicineName, dosage, duration, instructions)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-    
     for (const m of allMedsForTask) {
-      insertItem.run(uuid(), taskId, m.code, m.name || m.code, m.dosage, m.duration, m.instructions);
+      stmtInsertMedicineTaskItem.run(uuid(), taskId, m.code, m.name || m.code, m.dosage, m.duration, m.instructions);
     }
     
     // 6. Log Activity
-    const firstDept = db.prepare('SELECT id FROM departments LIMIT 1').get();
+    const firstDept = stmtGetFirstDept.get();
     const deptId = firstDept ? firstDept.id : null;
-    db.prepare(`
-      INSERT INTO activity_logs (id, user_id, departmentId, action, entity, entity_id, timestamp)
-      VALUES (?, ?, ?, 'MEDICINE_TASK_CREATED', 'visits', ?, datetime('now'))
-    `).run(uuid(), userId || null, deptId, visitId);
+    stmtInsertActivityLog.run(uuid(), userId || null, deptId, visitId);
   }
   
-  return visitId;
+  return { visitId, taskId, hasMeds, patientName, count: allMedsForTask.length };
 });
 
 app.post('/api/visits/save-full', (req, res) => {
   try {
     const u = req.user;
-    const visitId = saveFullTx(req.body, u?.userId, u?.userName);
-    res.json({ success: true, visitId });
-    if (req.io) req.io.emit('db_changed', { table: 'visits' });
+    const saveRes = saveFullTx(req.body, u?.userId, u?.userName);
+    const visitId = typeof saveRes === 'object' ? saveRes.visitId : saveRes;
+    res.json({ success: true, visitId, taskId: saveRes?.taskId });
+    if (req.io) {
+      req.io.emit('db_changed', { table: 'visits' });
+      if (saveRes?.hasMeds) {
+        req.io.emit('db_changed', { table: 'medicine_tasks', action: 'insert' });
+        req.io.emit('prescription_created', {
+          taskId: saveRes.taskId,
+          visitId,
+          patientId: req.body.patientId,
+          patientName: saveRes.patientName,
+          doctorName: req.body.doctorName || 'Doctor',
+          itemCount: saveRes.count,
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
   } catch (e) {
     try {
       require('fs').appendFileSync('server_errors.log', `[${new Date().toISOString()}] SAVE-FULL ERROR: ${e.stack}\n`);
@@ -1317,19 +1613,15 @@ const editFullTx = db.transaction((payload) => {
   const { visitId, doctorName, date, notes, medicineGroups } = payload;
   
   // 1. Delete previous mapping data for this visit
-  const groupIds = db.prepare('SELECT id FROM prescription_groups WHERE visit_id = ?').all(visitId).map(g => g.id);
+  const groupIds = stmtSelectGroupIdsByVisit.all(visitId).map(g => g.id);
   if (groupIds.length > 0) {
     const placeholders = groupIds.map(() => '?').join(',');
     db.prepare(`DELETE FROM group_medicines WHERE group_id IN (${placeholders})`).run(...groupIds);
   }
-  db.prepare('DELETE FROM prescription_groups WHERE visit_id = ?').run(visitId);
+  stmtDeletePrescriptionGroupsByVisit.run(visitId);
 
   // 2. Update visits table info
-  db.prepare(`
-    UPDATE visits 
-    SET doctor_name = ?, date = ?, notes = ? 
-    WHERE id = ?
-  `).run(doctorName, date, notes, visitId);
+  stmtUpdateVisit.run(doctorName, date, notes, visitId);
 
   let hasMeds = false;
   let allMedsForTask = [];
@@ -1341,12 +1633,10 @@ const editFullTx = db.transaction((payload) => {
     hasMeds = true;
     const groupId = `GRP-${visitId}-${i}`;
 
-    db.prepare('INSERT INTO prescription_groups (id, visit_id, power, dosage_code) VALUES (?, ?, ?, ?)')
-      .run(groupId, visitId, group.power || null, group.dosage || 'BD');
+    stmtInsertPrescriptionGroup.run(groupId, visitId, group.power || null, group.dosage || 'BD');
 
     for (const med of group.meds) {
-      db.prepare('INSERT INTO group_medicines (group_id, medicine_code) VALUES (?, ?)')
-        .run(groupId, med.code);
+      stmtInsertGroupMedicine.run(groupId, med.code);
 
       allMedsForTask.push({
         code: med.code,
@@ -1357,24 +1647,15 @@ const editFullTx = db.transaction((payload) => {
   }
 
   // 4. Update pharmacy tasks if exists
-  const task = db.prepare('SELECT id FROM medicine_tasks WHERE visitId = ?').get(visitId);
+  const task = stmtSelectTaskByVisit.get(visitId);
   if (task) {
-    db.prepare('DELETE FROM medicine_task_items WHERE taskId = ?').run(task.id);
-    
-    const insertItem = db.prepare(`
-      INSERT INTO medicine_task_items (id, taskId, medicineCode, medicineName, dosage, duration, instructions)
-      VALUES (?, ?, ?, ?, ?, '', '')
-    `);
+    stmtDeleteTaskItemsByTask.run(task.id);
     
     for (const m of allMedsForTask) {
-      insertItem.run(uuid(), task.id, m.code, m.name || m.code, m.dosage);
+      stmtInsertMedicineTaskItem.run(uuid(), task.id, m.code, m.name || m.code, m.dosage, '', '');
     }
 
-    db.prepare(`
-      UPDATE medicine_tasks 
-      SET updatedAt = datetime('now') 
-      WHERE id = ?
-    `).run(task.id);
+    stmtUpdateTaskUpdatedAt.run(task.id);
   }
 });
 
@@ -1429,10 +1710,18 @@ app.post('/api/queue/claim', (req, res) => {
     `).run(name, taskId);
     
     if (info.changes === 1) {
-      res.json({ success: true });
-      if (req.io) req.io.emit('db_changed', { table: 'medicine_tasks' });
+      res.json({ success: true, taskId, claimedBy: name });
+      if (req.io) {
+        req.io.emit('db_changed', { table: 'medicine_tasks' });
+        req.io.emit('task_claimed', { taskId, claimedBy: name, status: 'IN_PROGRESS' });
+      }
     } else {
-      res.status(409).json({ error: 'Task already claimed or not found' });
+      const current = db.prepare('SELECT status, claimedBy FROM medicine_tasks WHERE id=?').get(taskId);
+      res.status(409).json({
+        error: 'Task already claimed or not pending',
+        currentStatus: current?.status,
+        claimedBy: current?.claimedBy
+      });
     }
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1535,10 +1824,10 @@ app.post('/api/users/create-profile', (req, res) => {
 
 app.get('/api/presence', (req, res) => {
   try {
-    // Return all presence entries. Determine online dynamically: if lastHeartbeatAt is within 30 seconds.
+    // Return all presence entries. Determine online dynamically: if lastHeartbeatAt is within 120 seconds.
     const rows = db.prepare(`
       SELECT *, 
-      CASE WHEN lastHeartbeatAt >= datetime('now', '-30 seconds') THEN 1 ELSE 0 END as isOnlineCalc
+      CASE WHEN lastHeartbeatAt >= datetime('now', '-120 seconds') THEN 1 ELSE 0 END as isOnlineCalc
       FROM user_presence
       ORDER BY lastActivityAt DESC
     `).all();
@@ -1590,6 +1879,84 @@ app.post('/api/presence/heartbeat', (req, res) => {
     console.error('[HEARTBEAT ERROR SQLITE]', e);
     res.status(500).json({ error: e.message });
   }
+});
+
+// ─── 1-CLICK PASSWORD-FREE DATABASE BACKUP & DUMP ENDPOINTS (R3) ───
+app.get('/api/backup/download', (req, res) => {
+  try {
+    const format = (req.query?.format || '').toLowerCase();
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const timestamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+
+    if (format === 'json') {
+      const tables = [
+        'patients', 'visits', 'prescription_groups', 'group_medicines',
+        'medicines', 'tokens', 'departments', 'users', 'medicine_tasks', 'medicine_task_items'
+      ];
+      const snapshot = {
+        exportedAt: now.toISOString(),
+        system: 'Nek Kadam Clinical Management System',
+        data: {}
+      };
+      for (const t of tables) {
+        try {
+          snapshot.data[t] = db.prepare(`SELECT * FROM "${t}"`).all();
+        } catch (_) {
+          snapshot.data[t] = [];
+        }
+      }
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="nekkadam_backup_${timestamp}.json"`);
+      return res.json(snapshot);
+    }
+
+    // Flush WAL checkpoint to ensure disk file has all committed transactions
+    try {
+      db.pragma('wal_checkpoint(TRUNCATE)');
+    } catch (_) {}
+
+    const filename = `nekkadam_backup_${timestamp}.sqlite`;
+    const dbPath = path.resolve(__dirname, 'nekkadam.db');
+
+    if (!fs.existsSync(dbPath)) {
+      return res.status(404).json({ error: 'Database file not found' });
+    }
+
+    res.setHeader('Content-Type', 'application/x-sqlite3');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    const fileStream = fs.createReadStream(dbPath);
+    fileStream.pipe(res);
+  } catch (err) {
+    console.error('[BACKUP DOWNLOAD ERROR]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/backup/json', (req, res) => {
+  req.query.format = 'json';
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const timestamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const tables = [
+    'patients', 'visits', 'prescription_groups', 'group_medicines',
+    'medicines', 'tokens', 'departments', 'users', 'medicine_tasks', 'medicine_task_items'
+  ];
+  const snapshot = {
+    exportedAt: now.toISOString(),
+    system: 'Nek Kadam Clinical Management System',
+    data: {}
+  };
+  for (const t of tables) {
+    try {
+      snapshot.data[t] = db.prepare(`SELECT * FROM "${t}"`).all();
+    } catch (_) {
+      snapshot.data[t] = [];
+    }
+  }
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', `attachment; filename="nekkadam_backup_${timestamp}.json"`);
+  return res.json(snapshot);
 });
 
 app.get('/api/health', (_req, res) => {

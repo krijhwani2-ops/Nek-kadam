@@ -50,7 +50,8 @@ export default function MedicineDashboard() {
 
     async function poll() {
       try {
-        const url = new URL(`${getBaseUrl()}/api/queue/tasks`);
+        const base = getBaseUrl() || (typeof window !== 'undefined' ? window.location.origin : '');
+        const url = new URL(`${base}/api/queue/tasks`);
         if (lastSyncRef.current) {
           url.searchParams.append('updatedAfter', lastSyncRef.current);
         }

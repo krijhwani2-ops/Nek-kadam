@@ -32,17 +32,17 @@
 @layer utilities {
   /* ── Glassmorphism Theme ── */
   .glass, .glass-card, .glass-panel {
-    background: rgba(255, 255, 255, 0.75);
+    background: rgba(255, 255, 255, 0.85);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(226, 232, 240, 0.8);
+    border: 1px solid rgba(203, 213, 225, 0.9);
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
     transition: background-color 0.3s, border-color 0.3s;
   }
   
   html.dark .glass, html.dark .glass-card, html.dark .glass-panel {
-    background: rgba(15, 23, 42, 0.8);
-    border-color: rgba(51, 65, 85, 0.5);
+    background: rgba(15, 23, 42, 0.85);
+    border-color: rgba(51, 65, 85, 0.8);
   }
 
   /* ── Text Gradients ── */
@@ -109,19 +109,33 @@ html.dark .app-bg {
 /* ───────────────────────────────────────────── */
 /*  Custom Scrollbar                            */
 /* ───────────────────────────────────────────── */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+@media (min-width: 769px) {
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 100px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
 }
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #10b981, #fb923c);
-  border-radius: 100px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #059669, #ea580c);
+
+@media (max-width: 768px) {
+  ::-webkit-scrollbar {
+    width: 0px;
+    height: 0px;
+    display: none;
+  }
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
 }
 
 /* ───────────────────────────────────────────── */

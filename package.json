@@ -33,6 +33,8 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "framer-motion": "^13.2.0",
+    "html5-qrcode": "^2.3.8",
     "idb": "^8.0.3",
     "lucide-react": "^0.303.0",
     "papaparse": "^5.5.3",

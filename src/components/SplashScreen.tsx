@@ -4,12 +4,12 @@ import { HeartPulse, GraduationCap, Users, HeartHandshake } from 'lucide-react';
 import logoUrl from '../assets/logo.jpg';
 
 export default function SplashScreen() {
-  const [show, setShow] = useState(false);
+  const [show, setShow] = useState(true);
+  const [canSkip, setCanSkip] = useState(false);
 
   useEffect(() => {
-    // Slight delay before animating in to ensure DOM is ready
-    const timer = setTimeout(() => setShow(true), 50);
-    return () => clearTimeout(timer);
+    const t = setTimeout(() => setCanSkip(true), 1500);
+    return () => clearTimeout(t);
   }, []);
 
   return (
@@ -71,9 +71,17 @@ export default function SplashScreen() {
         <p className="text-[10px] font-bold text-slate-400 mt-2 mb-8 tracking-widest">NEK KADAM OPERATING SYSTEM</p>
         
         {/* Custom Spinner */}
-        <div className="relative flex items-center justify-center">
+        <div className="relative flex flex-col items-center justify-center">
           <div className="w-8 h-8 rounded-full border-2 border-emerald-100 border-t-emerald-500 animate-spin"></div>
-          <p className="absolute top-12 text-[9px] font-black tracking-widest text-emerald-600">LOADING...</p>
+          <p className="mt-3 text-[9px] font-black tracking-widest text-emerald-600">LOADING...</p>
+          {canSkip && (
+            <button 
+              onClick={() => { localStorage.removeItem('nk_token'); window.location.href = '/login'; }}
+              className="mt-6 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95"
+            >
+              Continue to Login →
+            </button>
+          )}
         </div>
       </div>
     </div>

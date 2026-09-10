@@ -8,6 +8,7 @@
 
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const crypto = require('crypto');
@@ -58,7 +59,7 @@ io.on('connection', (socket) => {
   });
 });
 
-app.get('*', (req, res, next) => {
+app.use((req, res, next) => {
   req.io = io;
   next();
 });
@@ -120,8 +121,10 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use('/static', express.static('.'));
+app.use('/static', express.static('dist'));
+app.use('/apk', express.static(path.join(__dirname, 'apk')));
 app.use(express.static(path.join(__dirname, 'dist')));
+app.get('/api/version', (_req, res) => res.json({ version: '1.1.0', apkUrl: '/apk/nek-kadam.apk' }));
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -193,33 +196,44 @@ async function qr1lite(sqlWithQ, params) {
 }
 
 // ─── Auth ───
+const PUBLIC_PATHS_PG = [
+  '/api/login',
+  '/api/pc-login',
+  '/api/users',
+  '/api/users/create-profile',
+  '/api/version',
+  '/api/health',
+  '/api/backup/download',
+  '/api/backup/json'
+];
+
 async function requireAuth(req, res, next) {
-  try {
-    if (!req.user) {
-      const adminRow = await qr1(
-        `SELECT u.id, u.name, u.role, u.departmentId, d.code AS deptcode
-         FROM users u JOIN departments d ON u.departmentId = d.id
-         WHERE upper(u.role::text) = 'ADMIN' LIMIT 1`,
-        []
-      );
-      if (adminRow) {
-        req.user = {
-          userId: adminRow.id,
-          userName: adminRow.name,
-          role: adminRow.role,
-          deptCode: adminRow.deptcode,
-          departmentId: adminRow.departmentId,
-          lastActiveTime: Date.now(),
-        };
-      } else {
-        req.user = { userId: 'admin', userName: 'Default Admin', role: 'ADMIN', deptCode: 'MED', departmentId: '1', lastActiveTime: Date.now() };
-      }
-    }
-    next();
-  } catch (_e) {
-    req.user = { userId: 'admin', userName: 'Default Admin', role: 'ADMIN', deptCode: 'MED', departmentId: '1', lastActiveTime: Date.now() };
-    next();
+  const checkUrl = req.originalUrl || req.path || '';
+  if (PUBLIC_PATHS_PG.some(p => checkUrl.startsWith(p))) {
+    return next();
   }
+
+  if (req.user) {
+    return next();
+  }
+
+  // Strict check: unauthenticated sync or RPC requests MUST return 401
+  if (checkUrl.startsWith('/api/sync') || checkUrl.startsWith('/rpc')) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid or missing session token' });
+  }
+
+  // Safe fallback ONLY IF database has 0 users (initial setup)
+  try {
+    const userCount = await qr1('SELECT COUNT(*)::int AS c FROM users', []);
+    if (userCount && userCount.c === 0) {
+      req.user = { userId: 'admin', userName: 'Default Admin', role: 'ADMIN', deptCode: 'MED', departmentId: '1', lastActiveTime: Date.now() };
+      return next();
+    }
+  } catch (err) {
+    console.error('[AUTH ERROR] User count check failed:', err.message);
+  }
+
+  return res.status(401).json({ error: 'Unauthorized: Invalid or missing session token' });
 }
 
 async function hydrateUserFromBearer(req, res, next) {
@@ -241,31 +255,51 @@ app.use('/api', hydrateUserFromBearer, requireAuth);
 app.get('/api/users', async (_req, res) => {
   try {
     const rows = await qr(
-      `SELECT u.id, u.name, d.name AS department, d.code AS deptcode
+      `SELECT DISTINCT ON (LOWER(TRIM(u.name))) u.id, u.name, d.name AS department, d.code AS deptcode, u.role
        FROM users u
-       LEFT JOIN departments d ON u.departmentId = d.id
-       WHERE u.isActive = 1
-       ORDER BY u.name`,
+       LEFT JOIN departments d ON u."departmentId" = d.id
+       ORDER BY LOWER(TRIM(u.name)), u.created_at DESC`,
       []
     );
+    const mapped = rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      department: r.department || '',
+      deptCode: r.deptcode || '',
+      role: r.role || 'Volunteer',
+    }));
     res.json({
-      data: rows.map((r) => ({
-        id: r.id,
-        name: r.name,
-        department: r.department || '',
-        deptCode: r.deptcode || '',
-      })),
+      data: mapped,
+      users: mapped,
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
+// Activity telemetry / audit logging
+app.post('/api/activity', async (req, res) => {
+  try {
+    const { action, details, userId, departmentId } = req.body || {};
+    if (action) {
+      const id = uuid();
+      await pool.query(
+        `INSERT INTO activity_logs (id, "userId", user_id, "departmentId", action, details, timestamp)
+         VALUES ($1, $2, $2, $3, $4, $5, NOW())`,
+        [id, userId || 'unknown', departmentId || 'GEN', action, details || '']
+      );
+    }
+    res.json({ ok: true, success: true });
+  } catch (e) {
+    res.json({ ok: true, success: true });
+  }
+});
+
 // Simpler path for tokenService
 app.get('/api/departments', async (_req, res) => {
   try {
-    const rows = await qr('SELECT id, name, code, isActive FROM departments WHERE isActive = 1 ORDER BY name', []);
-    res.json({ data: rows });
+    const rows = await qr('SELECT id, name, code FROM departments ORDER BY name', []);
+    res.json({ data: rows, departments: rows });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -274,7 +308,7 @@ app.get('/api/departments', async (_req, res) => {
 app.get('/api/pc-login', async (_req, res) => {
   try {
     const user = await qr1lite(
-      `SELECT u.*, d.code as deptCode FROM users u JOIN departments d ON u.departmentId = d.id WHERE upper(u.role::text) = 'ADMIN' LIMIT 1`,
+      `SELECT u.*, d.code as deptCode FROM users u LEFT JOIN departments d ON u."departmentId" = d.id WHERE upper(u.role::text) = 'ADMIN' LIMIT 1`,
       []
     );
     if (!user) return res.status(503).json({ error: 'No admin user' });
@@ -307,7 +341,7 @@ app.post('/api/login', async (req, res) => {
     const { name, passcode } = req.body || {};
     const hash = crypto.createHash('sha256').update(passcode || '').digest('hex');
     const user = await qr1lite(
-      `SELECT u.*, d.code as deptCode FROM users u JOIN departments d ON u.departmentId = d.id WHERE u.name = ? AND u.passcode = ?`,
+      `SELECT u.*, d.code as deptCode FROM users u JOIN departments d ON u."departmentId" = d.id WHERE u.name = ? AND u.passcode = ?`,
       [name, hash]
     );
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
@@ -396,13 +430,16 @@ app.get('/api/dashboard', async (_req, res) => {
     const pts = await qr1(`SELECT COUNT(*)::int AS c FROM patients WHERE created_at::date >= CURRENT_DATE`);
     const totPt = await qr1('SELECT COUNT(*)::int AS c FROM patients');
     const totVt = await qr1('SELECT COUNT(*)::int AS c FROM visits');
-    const logs = await qr(`
-      SELECT l.*, u.name AS "userName", d.code AS "deptCode"
-      FROM activity_logs l
-      JOIN users u ON l.user_id = u.id
-      JOIN departments d ON l.departmentId = d.id
-      ORDER BY l.timestamp DESC LIMIT 10
-    `);
+    let logs = [];
+    try {
+      logs = await qr(`
+        SELECT l.*, COALESCE(u.name, 'Staff') AS "userName", COALESCE(d.code, 'GEN') AS "deptCode"
+        FROM activity_logs l
+        LEFT JOIN users u ON (l.user_id = u.id OR l."userId" = u.id)
+        LEFT JOIN departments d ON (l."departmentId" = d.id)
+        ORDER BY l.timestamp DESC LIMIT 10
+      `);
+    } catch (_) {}
     res.json({
       stats: {
         patientsToday: pts?.c || 0,
@@ -500,6 +537,7 @@ app.get('/api/patients/:identifier/visits', async (req, res) => {
       ...v,
       prescription_groups: groupsByVisit[v.id] || []
     }));
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     res.json({ data: enriched });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -509,9 +547,9 @@ app.get('/api/patients/:identifier/visits', async (req, res) => {
 app.get('/api/admin/users', async (_req, res) => {
   try {
     const users = await qr(`
-      SELECT u.id, u.name, u.role, u.departmentId, u.isActive, u.passcode, d.name AS department
+      SELECT u.id, u.name, u.role, u."departmentId", u."isActive", u.passcode, d.name AS department
       FROM users u
-      LEFT JOIN departments d ON u.departmentId = d.id
+      LEFT JOIN departments d ON u."departmentId" = d.id
       ORDER BY u.name
     `);
     res.json({ data: users });
@@ -544,7 +582,7 @@ app.post('/api/admin/users/create', async (req, res) => {
       deptId = firstDept?.id || null;
     }
     await q(
-      `INSERT INTO users (id, name, passcode, departmentId, role, isActive) VALUES ($1,$2,$3,$4,$5,1)`,
+      `INSERT INTO users (id, name, passcode, "departmentId", role, "isActive") VALUES ($1,$2,$3,$4,$5,1)`,
       [uuid(), name, hash, deptId, String(role).toUpperCase()]
     );
     res.json({ ok: true });
@@ -559,7 +597,7 @@ app.post('/api/admin/users/update', async (req, res) => {
     const dept = await qr1lite('SELECT id FROM departments WHERE name = ? OR code = ?', [department, department]);
     const deptId = dept?.id || null;
     const params = [name, String(role).toUpperCase(), is_active ? 1 : 0];
-    let sql = 'UPDATE users SET name = $1, role = $2, isActive = $3';
+    let sql = 'UPDATE users SET name = $1, role = $2, "isActive" = $3';
     let idx = 4;
     if (passcode && String(passcode).length > 0) {
       const hash = crypto.createHash('sha256').update(passcode).digest('hex');
@@ -567,7 +605,7 @@ app.post('/api/admin/users/update', async (req, res) => {
       params.push(hash);
     }
     if (deptId) {
-      sql += `, departmentId = $${idx++}`;
+      sql += `, "departmentId" = $${idx++}`;
       params.push(deptId);
     }
     sql += ` WHERE id = $${idx}`;
@@ -616,7 +654,7 @@ async function loadTokenWithDept(id) {
     `
     SELECT t.*, d.code AS "departmentCode"
     FROM tokens t
-    JOIN departments d ON t.currentDepartmentId = d.id
+    JOIN departments d ON t."currentDepartmentId" = d.id
     WHERE t.id = $1
     `,
     [id]
@@ -632,34 +670,34 @@ app.get('/api/tokens/dashboard', async (_req, res) => {
     const statsRows = await qr(
       `
       SELECT
-        currentDepartmentId AS "currentDepartmentId",
+        "currentDepartmentId" AS "currentDepartmentId",
         COALESCE(SUM(CASE WHEN status = 'WAITING' THEN 1 ELSE 0 END),0)::int AS waiting,
         COALESCE(SUM(CASE WHEN status = 'IN_PROGRESS' THEN 1 ELSE 0 END),0)::int AS inprogress,
         COALESCE(SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END),0)::int AS done,
         COALESCE(SUM(CASE WHEN status = 'SKIPPED' THEN 1 ELSE 0 END),0)::int AS skipped
       FROM tokens
-      WHERE dateKey = $1 AND isDeleted = 0
-      GROUP BY currentDepartmentId
+      WHERE "dateKey" = $1 AND "isDeleted" = 0
+      GROUP BY "currentDepartmentId"
       `,
       [dateKey]
     );
 
     const currentRows = await qr(
       `
-      SELECT DISTINCT ON (t.currentDepartmentId) t.*, d.code AS "departmentCode"
-      FROM tokens t JOIN departments d ON t.currentDepartmentId = d.id
-      WHERE t.dateKey = $1 AND t.status = 'IN_PROGRESS' AND t.isDeleted = 0
-      ORDER BY t.currentDepartmentId, t.id
+      SELECT DISTINCT ON (t."currentDepartmentId") t.*, d.code AS "departmentCode"
+      FROM tokens t JOIN departments d ON t."currentDepartmentId" = d.id
+      WHERE t."dateKey" = $1 AND t.status = 'IN_PROGRESS' AND t."isDeleted" = 0
+      ORDER BY t."currentDepartmentId", t.id
       `,
       [dateKey]
     );
 
     const nextRows = await qr(
       `
-      SELECT DISTINCT ON (t.currentDepartmentId) t.*, d.code AS "departmentCode"
-      FROM tokens t JOIN departments d ON t.currentDepartmentId = d.id
-      WHERE t.dateKey = $1 AND t.status = 'WAITING' AND t.isDeleted = 0
-      ORDER BY t.currentDepartmentId, t.priority DESC, t.sequenceIndex ASC
+      SELECT DISTINCT ON (t."currentDepartmentId") t.*, d.code AS "departmentCode"
+      FROM tokens t JOIN departments d ON t."currentDepartmentId" = d.id
+      WHERE t."dateKey" = $1 AND t.status = 'WAITING' AND t."isDeleted" = 0
+      ORDER BY t."currentDepartmentId", t.priority DESC, t."sequenceIndex" ASC
       `,
       [dateKey]
     );
@@ -715,7 +753,7 @@ app.get('/api/tokens/dashboard', async (_req, res) => {
         COUNT(*)::int AS total,
         COALESCE(SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END),0)::int AS done
       FROM tokens
-      WHERE dateKey = $1 AND isDeleted = 0
+      WHERE "dateKey" = $1 AND "isDeleted" = 0
       `,
       [dateKey]
     );
@@ -741,18 +779,18 @@ app.get('/api/tokens', async (req, res) => {
     let sql = `
       SELECT t.*, d.code AS "departmentCode"
       FROM tokens t
-      JOIN departments d ON t.currentDepartmentId = d.id
-      WHERE t.dateKey = $1 AND t.isDeleted = 0
+      JOIN departments d ON t."currentDepartmentId" = d.id
+      WHERE t."dateKey" = $1 AND t."isDeleted" = 0
     `;
     if (departmentId) {
-      sql += ` AND t.currentDepartmentId = $${params.length + 1}`;
+      sql += ` AND t."currentDepartmentId" = $${params.length + 1}`;
       params.push(departmentId);
     }
     if (status) {
       sql += ` AND t.status = $${params.length + 1}`;
       params.push(status);
     }
-    sql += ` ORDER BY t.priority DESC, t.sequenceIndex ASC`;
+    sql += ` ORDER BY t.priority DESC, t."sequenceIndex" ASC`;
     const rows = await qr(sql, params);
     res.json({
       data: rows.map((r) => mapTokenRow(r)),
@@ -779,7 +817,7 @@ app.post('/api/tokens/create', async (req, res) => {
     const { personId, personName, personCard, priority } = req.body || {};
     const dateKey = todayKey();
     const exists = await qr1lite(
-      'SELECT id, tokenNumber, status FROM tokens WHERE personId = ? AND dateKey = ? AND isDeleted = 0',
+      'SELECT id, "tokenNumber", status FROM tokens WHERE "personId" = ? AND "dateKey" = ? AND "isDeleted" = 0',
       [personId, dateKey]
     );
     if (exists) return res.json({ error: `Token #${exists.tokennumber || exists.tokenNumber} already exists today (Status: ${exists.status})` });
@@ -788,16 +826,16 @@ app.post('/api/tokens/create', async (req, res) => {
     if (!receptionRow?.id) receptionRow = await qr1('SELECT id FROM departments ORDER BY code LIMIT 1', []);
     const receptionId = receptionRow?.id;
     if (!receptionId) return res.status(503).json({ error: 'No departments configured' });
-    const maxNumRow = await qr1('SELECT MAX(tokenNumber) AS m FROM tokens WHERE dateKey = $1', [dateKey]);
+    const maxNumRow = await qr1('SELECT MAX("tokenNumber") AS m FROM tokens WHERE "dateKey" = $1', [dateKey]);
     const nextNum = (maxNumRow?.m || 0) + 1;
     const maxSeqRow = await qr1(
-      'SELECT MAX(sequenceIndex) AS m FROM tokens WHERE currentDepartmentId = $1 AND dateKey = $2',
+      'SELECT MAX("sequenceIndex") AS m FROM tokens WHERE "currentDepartmentId" = $1 AND "dateKey" = $2',
       [receptionId, dateKey]
     );
     const nextSeq = (maxSeqRow?.m || 0) + 1;
     const tokenId = uuid();
     await q(
-      `INSERT INTO tokens (id, tokenNumber, dateKey, personId, personName, personCard, currentDepartmentId, status, priority, sequenceIndex, isDeleted)
+      `INSERT INTO tokens (id, "tokenNumber", "dateKey", "personId", "personName", "personCard", "currentDepartmentId", status, priority, "sequenceIndex", "isDeleted")
        VALUES ($1,$2,$3,$4,$5,$6,$7,'WAITING',$8,$9,0)`,
       [tokenId, nextNum, dateKey, personId, personName, personCard || personId, receptionId, priority || 'NORMAL', nextSeq]
     );
@@ -814,14 +852,14 @@ app.post('/api/tokens/start', async (req, res) => {
     const dateKey = todayKey();
     await q(
       `UPDATE tokens SET status = 'DONE'
-       WHERE currentDepartmentId = $1 AND dateKey = $2 AND status = 'IN_PROGRESS'`,
+       WHERE "currentDepartmentId" = $1 AND "dateKey" = $2 AND status = 'IN_PROGRESS'`,
       [departmentId, dateKey]
     );
     let targetId = tokenId;
     if (!targetId) {
       const next = await qr1(
-        `SELECT id FROM tokens WHERE currentDepartmentId = $1 AND dateKey = $2 AND status = 'WAITING' AND isDeleted = 0
-         ORDER BY priority DESC, sequenceIndex ASC LIMIT 1`,
+        `SELECT id FROM tokens WHERE "currentDepartmentId" = $1 AND "dateKey" = $2 AND status = 'WAITING' AND "isDeleted" = 0
+         ORDER BY priority DESC, "sequenceIndex" ASC LIMIT 1`,
         [departmentId, dateKey]
       );
       if (!next) return res.json({ error: 'No waiting tokens' });
@@ -852,12 +890,12 @@ app.post('/api/tokens/move', async (req, res) => {
     if (ix >= 0 && ix < order.length - 1) {
       const nextDept = order[ix + 1];
       const maxSeqRow = await qr1(
-        'SELECT MAX(sequenceIndex) AS m FROM tokens WHERE currentDepartmentId = $1 AND dateKey = $2',
+        'SELECT MAX("sequenceIndex") AS m FROM tokens WHERE "currentDepartmentId" = $1 AND "dateKey" = $2',
         [nextDept, dk]
       );
       const nextSeq = (maxSeqRow?.m || 0) + 1;
       await q(
-        `UPDATE tokens SET currentDepartmentId = $2, status = 'WAITING', priority = priority, sequenceIndex = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+        `UPDATE tokens SET "currentDepartmentId" = $2, status = 'WAITING', priority = priority, "sequenceIndex" = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
         [tokenId, nextDept, nextSeq]
       );
     } else {
@@ -890,7 +928,7 @@ app.post('/api/tokens/requeue', async (req, res) => {
 
 app.post('/api/tokens/cancel', async (req, res) => {
   try {
-    await q(`UPDATE tokens SET status = 'CANCELLED', isDeleted = 1, updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [req.body?.tokenId]);
+    await q(`UPDATE tokens SET status = 'CANCELLED', "isDeleted" = 1, updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [req.body?.tokenId]);
     res.json({ data: await loadTokenWithDept(req.body?.tokenId) });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1094,7 +1132,9 @@ function filterPrimitive(v) {
   if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
     if (v.eq !== undefined) return { op: '=', val: v.eq };
     if (v.neq !== undefined) return { op: '<>', val: v.neq };
+    if (v.gt !== undefined) return { op: '>', val: v.gt };
     if (v.gte !== undefined) return { op: '>=', val: v.gte };
+    if (v.lt !== undefined) return { op: '<', val: v.lt };
     if (v.lte !== undefined) return { op: '<=', val: v.lte };
     if (v.ilike !== undefined) return { op: 'ILIKE', val: String(v.ilike).replace(/%/g, '') };
     if (v.in !== undefined && Array.isArray(v.in)) return { op: 'IN', val: v.in };
@@ -1127,9 +1167,19 @@ function extendWhere(filters, params, clauses) {
       clauses.push(`"${col}" <> $${params.length}`);
       continue;
     }
+    if (meta.op === '>') {
+      params.push(meta.val);
+      clauses.push(`"${col}" > $${params.length}`);
+      continue;
+    }
     if (meta.op === '>=') {
       params.push(meta.val);
       clauses.push(`"${col}" >= $${params.length}`);
+      continue;
+    }
+    if (meta.op === '<') {
+      params.push(meta.val);
+      clauses.push(`"${col}" < $${params.length}`);
       continue;
     }
     if (meta.op === '<=') {
@@ -1146,12 +1196,41 @@ function extendWhere(filters, params, clauses) {
 app.post('/rpc/query', async (req, res) => {
   const { table, select, filters, order, single, limit, head, count, or: orClause } = req.body || {};
   try {
-    if (orClause && typeof orClause === 'string') {
-      return res.status(400).json({ error: 'OR filters not supported on PG RPC endpoint.' });
-    }
     const params = [];
     const clauses = [];
     extendWhere(filters, params, clauses);
+
+    if (orClause && typeof orClause === 'string') {
+      const cleanOr = orClause.replace(/^\(|\)$/g, '');
+      const parts = cleanOr.split(',');
+      const orClauses = [];
+      for (const part of parts) {
+        const match = part.trim().match(/^([a-zA-Z0-9_-]+)\.(eq|neq|ilike|gte|lte)\.(.*)$/);
+        if (match) {
+          const [, col, op, val] = match;
+          if (op === 'eq') {
+            params.push(val);
+            orClauses.push(`"${col}" = $${params.length}`);
+          } else if (op === 'neq') {
+            params.push(val);
+            orClauses.push(`"${col}" <> $${params.length}`);
+          } else if (op === 'ilike') {
+            params.push(val);
+            orClauses.push(`"${col}"::text ILIKE $${params.length}`);
+          } else if (op === 'gte') {
+            params.push(val);
+            orClauses.push(`"${col}" >= $${params.length}`);
+          } else if (op === 'lte') {
+            params.push(val);
+            orClauses.push(`"${col}" <= $${params.length}`);
+          }
+        }
+      }
+      if (orClauses.length > 0) {
+        clauses.push(`(${orClauses.join(' OR ')})`);
+      }
+    }
+
     const whereSql = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
 
     if (head || count) {
@@ -1160,7 +1239,24 @@ app.post('/rpc/query', async (req, res) => {
       return res.json({ data: null, count: crow?.c ?? 0 });
     }
 
-    let sql = `SELECT ${select || '*'} FROM "${table}"`;
+    let selectSql = '*';
+    if (select && typeof select === 'string' && select.trim() !== '*') {
+      selectSql = select
+        .split(',')
+        .map((c) => {
+          const trimmed = c.trim();
+          if (!trimmed) return '';
+          if (trimmed.startsWith('"') && trimmed.endsWith('"')) return trimmed;
+          if (/^[a-zA-Z0-9_]+$/.test(trimmed)) {
+            return `"${trimmed}"`;
+          }
+          return trimmed;
+        })
+        .filter(Boolean)
+        .join(', ');
+    }
+
+    let sql = `SELECT ${selectSql} FROM "${table}"`;
     if (whereSql) sql += ` ${whereSql}`;
     if (order) sql += ` ORDER BY "${order.column}" ${order.ascending !== false ? 'ASC' : 'DESC'}`;
     const limNum = parseInt(String(limit ?? ''), 10);
@@ -1169,6 +1265,83 @@ app.post('/rpc/query', async (req, res) => {
     res.json({ data: single ? rows[0] ?? null : rows });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Dedicated Delta Sync Endpoint (PostgreSQL) ───
+app.post('/api/sync/delta', async (req, res) => {
+  try {
+    const lastSync = req.body?.lastSyncTime || req.body?.last_sync_time || null;
+    const reqTables = req.body?.tables;
+
+    const SYNC_TABLES = [
+      'patients',
+      'visits',
+      'prescription_groups',
+      'group_medicines',
+      'medicines',
+      'tokens',
+      'departments',
+      'batches',
+      'education_students',
+      'attendance',
+      'medicine_tasks',
+      'medicine_task_items'
+    ];
+
+    const targetTables = Array.isArray(reqTables) && reqTables.length > 0
+      ? reqTables.filter(t => SYNC_TABLES.includes(t))
+      : SYNC_TABLES;
+
+    const deltas = {};
+    const counts = {};
+    const serverTime = new Date().toISOString();
+
+    for (const tbl of targetTables) {
+      const colCheck = await qr(
+        `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1`,
+        [tbl]
+      );
+      const colNames = colCheck.map(c => c.column_name);
+      const timestampCol = colNames.includes('updated_at')
+        ? 'updated_at'
+        : (colNames.includes('updatedAt') ? 'updatedAt' : null);
+
+      let sql = `SELECT * FROM "${tbl}"`;
+      const params = [];
+
+      if (lastSync && timestampCol) {
+        sql += ` WHERE "${timestampCol}" > $1 ORDER BY "${timestampCol}" ASC`;
+        params.push(lastSync);
+      }
+
+      try {
+        const rows = await qr(sql, params);
+        deltas[tbl] = rows;
+        counts[tbl] = rows.length;
+      } catch (tableErr) {
+        try {
+          const rows = await qr(`SELECT * FROM "${tbl}"`, []);
+          deltas[tbl] = rows;
+          counts[tbl] = rows.length;
+        } catch (_fallback) {
+          deltas[tbl] = [];
+          counts[tbl] = 0;
+        }
+      }
+    }
+
+    res.json({
+      serverTime,
+      sync_time: serverTime,
+      is_delta: Boolean(lastSync),
+      deltas,
+      tables: deltas,
+      counts
+    });
+  } catch (err) {
+    console.error('[PG DELTA SYNC ERROR]', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -1327,8 +1500,9 @@ app.post('/api/visits/save-full', async (req, res) => {
     }
     
     // 5. create medicine task if meds exist
+    let taskId = null;
     if (hasMeds) {
-      const taskId = uuid();
+      taskId = uuid();
       await client.query(
         `INSERT INTO medicine_tasks (id, "visitId", "patientId", "patientName", status, "createdBy")
          VALUES ($1, $2, $3, $4, 'PENDING', $5)`,
@@ -1353,8 +1527,22 @@ app.post('/api/visits/save-full', async (req, res) => {
     }
     
     await client.query('COMMIT');
-    res.json({ success: true, visitId });
-    if (req.io) req.io.emit('db_changed', { table: 'visits' });
+    res.json({ success: true, visitId, taskId });
+    if (req.io) {
+      req.io.emit('db_changed', { table: 'visits' });
+      if (hasMeds) {
+        req.io.emit('db_changed', { table: 'medicine_tasks', action: 'insert' });
+        req.io.emit('prescription_created', {
+          taskId,
+          visitId,
+          patientId,
+          patientName,
+          doctorName: doctorName || 'Doctor',
+          itemCount: allMedsForTask.length,
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
     
   } catch (err) {
     await client.query('ROLLBACK');
@@ -1397,18 +1585,27 @@ app.get('/api/queue/tasks', async (req, res) => {
 app.post('/api/queue/claim', async (req, res) => {
   const { taskId, volunteerName } = req.body || {};
   try {
+    const name = volunteerName || req.user?.userName || 'Unknown';
     const { rowCount } = await pool.query(
       `UPDATE medicine_tasks 
        SET status='IN_PROGRESS', "claimedBy"=$1, "claimedAt"=CURRENT_TIMESTAMP, "startedAt"=CURRENT_TIMESTAMP, "updatedAt"=CURRENT_TIMESTAMP
        WHERE id=$2 AND status='PENDING'`,
-      [volunteerName || req.user?.userName || 'Unknown', taskId]
+      [name, taskId]
     );
     
     if (rowCount === 1) {
-       res.json({ success: true });
-       if (req.io) req.io.emit('db_changed', { table: 'medicine_tasks' });
+       res.json({ success: true, taskId, claimedBy: name });
+       if (req.io) {
+         req.io.emit('db_changed', { table: 'medicine_tasks' });
+         req.io.emit('task_claimed', { taskId, claimedBy: name, status: 'IN_PROGRESS' });
+       }
     } else {
-       res.status(409).json({ error: 'Task already claimed or not found' });
+       const existing = await pool.query('SELECT status, "claimedBy" FROM medicine_tasks WHERE id=$1', [taskId]);
+       res.status(409).json({
+         error: 'Task already claimed or not pending',
+         currentStatus: existing.rows[0]?.status,
+         claimedBy: existing.rows[0]?.claimedBy
+       });
     }
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1468,22 +1665,43 @@ app.post('/api/users/create-profile', async (req, res) => {
 
   try {
     const { rows: existingRows } = await pool.query(
-      'SELECT * FROM users WHERE LOWER(name) = LOWER($1) AND department = $2 LIMIT 1',
-      [name, department]
+      `SELECT u.id, u.name, u.role, u."departmentId", d.name AS department
+       FROM users u
+       LEFT JOIN departments d ON u."departmentId" = d.id
+       WHERE LOWER(u.name) = LOWER($1) LIMIT 1`,
+      [name]
     );
+
+    let userObj;
     if (existingRows.length > 0) {
-      return res.json({ success: true, user: existingRows[0] });
+      userObj = existingRows[0];
+    } else {
+      const id = uuid();
+      const { rows: deptRows } = await pool.query(
+        'SELECT id FROM departments WHERE LOWER(code) = LOWER($1) OR LOWER(name) = LOWER($1) LIMIT 1',
+        [department]
+      );
+      const departmentId = deptRows[0]?.id || null;
+
+      await pool.query(
+        `INSERT INTO users (id, name, passcode, "departmentId", role, "deviceId", created_at, "updatedAt")
+         VALUES ($1, $2, '', $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        [id, name, departmentId, role || 'Volunteer', deviceId || null]
+      );
+      userObj = { id, name, department, departmentId, role: role || 'Volunteer' };
     }
 
-    const id = uuid();
-    // Insert user without passcode
-    await pool.query(
-      `INSERT INTO users (id, name, passcode, department, role, "deviceId", "isActive", created_at, "updatedAt")
-       VALUES ($1, $2, '', $3, $4, $5, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-      [id, name, department, role || 'Volunteer', deviceId || null]
-    );
+    const token = uuid();
+    activeSessions.set(token, {
+      userId: userObj.id,
+      userName: userObj.name,
+      departmentId: userObj.departmentId || '1',
+      deptCode: userObj.department || 'Medical',
+      role: userObj.role || 'Volunteer',
+      lastActiveTime: Date.now()
+    });
 
-    res.json({ success: true, user: { id, name, department, role: role || 'Volunteer' } });
+    res.json({ success: true, user: userObj, token });
     if (req.io) req.io.emit('db_changed', { table: 'users' });
   } catch (e) {
     console.error('[CREATE PROFILE ERROR]', e);
@@ -1493,15 +1711,13 @@ app.post('/api/users/create-profile', async (req, res) => {
 
 app.get('/api/presence', async (req, res) => {
   try {
-    // Return all presence entries. To determine if they are online, we will check if lastHeartbeatAt is within 30 seconds.
     const { rows } = await pool.query(`
       SELECT *, 
-      CASE WHEN "lastHeartbeatAt" >= NOW() - INTERVAL '30 seconds' THEN 1 ELSE 0 END as "isOnlineCalc"
+      CASE WHEN "lastHeartbeatAt" >= NOW() - INTERVAL '120 seconds' THEN 1 ELSE 0 END as "isOnlineCalc"
       FROM user_presence
       ORDER BY "lastActivityAt" DESC
     `);
     
-    // Convert isOnlineCalc to boolean matching isOnline
     const presenceList = rows.map(r => ({
       ...r,
       isOnline: r.isOnlineCalc === 1
@@ -1518,7 +1734,6 @@ app.post('/api/presence/heartbeat', async (req, res) => {
   if (!userId || !userName) return res.status(400).json({ error: 'Missing userId or userName' });
 
   try {
-    // Upsert into user_presence
     const presenceId = uuid();
     await pool.query(`
       INSERT INTO user_presence (
@@ -1539,12 +1754,11 @@ app.post('/api/presence/heartbeat', async (req, res) => {
         "deviceId" = EXCLUDED."deviceId",
         "updatedAt" = CURRENT_TIMESTAMP
     `, [
-      presenceId, userId, userName, department || 'MED', currentStatus || 'ONLINE', 
-      currentScreen || null, currentTaskId || null, currentPatientName || null, deviceId || null
+      presenceId, userId, userName, department || 'Medical', currentStatus || 'ONLINE', 
+      currentScreen || 'Dashboard', currentTaskId || null, currentPatientName || null, deviceId || null
     ]);
 
     res.json({ success: true });
-    // Emit dynamic db changed presence event
     if (req.io) req.io.emit('db_changed', { table: 'user_presence' });
   } catch (e) {
     console.error('[HEARTBEAT ERROR]', e);
@@ -1552,17 +1766,111 @@ app.post('/api/presence/heartbeat', async (req, res) => {
   }
 });
 
-// Catch-all route for React SPA routing
+// ─── 1-CLICK PASSWORD-FREE DATABASE BACKUP & DUMP ENDPOINTS (R3 - PG) ───
+app.get('/api/backup/download', async (req, res) => {
+  try {
+    const format = (req.query?.format || '').toLowerCase();
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const timestamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+
+    if (format === 'json') {
+      const tables = [
+        'patients', 'visits', 'prescription_groups', 'group_medicines',
+        'medicines', 'tokens', 'departments', 'users', 'medicine_tasks', 'medicine_task_items'
+      ];
+      const snapshot = {
+        exportedAt: now.toISOString(),
+        system: 'Nek Kadam Clinical Management System (PostgreSQL)',
+        data: {}
+      };
+      for (const t of tables) {
+        try {
+          snapshot.data[t] = await qr(`SELECT * FROM "${t}"`, []);
+        } catch (_) {
+          snapshot.data[t] = [];
+        }
+      }
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="nekkadam_backup_${timestamp}.json"`);
+      return res.json(snapshot);
+    }
+
+    const filename = `nekkadam_backup_${timestamp}.sqlite`;
+    const dbPath = path.resolve(__dirname, 'nekkadam.db');
+
+    if (fs.existsSync(dbPath)) {
+      res.setHeader('Content-Type', 'application/x-sqlite3');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      const fileStream = fs.createReadStream(dbPath);
+      return fileStream.pipe(res);
+    }
+
+    // Fallback: export JSON if local sqlite file not available
+    const tables = ['patients', 'visits', 'medicines'];
+    const snapshot = { exportedAt: now.toISOString(), data: {} };
+    for (const t of tables) {
+      try { snapshot.data[t] = await qr(`SELECT * FROM "${t}"`, []); } catch (_) { snapshot.data[t] = []; }
+    }
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="nekkadam_backup_${timestamp}.json"`);
+    res.json(snapshot);
+  } catch (err) {
+    console.error('[PG BACKUP DOWNLOAD ERROR]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/backup/json', async (req, res) => {
+  req.query.format = 'json';
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const timestamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const tables = [
+    'patients', 'visits', 'prescription_groups', 'group_medicines',
+    'medicines', 'tokens', 'departments', 'users', 'medicine_tasks', 'medicine_task_items'
+  ];
+  const snapshot = {
+    exportedAt: now.toISOString(),
+    system: 'Nek Kadam Clinical Management System (PostgreSQL)',
+    data: {}
+  };
+  for (const t of tables) {
+    try {
+      snapshot.data[t] = await qr(`SELECT * FROM "${t}"`, []);
+    } catch (_) {
+      snapshot.data[t] = [];
+    }
+  }
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Disposition', `attachment; filename="nekkadam_backup_${timestamp}.json"`);
+  return res.json(snapshot);
+});
+
+// Catch-all route for React SPA routing (never cache index.html, never serve HTML for /assets)
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api') || req.path.startsWith('/rpc') || req.path.startsWith('/static')) {
+  if (
+    req.path.startsWith('/api') || 
+    req.path.startsWith('/rpc') || 
+    req.path.startsWith('/static') || 
+    req.path.startsWith('/apk') ||
+    req.path.startsWith('/assets')
+  ) {
     return next();
   }
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 async function bootstrap() {
   attachGracefulShutdown();
-  await ensureSchema();
+  try {
+    await ensureSchema();
+  } catch (schemaErr) {
+    console.warn('[SCHEMA WARNING] Schema check deferred/warned:', schemaErr.message);
+  }
   server.listen(port, '0.0.0.0', () => {
     const dbg = process.env.DATABASE_URL ? 'DATABASE_URL' : process.env.PGDATABASE || 'nekkadam';
     console.log(`\x1b[32m[POSTGRES ONLINE]\x1b[0m :${port} bind=0.0.0.0 | DB=${dbg}`);

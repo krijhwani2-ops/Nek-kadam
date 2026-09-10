@@ -268,8 +268,8 @@ export default function NewPatient() {
             <span className="w-8 h-1 bg-gradient-secondary rounded-full" />
             <p className="text-emerald-600 font-black text-[10px] uppercase tracking-[0.3em]">Patient Enrollment</p>
           </div>
-          <h2 className="text-2xl md:text-3xl font-[900] text-emerald-900 tracking-tight">
-            Register New
+          <h2 className="text-2xl md:text-3xl font-[900] text-emerald-900 dark:text-emerald-400 tracking-tight">
+            Register New Patient
           </h2>
         </div>
         <Link to="/patients" className="flex items-center gap-1.5 text-slate-400 hover:text-emerald-600 font-bold transition-colors text-sm">
@@ -306,8 +306,8 @@ export default function NewPatient() {
                 <div className="p-4 bg-slate-50/50 dark:bg-slate-900/50 rounded-2xl border-2 border-slate-100/50 dark:border-slate-800/80 shadow-inner group-focus-within:border-emerald-200 transition-colors">
                   <label className="block text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-1.5 ml-1">Card Assignment</label>
                   <div className="flex items-center gap-2">
-                    <span className="text-emerald-500 font-black text-xl tracking-tighter">ID-</span>
-                    <input name="card_number" type="text" required placeholder="1001" className="w-full bg-transparent text-slate-800 dark:text-slate-100 font-[900] text-2xl outline-none placeholder-slate-200 dark:placeholder-slate-800" />
+                    <span className="text-emerald-600 dark:text-emerald-400 font-black text-xl tracking-tighter">ID-</span>
+                    <input name="card_number" type="text" required placeholder="1001" className="w-full bg-transparent text-slate-800 dark:text-slate-100 font-[900] text-2xl outline-none placeholder-slate-400 dark:placeholder-slate-500" />
                   </div>
                 </div>
 
