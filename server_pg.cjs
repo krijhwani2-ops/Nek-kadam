@@ -124,7 +124,7 @@ app.use((req, res, next) => {
 app.use('/static', express.static('dist'));
 app.use('/apk', express.static(path.join(__dirname, 'apk')));
 app.use(express.static(path.join(__dirname, 'dist')));
-app.get('/api/version', (_req, res) => res.json({ version: '1.1.0', apkUrl: '/apk/nek-kadam.apk' }));
+app.get('/api/version', (_req, res) => res.json({ version: '1.2.0', apkUrl: '/apk/nek-kadam.apk' }));
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -168,7 +168,32 @@ async function ensureSchema() {
       "fileName" TEXT,
       "fileData" TEXT
     );
+    CREATE TABLE IF NOT EXISTS sessions (
+      token TEXT PRIMARY KEY,
+      "userId" TEXT NOT NULL,
+      "userName" TEXT NOT NULL,
+      "departmentId" TEXT,
+      "deptCode" TEXT,
+      role TEXT,
+      "lastActiveTime" BIGINT,
+      "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
   `);
+}
+
+async function saveSessionPg(token, session) {
+  activeSessions.set(token, session);
+  try {
+    await pool.query(
+      `INSERT INTO sessions (token, "userId", "userName", "departmentId", "deptCode", role, "lastActiveTime")
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (token) DO UPDATE 
+       SET "lastActiveTime" = EXCLUDED."lastActiveTime", "deptCode" = EXCLUDED."deptCode"`,
+      [token, session.userId, session.userName, session.departmentId || null, session.deptCode || null, session.role || null, session.lastActiveTime || Date.now()]
+    );
+  } catch (err) {
+    console.error('[SESSION PG SAVE ERROR]', err.message);
+  }
 }
 
 async function q(sql, params = []) {
@@ -204,7 +229,8 @@ const PUBLIC_PATHS_PG = [
   '/api/version',
   '/api/health',
   '/api/backup/download',
-  '/api/backup/json'
+  '/api/backup/json',
+  '/api/presence'
 ];
 
 async function requireAuth(req, res, next) {
@@ -241,7 +267,37 @@ async function hydrateUserFromBearer(req, res, next) {
     const h = req.headers.authorization;
     if (h?.startsWith('Bearer ')) {
       const sid = h.slice('Bearer '.length).trim();
-      const s = activeSessions.get(sid);
+      let s = activeSessions.get(sid);
+      if (!s) {
+        try {
+          const row = await qr1('SELECT * FROM sessions WHERE token = $1', [sid]);
+          if (row) {
+            s = {
+              userId: row.userId,
+              userName: row.userName,
+              departmentId: row.departmentId,
+              deptCode: row.deptCode,
+              role: row.role,
+              lastActiveTime: Number(row.lastActiveTime) || Date.now()
+            };
+            activeSessions.set(sid, s);
+          } else if (sid.startsWith('offline-token-')) {
+            const uId = sid.replace('offline-token-', '');
+            const uRow = await qr1('SELECT u.id, u.name, u.role, d.code as "deptCode", u."departmentId" FROM users u LEFT JOIN departments d ON u."departmentId" = d.id WHERE u.id = $1', [uId]);
+            if (uRow) {
+              s = {
+                userId: uRow.id,
+                userName: uRow.name,
+                departmentId: uRow.departmentId,
+                deptCode: uRow.deptCode || 'Medical',
+                role: uRow.role || 'Volunteer',
+                lastActiveTime: Date.now()
+              };
+              activeSessions.set(sid, s);
+            }
+          }
+        } catch (_) {}
+      }
       if (s) req.user = s;
     }
   } catch (_) { /* noop */ }
@@ -305,7 +361,7 @@ app.get('/api/departments', async (_req, res) => {
   }
 });
 
-app.get('/api/pc-login', async (_req, res) => {
+app.all('/api/pc-login', async (_req, res) => {
   try {
     const user = await qr1lite(
       `SELECT u.*, d.code as deptCode FROM users u LEFT JOIN departments d ON u."departmentId" = d.id WHERE upper(u.role::text) = 'ADMIN' LIMIT 1`,
@@ -313,14 +369,15 @@ app.get('/api/pc-login', async (_req, res) => {
     );
     if (!user) return res.status(503).json({ error: 'No admin user' });
     const token = uuid();
-    activeSessions.set(token, {
+    const sessionObj = {
       userId: user.id,
       userName: user.name,
       departmentId: user.departmentId,
       deptCode: user.deptcode || user.deptCode,
       role: user.role,
       lastActiveTime: Date.now(),
-    });
+    };
+    await saveSessionPg(token, sessionObj);
     res.json({
       token,
       user: {
@@ -346,14 +403,15 @@ app.post('/api/login', async (req, res) => {
     );
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     const token = uuid();
-    activeSessions.set(token, {
+    const sessionObj = {
       userId: user.id,
       userName: user.name,
       departmentId: user.departmentId,
       deptCode: user.deptcode || user.deptCode,
       role: user.role,
       lastActiveTime: Date.now(),
-    });
+    };
+    await saveSessionPg(token, sessionObj);
     res.json({
       token,
       user: {
@@ -1692,14 +1750,15 @@ app.post('/api/users/create-profile', async (req, res) => {
     }
 
     const token = uuid();
-    activeSessions.set(token, {
+    const sessionObj = {
       userId: userObj.id,
       userName: userObj.name,
       departmentId: userObj.departmentId || '1',
       deptCode: userObj.department || 'Medical',
       role: userObj.role || 'Volunteer',
       lastActiveTime: Date.now()
-    });
+    };
+    await saveSessionPg(token, sessionObj);
 
     res.json({ success: true, user: userObj, token });
     if (req.io) req.io.emit('db_changed', { table: 'users' });

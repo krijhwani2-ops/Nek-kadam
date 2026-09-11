@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Users, Save, Globe, PlusCircle, Key, Wifi, Cloud, Cpu, RefreshCw, CheckCircle2, AlertCircle, Download, FileSpreadsheet, Database } from 'lucide-react';
+import { Users, Save, Globe, PlusCircle, Key, Wifi, Cloud, Cpu, RefreshCw, CheckCircle2, AlertCircle, Download, FileSpreadsheet, Database, Smartphone } from 'lucide-react';
 import { fetchAdminUsers, updateAdminUser, createAdminUser, fetchDepartments, getBaseUrl } from '../lib/session';
 import { getServerIp, setServerIp, getNetworkMode, setNetworkMode, checkServerOnline, NetworkMode } from '../lib/db';
 import { QRCodeSVG } from 'qrcode.react';
@@ -455,6 +455,68 @@ export default function Settings() {
                   <FileSpreadsheet size={15} />
                   {exportingReport ? 'Generating Report...' : 'Export Donor Report (.xlsx)'}
                 </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ─── DIRECT ANDROID APK DOWNLOAD & UPDATE CARD ─── */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
+                  <Smartphone size={20} className="text-blue-500" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-800 dark:text-slate-100 text-lg">
+                    Android Mobile App (Direct APK)
+                  </h3>
+                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">
+                    Install or Update Clinical Tablet & Mobile App
+                  </p>
+                </div>
+              </div>
+              <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                Latest Build v1.2.0 (5.1 MB)
+              </span>
+            </div>
+
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              <div className="space-y-4">
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Download the latest standalone Android APK package. Built with full camera QR/barcode scanner, offline delta sync, real-time pharmacy audio chime, and OPD slip printing.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <a
+                    href={`${getBaseUrl()}/apk/nek-kadam.apk`}
+                    download="nek-kadam-v1.2.0.apk"
+                    className="flex-1 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-blue-600/15 flex items-center justify-center gap-2 transition-all"
+                  >
+                    <Download size={16} />
+                    Direct Download APK (v1.2.0)
+                  </a>
+                  <a
+                    href="https://nek-kadam.onrender.com/apk/nek-kadam.apk"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all"
+                  >
+                    Cloud Direct Link
+                  </a>
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center gap-4">
+                <div className="p-2 bg-white rounded-lg shadow-sm shrink-0">
+                  <QRCodeSVG value="https://nek-kadam.onrender.com/apk/nek-kadam.apk" size={80} level="M" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-200">
+                    Scan to Install on Phone
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                    Point your phone camera to download & install directly on any Android device without PC cable.
+                  </p>
+                </div>
               </div>
             </div>
           </div>

@@ -90,7 +90,7 @@ app.use((req, res, next) => {
 // AUDIT FIX: Serve only the dist folder, not the entire project root (was exposing nekkadam.db, source code, .env)
 app.use('/static', express.static('dist'));
 app.use('/apk', express.static(__dirname + '/apk'));
-app.get('/api/version', (req, res) => res.json({ version: '1.1.0', apkUrl: '/apk/nek-kadam.apk' }));
+app.get('/api/version', (req, res) => res.json({ version: '1.2.0', apkUrl: '/apk/nek-kadam.apk' }));
 
 // ─────────────────────────────────────
 //  ECOSYSTEM: Request Logger
@@ -500,7 +500,8 @@ const PUBLIC_PATHS = [
   '/api/version',
   '/api/health',
   '/api/backup/download',
-  '/api/backup/json'
+  '/api/backup/json',
+  '/api/presence'
 ];
 
 function requireAuth(req, res, next) {

@@ -9,7 +9,7 @@ import {
   UserPlus, HeartPulse, FileDown,
   LayoutDashboard, ChevronLeft, ListChecks,
   ClipboardList, Monitor, Menu, X, MessageSquare,
-  Smartphone, QrCode
+  Smartphone, QrCode, Download
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { useApp } from './contexts/AppContext';
@@ -79,7 +79,7 @@ function BackButtonHandler() {
   return null;
 }
 
-const APP_VERSION = "1.1.0"; // Current release version
+const APP_VERSION = "1.2.0"; // Current release version
 
 function OTAUpdater() {
   const [updateAvailable, setUpdateAvailable] = useState<{version: string, apkUrl: string} | null>(null);
@@ -307,6 +307,16 @@ function Sidebar() {
         <NavLink to="/import" icon={FileDown} label={t('dataImport')} />
         <NavLink to="/settings" icon={Settings} label={t('settings')} />
         <NavLink to="/demo" icon={Smartphone} label="APK Modern Demo" />
+        <a 
+          href={`${getBaseUrl()}/apk/nek-kadam.apk`}
+          download="nek-kadam-v1.2.0.apk"
+          className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/80 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-all shadow-sm group"
+          title="Direct Download Latest Android APK"
+        >
+          <Download size={18} className="text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform" />
+          <span className="truncate">Download APK</span>
+          <span className="ml-auto text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-600 text-white shrink-0">v1.2</span>
+        </a>
       </div>
 
       <div className="mt-auto pt-8 flex flex-col gap-3">
