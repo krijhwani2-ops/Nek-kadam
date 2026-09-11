@@ -122,13 +122,12 @@ export default function ApkDemoApp() {
       </div>
 
       {/* ═══════════════════════════════════════════════════════════
-          FLOATING BOTTOM PILL SWITCHER
-          - Floating glass dock at the bottom of screen
-          - Completely unblocks the top of the mobile screen
-          - Instant 1-tap switching between the creative universes
+          FLOATING STYLE SWITCHER PILL (Floats above bottom nav)
+          - Compact pill that doesn't block thumb navigation
+          - 1-tap style switcher for testing all design paradigms
          ═══════════════════════════════════════════════════════════ */}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-[96%] sm:w-auto">
-        <div className="bg-black/90 backdrop-blur-2xl border border-white/20 rounded-full p-1.5 shadow-[0_10px_40px_rgba(0,0,0,0.8)] flex items-center justify-between gap-1 overflow-x-auto">
+      <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 max-w-md w-[96%] sm:w-auto">
+        <div className="bg-slate-950/90 backdrop-blur-2xl border border-slate-700/80 rounded-full p-1 shadow-[0_10px_40px_rgba(0,0,0,0.7)] flex items-center justify-center gap-1">
           
           {/* 0. Nek Kadam 2.0 (Clinical Sleek Mobile) */}
           <button
@@ -136,9 +135,9 @@ export default function ApkDemoApp() {
               setSelectedVariant('clinical');
               triggerToast('Switched to: 🏥 Nek Kadam 2.0 (Mobile Optimized)');
             }}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
+            className={`flex items-center justify-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
               selectedVariant === 'clinical'
-                ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-[0_0_15px_rgba(16,185,129,0.6)] scale-[1.03]'
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)] scale-[1.02]'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -152,9 +151,9 @@ export default function ApkDemoApp() {
               setSelectedVariant('aura');
               triggerToast('Switched to: 🌌 Aura Glass (Spatial Bio-OS)');
             }}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
+            className={`flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
               selectedVariant === 'aura'
-                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.6)] scale-[1.03]'
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.5)] scale-[1.02]'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -168,9 +167,9 @@ export default function ApkDemoApp() {
               setSelectedVariant('neopop');
               triggerToast('Switched to: ⚡ Neo-Pop Arcade (Tactile Brutalism)');
             }}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
+            className={`flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
               selectedVariant === 'neopop'
-                ? 'bg-[#D4FF00] text-black shadow-[0_0_15px_rgba(212,255,0,0.6)] scale-[1.03]'
+                ? 'bg-[#D4FF00] text-black shadow-[0_0_15px_rgba(212,255,0,0.5)] scale-[1.02]'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -184,9 +183,9 @@ export default function ApkDemoApp() {
               setSelectedVariant('nothing');
               triggerToast('Switched to: 🕹️ Nothing OS Glyph (Teenage Engineering)');
             }}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
+            className={`flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
               selectedVariant === 'nothing'
-                ? 'bg-[#FF2A1B] text-white shadow-[0_0_15px_rgba(255,42,27,0.6)] scale-[1.03]'
+                ? 'bg-[#FF2A1B] text-white shadow-[0_0_15px_rgba(255,42,27,0.5)] scale-[1.02]'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
