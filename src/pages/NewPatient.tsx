@@ -427,20 +427,21 @@ export default function NewPatient() {
                 </div>
 
                 <div className="p-3.5 bg-slate-50/50 dark:bg-slate-900/20 rounded-2xl border-2 border-dashed border-slate-200/60 dark:border-slate-800 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide flex-1">
                       {medicineGroups.map((_, idx) => (
                         <button
                           key={idx}
                           type="button"
                           onClick={() => setActiveGroupIndex(idx)}
-                          className={`px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-1.5 ${activeGroupIndex === idx ? 'bg-gradient-primary text-white shadow-lg shadow-emerald-200 scale-105' : 'bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-100 dark:border-slate-800 hover:text-slate-600 dark:hover:text-slate-350'}`}
+                          className={`min-h-[40px] px-3.5 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center gap-1.5 shrink-0 ${activeGroupIndex === idx ? 'bg-gradient-primary text-white shadow-lg shadow-emerald-200 scale-105' : 'bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-100 dark:border-slate-800 hover:text-slate-600 dark:hover:text-slate-350'}`}
                         >
                           Combination {idx + 1}
                           {medicineGroups.length > 1 && (
                             <span
                               onClick={(e) => { e.stopPropagation(); removeGroup(idx); }}
-                              className="ml-1 w-4 h-4 rounded-full bg-red-400/80 text-white flex items-center justify-center text-[8px] font-black hover:bg-red-600 transition-colors cursor-pointer"
+                              className="ml-1 w-5 h-5 rounded-full bg-red-400/80 hover:bg-red-600 text-white flex items-center justify-center text-[10px] font-black transition-colors cursor-pointer"
+                              title="Remove Combination"
                             >✕</span>
                           )}
                         </button>
@@ -449,62 +450,68 @@ export default function NewPatient() {
                     <button 
                       type="button"
                       onClick={addGroup}
-                      className="p-2 bg-white dark:bg-slate-800 text-emerald-500 dark:text-emerald-400 rounded-xl hover:bg-emerald-500 dark:hover:bg-emerald-600 hover:text-white transition-all border border-emerald-100 dark:border-emerald-900/50 shadow-sm"
+                      className="min-w-[40px] min-h-[40px] flex items-center justify-center bg-white dark:bg-slate-800 text-emerald-500 dark:text-emerald-400 rounded-xl hover:bg-emerald-500 dark:hover:bg-emerald-600 hover:text-white transition-all border border-emerald-100 dark:border-emerald-900/50 shadow-sm shrink-0 active:scale-95"
+                      title="Add Combination"
                     >
-                      <Plus size={16} />
+                      <Plus size={18} />
                     </button>
                   </div>
-                  <div className="flex flex-col md:flex-row items-center gap-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-1.5 shadow-sm relative" ref={searchRef}>
-                    <select value={medicineGroups[activeGroupIndex].power} onChange={e => {
-                          const updated = [...medicineGroups];
-                          updated[activeGroupIndex].power = e.target.value;
-                          setMedicineGroups(updated);
-                    }} className="w-full md:w-24 px-2 py-2 bg-transparent outline-none font-black text-slate-700 dark:text-slate-300 text-xs">
-                      <option value="">Power</option>
-                      <option value="Q">Q</option>
-                      <option value="3X">3X</option>
-                      <option value="6X">6X</option>
-                      <option value="30C">30C</option>
-                      <option value="200C">200C</option>
-                      <option value="1M">1M</option>
-                      <option value="10M">10M</option>
-                    </select>
+                  <div className="flex flex-col md:flex-row flex-wrap lg:flex-nowrap items-stretch md:items-center gap-2.5 md:gap-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 md:p-1.5 shadow-sm relative" ref={searchRef}>
+                    <div className="grid grid-cols-2 md:flex items-center gap-2 w-full md:w-auto shrink-0">
+                      <select value={medicineGroups[activeGroupIndex].power} onChange={e => {
+                            const updated = [...medicineGroups];
+                            updated[activeGroupIndex].power = e.target.value;
+                            setMedicineGroups(updated);
+                      }} className="w-full md:w-24 px-2 py-2.5 md:py-2 bg-slate-50 md:bg-transparent dark:bg-slate-900 md:dark:bg-transparent rounded-xl md:rounded-none border border-slate-200 md:border-0 dark:border-slate-700 outline-none font-black text-slate-700 dark:text-slate-300 text-xs cursor-pointer">
+                        <option value="">Power</option>
+                        <option value="Q">Q</option>
+                        <option value="3X">3X</option>
+                        <option value="6X">6X</option>
+                        <option value="30C">30C</option>
+                        <option value="200C">200C</option>
+                        <option value="1M">1M</option>
+                        <option value="10M">10M</option>
+                      </select>
+                      <div className="hidden md:block w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                      <select value={medicineGroups[activeGroupIndex].dosage} onChange={e => {
+                            const updated = [...medicineGroups];
+                            updated[activeGroupIndex].dosage = e.target.value;
+                            setMedicineGroups(updated);
+                      }} className="w-full md:w-32 px-2 py-2.5 md:py-2 bg-slate-50 md:bg-transparent dark:bg-slate-900 md:dark:bg-transparent rounded-xl md:rounded-none border border-slate-200 md:border-0 dark:border-slate-700 outline-none font-black text-slate-700 dark:text-slate-300 text-xs cursor-pointer">
+                        {dosages.map(d => <option key={d.code} value={d.code}>{d.code}</option>)}
+                      </select>
+                    </div>
                     <div className="hidden md:block w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
-                    <select value={medicineGroups[activeGroupIndex].dosage} onChange={e => {
-                          const updated = [...medicineGroups];
-                          updated[activeGroupIndex].dosage = e.target.value;
-                          setMedicineGroups(updated);
-                    }} className="w-full md:w-32 px-2 py-2 bg-transparent outline-none font-black text-slate-700 dark:text-slate-300 text-xs">
-                      {dosages.map(d => <option key={d.code} value={d.code}>{d.code}</option>)}
-                    </select>
-                    <div className="hidden md:block w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
-                    <input 
-                      value={currentCode}
-                      onChange={(e) => setCurrentCode(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleAddMedicine();
-                        } else if (e.key === '+') {
-                          e.preventDefault();
-                          if (!currentCode.trim()) addGroup();
-                          else handleAddMedicine();
-                        }
-                      }}
-                      placeholder="CODE"
-                      className="w-full md:w-20 px-2 py-2 bg-slate-50 dark:bg-slate-900 rounded-xl outline-none uppercase font-black text-center text-xs text-slate-800 dark:text-slate-100"
-                    />
-                    <input 
-                      value={currentName}
-                      onChange={(e) => {
-                        setCurrentName(e.target.value);
-                        setSearchQuery(e.target.value);
-                      }}
-                      onFocus={() => setShowResults(true)}
-                      readOnly={!isNewMedicine && !!currentCode.trim()}
-                      placeholder={isNewMedicine ? "New med..." : "Search..."}
-                      className={`flex-1 px-3 py-2 outline-none font-black text-sm rounded-xl ${(!isNewMedicine && currentCode.trim()) ? 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300' : 'bg-transparent text-slate-800 dark:text-slate-100'}`}
-                    />
+                    
+                    <div className="flex items-center gap-2 flex-1 w-full md:w-auto min-w-0">
+                      <input 
+                        value={currentCode}
+                        onChange={(e) => setCurrentCode(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddMedicine();
+                          } else if (e.key === '+') {
+                            e.preventDefault();
+                            if (!currentCode.trim()) addGroup();
+                            else handleAddMedicine();
+                          }
+                        }}
+                        placeholder="CODE"
+                        className="w-20 md:w-20 px-2 py-2.5 md:py-2 bg-slate-50 dark:bg-slate-900 rounded-xl outline-none uppercase font-black text-center text-xs text-slate-800 dark:text-slate-100 border border-slate-200 md:border-0 dark:border-slate-700 shrink-0"
+                      />
+                      <input 
+                        value={currentName}
+                        onChange={(e) => {
+                          setCurrentName(e.target.value);
+                          setSearchQuery(e.target.value);
+                        }}
+                        onFocus={() => setShowResults(true)}
+                        readOnly={!isNewMedicine && !!currentCode.trim()}
+                        placeholder={isNewMedicine ? "New med..." : "Search..."}
+                        className={`flex-1 px-3 py-2.5 md:py-2 outline-none font-black text-sm rounded-xl min-w-0 ${(!isNewMedicine && currentCode.trim()) ? 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300' : 'bg-transparent text-slate-800 dark:text-slate-100'}`}
+                      />
+                    </div>
 
                     {showResults && searchResults.length > 0 && (
                       <div className="absolute z-50 left-0 right-0 top-full mt-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl overflow-hidden max-h-60 overflow-y-auto">
@@ -520,10 +527,13 @@ export default function NewPatient() {
                       </div>
                     )}
 
-                    <input type="number" min="1" value={currentQuantity} onChange={(e) => setCurrentQuantity(parseInt(e.target.value) || 1)} className="w-16 px-2 py-2 bg-slate-50 dark:bg-slate-900 rounded-xl outline-none font-black text-center text-sm text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800" />
-                    <button type="button" onClick={handleAddMedicine} disabled={!currentCode.trim() || !currentName.trim()} className="px-4 py-2 bg-emerald-600 text-white rounded-xl disabled:opacity-50 font-black flex items-center justify-center shrink-0">
-                      <Plus size={20} strokeWidth={3} />
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0 justify-end w-full md:w-auto pt-2 md:pt-0 border-t md:border-t-0 border-slate-100 dark:border-slate-700/50">
+                      <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest md:hidden">Qty:</span>
+                      <input type="number" min="1" value={currentQuantity} onChange={(e) => setCurrentQuantity(parseInt(e.target.value) || 1)} className="w-16 px-2 py-2.5 md:py-2 bg-slate-50 dark:bg-slate-900 rounded-xl outline-none font-black text-center text-sm text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-800" />
+                      <button type="button" onClick={handleAddMedicine} disabled={!currentCode.trim() || !currentName.trim()} className="min-w-[44px] min-h-[44px] px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl disabled:opacity-50 font-black flex items-center justify-center shrink-0 shadow-sm active:scale-95 transition-all">
+                        <Plus size={20} strokeWidth={3} />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="space-y-2">

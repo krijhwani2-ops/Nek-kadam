@@ -91,24 +91,24 @@ export default function PatientsList() {
             {t('patients')}
           </h2>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
           <button
             type="button"
             onClick={() => setIsScannerOpen(true)}
-            className="px-3.5 py-2 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-sm transition-all active:scale-95"
+            className="min-h-[44px] px-3.5 py-2.5 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95"
             title="Scan Barcode or QR Code on OPD Card"
           >
             <QrCode size={16} className="text-emerald-400" />
             <span>Scan OPD Card</span>
           </button>
-          <Link to="/patients/new" className="btn-primary text-xs flex items-center gap-1.5 w-fit px-4 py-2">
+          <Link to="/patients/new" className="min-h-[44px] btn-primary text-xs flex items-center justify-center gap-1.5 w-full sm:w-fit px-4 py-2.5 rounded-xl">
             + {t('registerPatient')}
           </Link>
         </div>
       </div>
 
       {/* Search */}
-      <div className="glass-card rounded-xl px-4 py-2.5 flex items-center gap-3 group focus-within:border-emerald-300 dark:border-slate-800"
+      <div className="glass-card rounded-xl px-3 sm:px-4 py-2 flex items-center gap-2 sm:gap-3 group focus-within:border-emerald-300 dark:border-slate-800 min-h-[48px]"
            style={{ border: '2px solid rgba(167,243,208,0.4)' }}>
         <Search
           size={18}
@@ -116,7 +116,7 @@ export default function PatientsList() {
         />
         <input
           type="text"
-          className="flex-1 bg-transparent outline-none text-slate-700 dark:text-slate-200 font-medium placeholder-slate-400 text-sm"
+          className="flex-1 bg-transparent outline-none text-slate-700 dark:text-slate-200 font-medium placeholder-slate-400 text-sm min-w-0"
           placeholder={t('searchPatientPlaceholder')}
           value={localQuery}
           onChange={(e) => setLocalQuery(e.target.value)}
@@ -124,7 +124,8 @@ export default function PatientsList() {
         {localQuery && (
           <button
             onClick={() => { setLocalQuery(''); setSearchQuery(''); }}
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-lg leading-none font-bold px-1"
+            className="min-w-[40px] min-h-[40px] flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl leading-none font-bold"
+            aria-label="Clear search"
           >
             ×
           </button>
@@ -132,7 +133,7 @@ export default function PatientsList() {
         <button
           type="button"
           onClick={() => setIsScannerOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-black border border-emerald-500/20 transition-all shrink-0 active:scale-95"
+          className="min-h-[38px] flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-black border border-emerald-500/20 transition-all shrink-0 active:scale-95"
           title="Scan OPD Card QR or Barcode"
         >
           <QrCode size={15} />

@@ -1,0 +1,1 @@
+Add-Type -AssemblyName System.Windows.Forms; $img = [System.Drawing.Image]::FromFile((Resolve-Path opd_card_sample.png)); [System.Windows.Forms.Clipboard]::SetImage($img); Write-Host Image copied to clipboard

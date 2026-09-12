@@ -669,33 +669,52 @@ export default function PatientProfile() {
     <div className="max-w-6xl mx-auto px-4 py-5 space-y-5">
       
       {/* Profile Header */}
-      <div className="glass-card pt-10 pb-5 px-5 md:pt-12 md:pb-6 md:px-6 rounded-2xl relative overflow-hidden shadow-xl shadow-emerald-900/5 dark:border-slate-800">
-        {/* Unique Card Number Ribbon (Top-Left corner) */}
-        <div className="absolute top-0 left-0 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-black tracking-wider uppercase px-5 py-2 rounded-br-2xl shadow-md border-r border-b border-emerald-500/20 z-20">
-          Card: {patient.card_number?.startsWith('TEMP-') ? 'No ID' : patient.card_number}
+      <div className="glass-card pt-6 pb-5 px-4 sm:px-6 sm:pt-8 rounded-2xl relative overflow-hidden shadow-xl shadow-emerald-900/5 dark:border-slate-800">
+        
+        {/* Prominent OPD Card Number Banner */}
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-4 pb-3 border-b border-slate-200/60 dark:border-slate-800">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-400 bg-emerald-100/70 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+              OPD SMART PASS
+            </span>
+          </div>
+
+          <div 
+            onClick={() => {
+              if (patient.card_number) {
+                navigator.clipboard?.writeText(String(patient.card_number));
+                alert(`Card #${patient.card_number} copied to clipboard!`);
+              }
+            }}
+            className="flex items-center gap-2 px-3.5 py-1.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl shadow-md shadow-orange-500/20 cursor-pointer active:scale-95 transition-all"
+            title="Click to copy Card Number"
+          >
+            <CreditCard size={17} className="text-white shrink-0" />
+            <span className="text-[11px] font-black uppercase tracking-wider text-orange-100">CARD NO:</span>
+            <span className="text-base sm:text-lg font-black tracking-tight font-mono">
+              {patient.card_number?.startsWith('TEMP-') ? 'NO ID' : `#${patient.card_number}`}
+            </span>
+          </div>
         </div>
 
-        <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-100 dark:bg-emerald-950/20 rounded-full blur-[100px] opacity-40 -mr-40 -mt-40"></div>
+        <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-100 dark:bg-emerald-950/20 rounded-full blur-[100px] opacity-40 -mr-40 -mt-40 pointer-events-none"></div>
         
-        <div className="relative z-10 flex flex-col md:flex-row gap-6 items-center">
-          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-black text-3xl shadow-xl shadow-emerald-200 border-4 border-white">
+        <div className="relative z-10 flex flex-col md:flex-row gap-5 sm:gap-6 items-center">
+          <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-black text-2xl sm:text-3xl shadow-xl shadow-emerald-200 dark:shadow-emerald-950 border-4 border-white dark:border-slate-800 shrink-0">
             {(patient?.name?.charAt(0) || '?')}
           </div>
           
           {!isEditingProfile ? (
-            <div className="flex-grow text-center md:text-left">
-              <div className="flex items-center gap-3 justify-center md:justify-start flex-wrap mb-1.5">
-                <h2 className="text-2xl font-black text-slate-800 dark:text-slate-100 tracking-tight">{patient.name}</h2>
-                <button onClick={startEditingProfile} className="px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 rounded-lg text-xs font-black transition-all">
+            <div className="flex-grow text-center md:text-left min-w-0 w-full">
+              <div className="flex items-center gap-3 justify-center md:justify-start flex-wrap mb-2">
+                <h2 className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100 tracking-tight">{patient.name}</h2>
+                <button onClick={startEditingProfile} className="min-h-[32px] px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 rounded-lg text-xs font-black transition-all">
                   Edit Profile
                 </button>
               </div>
-              <div className="flex flex-wrap justify-center md:justify-start gap-2">
+              <div className="flex flex-wrap justify-center md:justify-start gap-1.5 sm:gap-2">
                 <span className="bg-slate-100 dark:bg-slate-900/50 text-slate-600 dark:text-slate-300 px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 border border-slate-200 dark:border-slate-800">
-                  <CreditCard size={14} className="text-emerald-500" /> {patient.card_number?.startsWith('TEMP-') ? 'No ID' : `#${patient.card_number}`}
-                </span>
-                <span className="bg-slate-100 dark:bg-slate-900/50 text-slate-600 dark:text-slate-300 px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 border border-slate-200 dark:border-slate-800">
-                  <Phone size={14} className="text-emerald-500" /> {patient.phone || 'No Phone'}
+                  <Phone size={14} className="text-emerald-500 shrink-0" /> {patient.phone || 'No Phone'}
                 </span>
                 {patient.address && (
                   <span className="bg-slate-100 dark:bg-slate-900/50 text-slate-600 dark:text-slate-300 px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 border border-slate-200 dark:border-slate-800">
@@ -714,7 +733,7 @@ export default function PatientProfile() {
                 )}
                 {visits.length > 0 && (
                   <span className="bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 border border-emerald-100 dark:border-emerald-900/30">
-                    <Stethoscope size={14} className="text-emerald-500" /> {
+                    <Stethoscope size={14} className="text-emerald-500 shrink-0" /> {
                       (() => {
                          const counts: any = {};
                          visits.forEach((v: any) => {
@@ -772,37 +791,36 @@ export default function PatientProfile() {
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button onClick={() => setIsEditingProfile(false)} className="px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-black transition-all">
+                <button onClick={() => setIsEditingProfile(false)} className="min-h-[40px] px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-black transition-all">
                   Cancel
                 </button>
-                <button onClick={saveProfileChanges} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all shadow-sm">
+                <button onClick={saveProfileChanges} className="min-h-[40px] px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all shadow-sm">
                   Save Changes
                 </button>
               </div>
             </div>
           )}
 
- 
-          <div className="flex items-center gap-3 flex-wrap justify-center md:justify-end">
-            <div className="bg-white/80 dark:bg-slate-900/80 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm text-center min-w-[70px]">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-center md:justify-end shrink-0">
+            <div className="bg-white/80 dark:bg-slate-900/80 p-2.5 sm:p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm text-center min-w-[65px] sm:min-w-[70px]">
               <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">Visits</p>
-              <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{visits.length}</p>
+              <p className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">{visits.length}</p>
             </div>
-            <div className="bg-white/80 dark:bg-slate-900/80 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm text-center min-w-[70px] flex flex-col items-center justify-center">
+            <div className="bg-white/80 dark:bg-slate-900/80 p-2.5 sm:p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm text-center min-w-[65px] sm:min-w-[70px] flex flex-col items-center justify-center">
               <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">Age</p>
-              <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{patient.age || '—'}</p>
+              <p className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">{patient.age || '—'}</p>
             </div>
 
             {/* Patient OPD QR Token Card */}
             <div 
               onClick={() => setShowOpdSlip(true)}
-              className="bg-white dark:bg-slate-900 p-2.5 rounded-2xl border border-emerald-500/30 dark:border-emerald-500/20 shadow-sm hover:shadow-md cursor-pointer group transition-all flex flex-col items-center gap-1.5"
+              className="bg-white dark:bg-slate-900 p-2 sm:p-2.5 rounded-2xl border border-emerald-500/30 dark:border-emerald-500/20 shadow-sm hover:shadow-md cursor-pointer group transition-all flex flex-col items-center gap-1"
               title="Click to print OPD QR Slip"
             >
               <div className="bg-white p-1 rounded-xl shadow-inner border border-slate-100">
                 <QRCodeSVG 
                   value={String(patient.card_number || patient.id || '')} 
-                  size={46} 
+                  size={42} 
                   level="M" 
                   bgColor="#ffffff"
                   fgColor="#0f172a"
@@ -817,30 +835,30 @@ export default function PatientProfile() {
       </div>
  
       {/* Mobile Tab Selector */}
-      <div className="flex lg:hidden bg-slate-200/70 dark:bg-slate-800/80 p-1.5 rounded-2xl gap-1.5 shadow-inner">
+      <div className="flex lg:hidden bg-slate-200/70 dark:bg-slate-800/80 p-1 rounded-2xl gap-1 shadow-inner">
         <button
           type="button"
           onClick={() => setMobileActiveTab('history')}
-          className={`flex-1 py-2.5 px-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+          className={`flex-1 py-2.5 px-3 min-h-[44px] rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
             mobileActiveTab === 'history'
               ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-800'
           }`}
         >
-          <Clock size={15} />
-          <span>Clinical History ({visits.length})</span>
+          <Clock size={15} className="shrink-0" />
+          <span className="truncate">History ({visits.length})</span>
         </button>
         <button
           type="button"
           onClick={() => setMobileActiveTab('prescription')}
-          className={`flex-1 py-2.5 px-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+          className={`flex-1 py-2.5 px-3 min-h-[44px] rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
             mobileActiveTab === 'prescription'
               ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-800'
           }`}
         >
-          <Plus size={15} />
-          <span>New Prescription</span>
+          <Plus size={15} className="shrink-0" />
+          <span className="truncate">New Rx</span>
         </button>
       </div>
 
@@ -924,7 +942,7 @@ export default function PatientProfile() {
               <div className="p-3 bg-slate-50/50 dark:bg-slate-900/20 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 space-y-4">
                 
                 {/* Combination Input Bar */}
-                <div className="flex flex-col sm:flex-row flex-wrap lg:flex-nowrap items-stretch sm:items-center gap-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-2 shadow-sm relative" ref={searchRef}>
+                <div className="flex flex-col sm:flex-row flex-wrap lg:flex-nowrap items-stretch sm:items-center gap-2.5 sm:gap-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 sm:p-2 shadow-sm relative" ref={searchRef}>
                   
                   {/* Power & Dosage Controls */}
                   <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto shrink-0">
@@ -932,7 +950,7 @@ export default function PatientProfile() {
                           const updated = [...medicineGroups];
                           updated[activeGroupIndex].power = e.target.value;
                           setMedicineGroups(updated);
-                    }} className="w-full sm:w-24 px-2.5 py-2 bg-slate-50 sm:bg-transparent dark:bg-slate-900 sm:dark:bg-transparent border border-slate-200 sm:border-0 dark:border-slate-700 rounded-lg sm:rounded-none outline-none font-black text-slate-700 dark:text-slate-300 text-xs cursor-pointer">
+                    }} className="w-full sm:w-24 px-2.5 py-2.5 sm:py-2 bg-slate-50 sm:bg-transparent dark:bg-slate-900 sm:dark:bg-transparent border border-slate-200 sm:border-0 dark:border-slate-700 rounded-xl sm:rounded-none outline-none font-black text-slate-700 dark:text-slate-300 text-xs cursor-pointer">
                       <option value="">Power</option>
                       <option value="Q">Q</option>
                       <option value="3X">3X</option>
@@ -949,7 +967,7 @@ export default function PatientProfile() {
                           const updated = [...medicineGroups];
                           updated[activeGroupIndex].dosage = e.target.value;
                           setMedicineGroups(updated);
-                    }} className="w-full sm:w-28 px-2.5 py-2 bg-slate-50 sm:bg-transparent dark:bg-slate-900 sm:dark:bg-transparent border border-slate-200 sm:border-0 dark:border-slate-700 rounded-lg sm:rounded-none outline-none font-black text-slate-700 dark:text-slate-300 text-xs cursor-pointer">
+                    }} className="w-full sm:w-28 px-2.5 py-2.5 sm:py-2 bg-slate-50 sm:bg-transparent dark:bg-slate-900 sm:dark:bg-transparent border border-slate-200 sm:border-0 dark:border-slate-700 rounded-xl sm:rounded-none outline-none font-black text-slate-700 dark:text-slate-300 text-xs cursor-pointer">
                       {dosages.map(d => <option key={d.code} value={d.code}>{d.code}</option>)}
                     </select>
                   </div>
@@ -975,7 +993,7 @@ export default function PatientProfile() {
                         }
                       }}
                       placeholder="CODE"
-                      className="w-20 sm:w-20 px-2 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 sm:border-0 dark:border-slate-700 rounded-xl outline-none uppercase font-black text-center text-xs text-slate-800 dark:text-slate-100 shrink-0"
+                      className="w-20 sm:w-20 px-2 py-2.5 sm:py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 sm:border-0 dark:border-slate-700 rounded-xl outline-none uppercase font-black text-center text-xs text-slate-800 dark:text-slate-100 shrink-0"
                     />
 
                     <div className="flex-1 min-w-0 relative">
@@ -998,7 +1016,7 @@ export default function PatientProfile() {
                         }}
                         readOnly={!isNewMedicine && !!currentCode.trim()}
                         placeholder={isNewMedicine ? "New medicine..." : "Search..."}
-                        className={`w-full px-3 py-2 outline-none font-black text-sm rounded-xl transition-all ${(!isNewMedicine && currentCode.trim()) ? 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300' : 'bg-transparent text-slate-800 dark:text-slate-100'}`}
+                        className={`w-full px-3 py-2.5 sm:py-2 outline-none font-black text-sm rounded-xl transition-all ${(!isNewMedicine && currentCode.trim()) ? 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-300' : 'bg-transparent text-slate-800 dark:text-slate-100'}`}
                       />
                     </div>
                   </div>
@@ -1019,11 +1037,11 @@ export default function PatientProfile() {
                   )}
 
                   {/* Quantity & Add Action */}
-                  <div className="flex items-center gap-2 shrink-0 justify-end w-full sm:w-auto pt-1 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-700/50">
+                  <div className="flex items-center gap-2 shrink-0 justify-end w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-700/50">
                     <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest sm:hidden">Qty:</span>
-                    <input type="number" min="1" value={currentQuantity} onChange={(e) => setCurrentQuantity(parseInt(e.target.value) || 1)} className="w-16 px-2 py-2 bg-slate-50 dark:bg-slate-900 rounded-xl outline-none font-black text-center text-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100" />
+                    <input type="number" min="1" value={currentQuantity} onChange={(e) => setCurrentQuantity(parseInt(e.target.value) || 1)} className="w-16 px-2 py-2.5 sm:py-2 bg-slate-50 dark:bg-slate-900 rounded-xl outline-none font-black text-center text-sm border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100" />
                     
-                    <button type="button" onClick={handleAddMedicine} disabled={!currentCode.trim() || !currentName.trim()} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl disabled:opacity-50 font-black flex items-center justify-center shrink-0 transition-all">
+                    <button type="button" onClick={handleAddMedicine} disabled={!currentCode.trim() || !currentName.trim()} className="min-w-[44px] min-h-[44px] px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl disabled:opacity-50 font-black flex items-center justify-center shrink-0 transition-all shadow-sm">
                       <Plus size={20} strokeWidth={3} />
                     </button>
                   </div>
@@ -1088,7 +1106,7 @@ export default function PatientProfile() {
                 {visits.length} Visits
               </span>
             </div>
-            <div className="relative pl-4 border-l-2 border-slate-200 dark:border-slate-800 space-y-5">
+            <div className="relative pl-5 sm:pl-6 border-l-2 border-slate-200 dark:border-slate-800 space-y-5 ml-2">
               {visits.length === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-xs text-slate-400 italic">No clinical history found.</p>
@@ -1116,7 +1134,7 @@ export default function PatientProfile() {
                     className="relative group bg-slate-50/50 dark:bg-slate-900/45 p-4 rounded-xl border border-slate-100 dark:border-slate-800/80 hover:border-emerald-500 dark:hover:border-emerald-500 hover:bg-white dark:hover:bg-slate-900 hover:shadow-lg hover:shadow-emerald-950/5 transition-all outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 space-y-2 cursor-pointer"
                   >
                     {/* Bullet dot connector */}
-                    <div className="absolute left-[-23px] top-[18px] w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-700 group-hover:bg-emerald-500 border-2 border-white dark:border-slate-950 transition-colors shadow-sm"></div>
+                    <div className="absolute -left-[27px] sm:-left-[31px] top-[18px] w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-700 group-hover:bg-emerald-500 border-2 border-white dark:border-slate-950 transition-colors shadow-sm"></div>
                     
                     <div className="flex justify-between items-start flex-col sm:flex-row sm:items-center gap-1.5 border-b border-slate-200/60 dark:border-slate-800/60 pb-2">
                       <span className="text-sm sm:text-base font-black text-slate-800 dark:text-slate-100">
@@ -1147,20 +1165,20 @@ export default function PatientProfile() {
       {/* Visit Details Modal */}
       {selectedVisit && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white dark:bg-slate-900 w-full sm:max-w-2xl rounded-t-[2rem] sm:rounded-[3rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.4)] overflow-hidden animate-in slide-in-from-bottom sm:slide-in-from-none sm:zoom-in-95 duration-300 dark:border dark:border-slate-800 max-h-[85vh] sm:max-h-[90vh] flex flex-col">
+          <div className="bg-white dark:bg-slate-900 w-full sm:max-w-2xl rounded-t-2xl sm:rounded-3xl shadow-[0_32px_64px_-12px_rgba(0,0,0,0.4)] overflow-hidden animate-in slide-in-from-bottom sm:slide-in-from-none sm:zoom-in-95 duration-300 dark:border dark:border-slate-800 max-h-[92vh] sm:max-h-[90vh] flex flex-col">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-emerald-600 to-teal-700 px-6 py-6 md:px-10 md:py-8 text-white relative shrink-0">
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-700 px-4 py-4 md:px-8 md:py-6 text-white relative shrink-0">
               <button 
                 onClick={() => { setIsEditingVisit(false); setSelectedVisit(null); }} 
-                className="absolute top-5 right-5 p-2 bg-white/20 hover:bg-white/45 rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-white/50"
+                className="absolute top-3.5 right-3.5 min-w-[40px] min-h-[40px] flex items-center justify-center bg-white/20 hover:bg-white/40 rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-white/50"
                 aria-label="Close modal"
               >
                 <X size={20} />
               </button>
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-white/20 rounded-2xl"><Calendar size={28} /></div>
-                <div>
-                   <h3 className="text-2xl md:text-3xl font-black tracking-tight">{new Date(selectedVisit.date).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</h3>
+              <div className="flex items-center gap-3 sm:gap-4 pr-10">
+                <div className="p-2.5 sm:p-3 bg-white/20 rounded-2xl shrink-0"><Calendar size={24} /></div>
+                <div className="min-w-0">
+                   <h3 className="text-xl md:text-3xl font-black tracking-tight truncate">{new Date(selectedVisit.date).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</h3>
                    <p className="text-emerald-100 font-bold uppercase tracking-widest text-[10px] md:text-xs">{new Date(selectedVisit.date).toLocaleDateString('en-US', { weekday: 'long' })}</p>
                 </div>
               </div>
@@ -1169,25 +1187,25 @@ export default function PatientProfile() {
             {!isEditingVisit ? (
               <>
                 {/* Modal Body */}
-                <div className="flex-1 overflow-y-auto p-6 md:p-10 space-y-6 custom-scrollbar dark:text-slate-100">
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 custom-scrollbar dark:text-slate-100">
                   {/* Doctor & Notes */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border border-slate-200/50 dark:border-slate-800/50">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 bg-slate-50 dark:bg-slate-950/40 p-4 sm:p-5 rounded-2xl border border-slate-200/50 dark:border-slate-800/50">
                     <div className="space-y-1">
                        <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Attending Doctor</p>
-                       <p className="text-base font-black text-slate-800 dark:text-slate-100">{selectedVisit.doctor_name || 'NGO Clinic Doctor'}</p>
+                       <p className="text-sm sm:text-base font-black text-slate-800 dark:text-slate-100">{selectedVisit.doctor_name || 'NGO Clinic Doctor'}</p>
                     </div>
                     <div className="space-y-1">
                        <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Observations</p>
-                       <p className="text-sm font-bold text-slate-600 dark:text-slate-300 leading-relaxed">{selectedVisit.notes || 'Routine follow-up visit.'}</p>
+                       <p className="text-xs sm:text-sm font-bold text-slate-600 dark:text-slate-300 leading-relaxed">{selectedVisit.notes || 'Routine follow-up visit.'}</p>
                     </div>
                   </div>
 
                   {/* Prescription Section */}
-                  <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <div className="space-y-3 sm:space-y-4 pt-3 sm:pt-4 border-t border-slate-100 dark:border-slate-800">
                     <h4 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Prescribed Medicines</h4>
-                    <div className="space-y-4">
+                    <div className="space-y-3 sm:space-y-4">
                       {selectedVisit.prescription_groups?.map((group: any, idx: number) => (
-                        <div key={idx} className="bg-slate-50 dark:bg-slate-950/60 p-5 rounded-2xl border border-slate-200/60 dark:border-slate-800 flex flex-col gap-4">
+                        <div key={idx} className="bg-slate-50 dark:bg-slate-950/60 p-4 sm:p-5 rounded-2xl border border-slate-200/60 dark:border-slate-800 flex flex-col gap-3 sm:gap-4">
                           <div className="flex justify-between items-center">
                             <div className="flex items-center gap-2">
                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-400"></span>
@@ -1196,9 +1214,9 @@ export default function PatientProfile() {
                             <span className="bg-emerald-600 text-white text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-widest">{group.dosage_code}</span>
                           </div>
                           
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-1.5 sm:gap-2">
                             {group.group_medicines?.map((med: any, mIdx: number) => (
-                              <div key={mIdx} className="bg-white dark:bg-slate-800 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-black text-slate-700 dark:text-slate-300 shadow-sm">
+                              <div key={mIdx} className="bg-white dark:bg-slate-800 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs sm:text-sm font-black text-slate-700 dark:text-slate-300 shadow-sm">
                                 {med.medicine_name || med.medicine_code}
                               </div>
                             ))}
@@ -1217,15 +1235,15 @@ export default function PatientProfile() {
                 </div>
 
                 {/* Sticky Footer */}
-                <div className="p-6 md:p-8 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 shrink-0 flex flex-col sm:flex-row gap-3">
-                   <button onClick={() => window.print()} className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl transition-all flex items-center justify-center gap-2 shadow-md shadow-emerald-950/10">
+                <div className="p-4 sm:p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 shrink-0 flex flex-col sm:flex-row gap-2 sm:gap-3">
+                   <button onClick={() => window.print()} className="min-h-[44px] flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl transition-all flex items-center justify-center gap-2 shadow-md shadow-emerald-950/10 active:scale-95">
                      <Printer size={18} /> PRINT / SAVE AS PDF
                    </button>
-                   <div className="flex gap-2.5">
-                     <button onClick={startEditingVisit} className="flex-1 sm:flex-none px-6 py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-black rounded-xl transition-all shadow-sm">
+                   <div className="flex gap-2">
+                     <button onClick={startEditingVisit} className="min-h-[44px] flex-1 sm:flex-none px-5 py-3 bg-orange-500 hover:bg-orange-600 text-white font-black rounded-xl transition-all shadow-sm active:scale-95">
                        EDIT
                      </button>
-                     <button onClick={() => { setIsEditingVisit(false); setSelectedVisit(null); }} className="flex-1 sm:flex-none px-6 py-3.5 bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white font-black rounded-xl transition-all">
+                     <button onClick={() => { setIsEditingVisit(false); setSelectedVisit(null); }} className="min-h-[44px] flex-1 sm:flex-none px-5 py-3 bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white font-black rounded-xl transition-all active:scale-95">
                        CLOSE
                      </button>
                    </div>
@@ -1483,20 +1501,21 @@ export default function PatientProfile() {
 
       {/* ─── R4: PATIENT-SPECIFIC OPD TOKEN / QR SLIP MODAL ─── */}
       {showOpdSlip && patient && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-6 relative overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-4 sm:p-6 shadow-2xl space-y-4 sm:space-y-6 relative overflow-hidden my-auto">
             {/* Top Close Button */}
             <button
               onClick={() => setShowOpdSlip(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all print:hidden"
+              className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 min-w-[40px] min-h-[40px] flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all print:hidden"
+              aria-label="Close"
             >
               <X size={18} />
             </button>
 
             {/* Printable OPD Slip Card */}
-            <div id="opd-qr-slip" className="bg-gradient-to-b from-emerald-50/50 to-white dark:from-slate-900 dark:to-slate-950 p-6 rounded-2xl border-2 border-emerald-500/30 text-center space-y-4">
+            <div id="opd-qr-slip" className="bg-gradient-to-b from-emerald-50/50 to-white dark:from-slate-900 dark:to-slate-950 p-4 sm:p-6 rounded-2xl border-2 border-emerald-500/30 text-center space-y-3 sm:space-y-4">
               {/* Header */}
-              <div className="border-b border-dashed border-emerald-500/30 pb-3">
+              <div className="border-b border-dashed border-emerald-500/30 pb-2.5">
                 <h3 className="text-base font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-tight">
                   Nek Kadam Medical Camp
                 </h3>
@@ -1506,11 +1525,12 @@ export default function PatientProfile() {
               </div>
 
               {/* Scannable High-Res QR Code */}
-              <div className="flex justify-center py-2">
-                <div className="bg-white p-3 rounded-2xl shadow-md border-2 border-slate-900/10 flex flex-col items-center">
+              <div className="flex justify-center py-1.5">
+                <div className="bg-white p-2.5 sm:p-3 rounded-2xl shadow-md border-2 border-slate-900/10 flex flex-col items-center">
                   <QRCodeSVG 
                     value={String(patient.card_number || patient.id || '')} 
-                    size={160} 
+                    size={140} 
+                    className="w-32 h-32 sm:w-36 sm:h-36"
                     level="H" 
                     includeMargin={true}
                     bgColor="#ffffff"
@@ -1524,7 +1544,7 @@ export default function PatientProfile() {
 
               {/* Patient Core Details */}
               <div className="space-y-1 text-slate-800 dark:text-slate-100">
-                <h4 className="text-lg font-black">{patient.name}</h4>
+                <h4 className="text-base sm:text-lg font-black">{patient.name}</h4>
                 <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
                   Age: {patient.age || '—'} yrs • Gender: {patient.gender || '—'} {patient.blood_group ? `• Blood: ${patient.blood_group}` : ''}
                 </p>

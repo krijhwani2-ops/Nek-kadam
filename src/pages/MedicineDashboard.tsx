@@ -146,43 +146,43 @@ export default function MedicineDashboard() {
   const deliveredList = tasks.filter(t => t.status === 'DELIVERED').slice(0, 10);
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 overflow-y-auto pb-8">
+    <div className="flex flex-col min-h-full bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 pb-8">
       
       {/* Premium Dashboard Header */}
-      <div className="bg-white dark:bg-slate-900 px-6 py-5 flex flex-col md:flex-row justify-between items-center border-b border-slate-200/80 dark:border-slate-800 gap-4 shrink-0 shadow-sm relative">
+      <div className="bg-white dark:bg-slate-900 px-4 sm:px-6 py-4 sm:py-5 flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-200/80 dark:border-slate-800 gap-3 sm:gap-4 shrink-0 shadow-sm relative">
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-teal-500 to-indigo-500"></div>
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-black tracking-tight text-slate-800 dark:text-slate-100 flex items-center gap-2">
-              <Sparkles className="text-emerald-500 animate-pulse" size={24} /> 
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <Sparkles className="text-emerald-500 animate-pulse shrink-0" size={22} /> 
               Operations Center
             </h1>
             {error ? (
-              <span className="bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 px-3 py-1 rounded-full text-xs font-black border border-orange-100 dark:border-orange-900/30 flex items-center gap-1.5 animate-pulse">
+              <span className="bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 px-3 py-1 rounded-full text-xs font-black border border-orange-100 dark:border-orange-900/30 flex items-center gap-1.5 animate-pulse shrink-0">
                 <AlertCircle size={12} /> {error}
               </span>
             ) : (
-              <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 px-3 py-1 rounded-full text-xs font-black border border-emerald-100 dark:border-emerald-900/30 uppercase tracking-widest flex items-center gap-1">
+              <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 px-3 py-1 rounded-full text-xs font-black border border-emerald-100 dark:border-emerald-900/30 uppercase tracking-widest flex items-center gap-1 shrink-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span> Live Link Active
               </span>
             )}
           </div>
-          <p className="text-slate-400 dark:text-slate-500 text-xs mt-0.5 uppercase tracking-wider font-bold">
+          <p className="text-slate-400 dark:text-slate-500 text-xs mt-0.5 uppercase tracking-wider font-bold truncate">
             Clinic Handover Desk • NGO Reception Dashboard
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <button 
             onClick={() => {
               setLoading(true);
               lastSyncRef.current = '';
               setTasks([]);
             }} 
-            className="p-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all border border-slate-200 dark:border-slate-700 flex items-center gap-2"
+            className="min-h-[44px] px-3.5 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all border border-slate-200 dark:border-slate-700 flex items-center gap-2 active:scale-95 shadow-sm"
           >
-            <RefreshCw size={18} className={loading && tasks.length === 0 ? 'animate-spin' : ''} />
-            <span className="text-xs font-black uppercase tracking-wider hidden sm:inline">Refresh Sync</span>
+            <RefreshCw size={16} className={loading && tasks.length === 0 ? 'animate-spin' : ''} />
+            <span className="text-xs font-black uppercase tracking-wider">Refresh</span>
           </button>
         </div>
       </div>
@@ -193,49 +193,55 @@ export default function MedicineDashboard() {
           <p className="text-slate-400 font-bold uppercase tracking-wider text-sm">Synchronizing operational state...</p>
         </div>
       ) : (
-        <div className="px-6 mt-6 grid grid-cols-1 lg:grid-cols-12 gap-8 max-w-7xl mx-auto w-full">
+        <div className="px-3 sm:px-6 mt-4 sm:mt-6 grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-8 max-w-7xl mx-auto w-full">
           
-          {/* TOP METRICS GRID */}
-          <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 flex items-center justify-center">
-                <Activity size={24} />
+          {/* TOP METRICS GRID (2x2 on mobile, 4 columns on desktop) */}
+          <div className="lg:col-span-12 grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+            <div className="bg-white dark:bg-slate-900 p-3 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center gap-2.5 sm:gap-3">
+              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0">
+                <Activity size={18} className="sm:w-5 sm:h-5" />
               </div>
-              <div>
-                <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Unclaimed Queue</p>
-                <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{pendingCount} Patients</p>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                <Users size={24} />
-              </div>
-              <div>
-                <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Preparation Workbench</p>
-                <p className="text-2xl font-black text-slate-800 dark:text-slate-100">{preparingList.length} Active</p>
+              <div className="min-w-0">
+                <p className="text-[9px] sm:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">Unclaimed</p>
+                <p className="text-base sm:text-2xl font-black text-slate-800 dark:text-slate-100 leading-tight">
+                  {pendingCount} <span className="text-[11px] sm:text-sm font-bold text-slate-500">Pts</span>
+                </p>
               </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center gap-4 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-[30px]"></div>
-              <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                <Package size={24} />
+            <div className="bg-white dark:bg-slate-900 p-3 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center gap-2.5 sm:gap-3">
+              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                <Users size={18} className="sm:w-5 sm:h-5" />
               </div>
-              <div>
-                <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Ready for Handover</p>
-                <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{readyList.length} Boxed</p>
+              <div className="min-w-0">
+                <p className="text-[9px] sm:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">Workbench</p>
+                <p className="text-base sm:text-2xl font-black text-slate-800 dark:text-slate-100 leading-tight">
+                  {preparingList.length} <span className="text-[11px] sm:text-sm font-bold text-slate-500">Active</span>
+                </p>
               </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center">
-                <CheckCircle size={24} />
+            <div className="bg-white dark:bg-slate-900 p-3 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center gap-2.5 sm:gap-3 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-[30px] pointer-events-none"></div>
+              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <Package size={18} className="sm:w-5 sm:h-5" />
               </div>
-              <div>
-                <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Delivered Today</p>
-                <p className="text-2xl font-black text-slate-600 dark:text-slate-300">
-                  {tasks.filter(t => t.status === 'DELIVERED').length} Done
+              <div className="min-w-0">
+                <p className="text-[9px] sm:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">Handover</p>
+                <p className="text-base sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 leading-tight">
+                  {readyList.length} <span className="text-[11px] sm:text-sm font-bold text-emerald-600/70">Boxed</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 p-3 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center gap-2.5 sm:gap-3">
+              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
+                <CheckCircle size={18} className="sm:w-5 sm:h-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[9px] sm:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">Delivered</p>
+                <p className="text-base sm:text-2xl font-black text-slate-600 dark:text-slate-300 leading-tight">
+                  {tasks.filter(t => t.status === 'DELIVERED').length} <span className="text-[11px] sm:text-sm font-bold text-slate-500">Done</span>
                 </p>
               </div>
             </div>

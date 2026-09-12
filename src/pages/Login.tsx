@@ -165,11 +165,11 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-[100dvh] bg-slate-900 flex items-center justify-center p-3 sm:p-4 py-6 sm:py-8 relative overflow-y-auto pt-safe pb-safe">
       <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none"></div>
       <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none"></div>
 
-      <div className="flex flex-col gap-3 max-w-4xl w-full items-center justify-center relative z-10">
+      <div className="flex flex-col gap-3 max-w-4xl w-full items-center justify-center relative z-10 my-auto">
         {/* Top Demo Quick-Launch Banner */}
         <div className="w-full max-w-md">
           <a
@@ -191,12 +191,13 @@ export default function Login() {
         </div>
 
         <div className="flex flex-col lg:flex-row gap-6 w-full items-stretch justify-center">
-          <div className="flex-1 max-w-md bg-slate-950/80 backdrop-blur-md rounded-[2.5rem] shadow-2xl border border-slate-800 overflow-hidden relative p-8 md:p-10 space-y-8 animate-in fade-in duration-300">
+          <div className="flex-1 max-w-md bg-slate-950/80 backdrop-blur-md rounded-3xl sm:rounded-[2.5rem] shadow-2xl border border-slate-800 relative p-5 sm:p-8 md:p-10 space-y-5 sm:space-y-8 animate-in fade-in duration-300">
           
           <button 
             onClick={() => setShowConfig(!showConfig)}
-            className="absolute top-6 right-6 text-slate-500 hover:text-emerald-400 transition-colors"
+            className="absolute top-4 right-4 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-500 hover:text-emerald-400 rounded-xl transition-colors"
             title="Server Configuration"
+            aria-label="Server Configuration"
           >
             <Server size={20} />
           </button>

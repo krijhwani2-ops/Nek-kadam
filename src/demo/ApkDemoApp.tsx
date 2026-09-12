@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { SleekClinicalVariant } from './variants/SleekClinicalVariant';
 import { AuraGlassVariant } from './variants/AuraGlassVariant';
 import { NeoPopBrutalistVariant } from './variants/NeoPopBrutalistVariant';
 import { NothingGlyphVariant } from './variants/NothingGlyphVariant';
@@ -12,10 +11,10 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export type DesignVariant = 'clinical' | 'aura' | 'neopop' | 'nothing';
+export type DesignVariant = 'aura' | 'neopop' | 'nothing';
 
 export default function ApkDemoApp() {
-  const [selectedVariant, setSelectedVariant] = useState<DesignVariant>('clinical');
+  const [selectedVariant, setSelectedVariant] = useState<DesignVariant>('aura');
   const [isPhoneFrame, setIsPhoneFrame] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -39,12 +38,6 @@ export default function ApkDemoApp() {
   };
 
   const variantMeta: Record<DesignVariant, { name: string; emoji: string; bg: string; accent: string }> = {
-    clinical: {
-      name: 'Nek Kadam 2.0 (Mobile Sleek)',
-      emoji: '🏥',
-      bg: 'bg-slate-900',
-      accent: 'border-emerald-500/50 text-emerald-400'
-    },
     aura: { 
       name: 'Aura Glass', 
       emoji: '🌌', 
@@ -114,7 +107,6 @@ export default function ApkDemoApp() {
 
         {/* ── ACTIVE VARIANT ENGINE (Full Unhindered Mobile View) ── */}
         <div className="w-full">
-          {selectedVariant === 'clinical' && <SleekClinicalVariant onNotify={triggerToast} />}
           {selectedVariant === 'aura' && <AuraGlassVariant onNotify={triggerToast} />}
           {selectedVariant === 'neopop' && <NeoPopBrutalistVariant onNotify={triggerToast} />}
           {selectedVariant === 'nothing' && <NothingGlyphVariant onNotify={triggerToast} />}
@@ -122,38 +114,23 @@ export default function ApkDemoApp() {
       </div>
 
       {/* ═══════════════════════════════════════════════════════════
-          FLOATING STYLE SWITCHER PILL (Floats above bottom nav)
-          - Compact pill that doesn't block thumb navigation
-          - 1-tap style switcher for testing all design paradigms
+          FLOATING BOTTOM PILL SWITCHER
+          - Floating glass dock at the bottom of screen
+          - Completely unblocks the top of the mobile screen
+          - Instant 1-tap switching between the 3 creative universes
          ═══════════════════════════════════════════════════════════ */}
-      <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 max-w-md w-[96%] sm:w-auto">
-        <div className="bg-slate-950/90 backdrop-blur-2xl border border-slate-700/80 rounded-full p-1 shadow-[0_10px_40px_rgba(0,0,0,0.7)] flex items-center justify-center gap-1">
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 max-w-sm w-[94%] sm:w-auto">
+        <div className="bg-black/90 backdrop-blur-2xl border border-white/20 rounded-full p-1.5 shadow-[0_10px_40px_rgba(0,0,0,0.8)] flex items-center justify-between gap-1">
           
-          {/* 0. Nek Kadam 2.0 (Clinical Sleek Mobile) */}
-          <button
-            onClick={() => {
-              setSelectedVariant('clinical');
-              triggerToast('Switched to: 🏥 Nek Kadam 2.0 (Mobile Optimized)');
-            }}
-            className={`flex items-center justify-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
-              selectedVariant === 'clinical'
-                ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)] scale-[1.02]'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <span>🏥</span>
-            <span>Mobile 2.0</span>
-          </button>
-
           {/* 1. Aura Glass */}
           <button
             onClick={() => {
               setSelectedVariant('aura');
               triggerToast('Switched to: 🌌 Aura Glass (Spatial Bio-OS)');
             }}
-            className={`flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold transition-all ${
               selectedVariant === 'aura'
-                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.5)] scale-[1.02]'
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.6)] scale-[1.03]'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -167,9 +144,9 @@ export default function ApkDemoApp() {
               setSelectedVariant('neopop');
               triggerToast('Switched to: ⚡ Neo-Pop Arcade (Tactile Brutalism)');
             }}
-            className={`flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold transition-all ${
               selectedVariant === 'neopop'
-                ? 'bg-[#D4FF00] text-black shadow-[0_0_15px_rgba(212,255,0,0.5)] scale-[1.02]'
+                ? 'bg-[#D4FF00] text-black shadow-[0_0_15px_rgba(212,255,0,0.6)] scale-[1.03]'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -183,9 +160,9 @@ export default function ApkDemoApp() {
               setSelectedVariant('nothing');
               triggerToast('Switched to: 🕹️ Nothing OS Glyph (Teenage Engineering)');
             }}
-            className={`flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold transition-all ${
               selectedVariant === 'nothing'
-                ? 'bg-[#FF2A1B] text-white shadow-[0_0_15px_rgba(255,42,27,0.5)] scale-[1.02]'
+                ? 'bg-[#FF2A1B] text-white shadow-[0_0_15px_rgba(255,42,27,0.6)] scale-[1.03]'
                 : 'text-slate-400 hover:text-white'
             }`}
           >

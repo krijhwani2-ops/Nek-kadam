@@ -290,29 +290,31 @@ export default function Attendance() {
       </div>
 
       {/* 3. Search & Quick Actions */}
-      <div className="flex gap-2 items-center">
+      <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input 
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search student..." 
-            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-xl pl-10 pr-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-emerald-500/20 outline-none"
+            placeholder="Search student name or card..." 
+            className="w-full min-h-[44px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 rounded-xl pl-10 pr-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-emerald-500/20 outline-none"
           />
         </div>
-        <button 
-          onClick={() => setShowEnroll(true)}
-          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-        >
-          <UserPlus size={16} /> Add Child
-        </button>
-        <button 
-          onClick={handleMarkAllPresent}
-          disabled={marking || students.length === 0}
-          className="bg-emerald-600 active:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 whitespace-nowrap disabled:opacity-50"
-        >
-          <ListChecks size={16} /> Mark All
-        </button>
+        <div className="grid grid-cols-2 sm:flex gap-2">
+          <button 
+            onClick={() => setShowEnroll(true)}
+            className="min-h-[44px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 px-4 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-95 transition-all"
+          >
+            <UserPlus size={16} /> Add Child
+          </button>
+          <button 
+            onClick={handleMarkAllPresent}
+            disabled={marking || students.length === 0}
+            className="min-h-[44px] bg-emerald-600 active:bg-emerald-700 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-50 active:scale-95 transition-all shadow-sm"
+          >
+            <ListChecks size={16} /> Mark All
+          </button>
+        </div>
       </div>
 
       {/* Create Batch Modal */}
@@ -549,25 +551,26 @@ export default function Attendance() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    {s.todayStatus ? (
-                      <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${config?.bg} ${config?.border} ${config?.color}`}>
-                        {StatusIcon && <StatusIcon size={14} />}
-                        <span className="text-[10px] font-bold uppercase tracking-wider">{s.todayStatus}</span>
-                      </div>
-                    ) : (
-                      <div className="px-3 py-1.5 rounded-lg border border-dashed border-slate-200 dark:border-slate-800 text-slate-300 dark:text-slate-600 text-[10px] font-bold uppercase tracking-wider">
-                        Mark
-                      </div>
-                    )}
+                  <div className="flex items-center gap-2 shrink-0">
                     <button 
-                      onClick={(e) => handleRemoveStudent(s.educationStudentId, s.name, e)}
-                      className="p-1.5 text-slate-300 dark:text-slate-600 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors ml-1"
+                      type="button"
+                      onClick={() => toggleStatus(s.educationStudentId, s.todayStatus)}
+                      className={`min-h-[40px] px-3 py-1.5 rounded-xl border flex items-center gap-1.5 font-bold text-xs active:scale-95 transition-all ${
+                        s.todayStatus ? `${config?.bg} ${config?.border} ${config?.color}` : 'border-dashed border-slate-300 dark:border-slate-700 text-slate-400'
+                      }`}
+                    >
+                      {StatusIcon && <StatusIcon size={14} />}
+                      <span className="uppercase tracking-wider">{s.todayStatus || 'Mark'}</span>
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); handleRemoveStudent(s.educationStudentId, s.name, e); }}
+                      className="min-w-[40px] min-h-[40px] flex items-center justify-center text-slate-400 dark:text-slate-500 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-500 dark:hover:text-red-400 rounded-xl transition-colors"
                       title="Remove Student"
+                      aria-label="Remove Student"
                     >
                       <Trash2 size={16} />
                     </button>
-                    <ChevronRight size={14} className="text-slate-300 dark:text-slate-600 ml-1" />
                   </div>
                 </div>
               );

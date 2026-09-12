@@ -163,7 +163,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-y-auto pb-10">
+    <div className="flex flex-col min-h-full bg-slate-50 dark:bg-slate-950 pb-10">
       
       {loading && (
         <div className="mx-4 mt-2 shrink-0">
@@ -175,26 +175,27 @@ export default function Dashboard() {
       )}
       
       {/* 1. TOP HEADER & SEARCH BANNER */}
-      <div className="bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 p-5 sm:p-6 shrink-0 text-white shadow-lg rounded-b-2xl mb-5">
+      <div className="bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 p-4 sm:p-6 shrink-0 text-white shadow-lg rounded-b-2xl mb-5">
         <div className="max-w-7xl mx-auto w-full space-y-4">
-          <div className="flex flex-row justify-between items-center gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="font-extrabold text-2xl sm:text-3xl text-white tracking-tight">{session.userName}</h1>
-                <span className="bg-white/20 backdrop-blur-md text-white text-[10px] px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider border border-white/20">
+          <div className="flex flex-row justify-between items-start sm:items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="font-extrabold text-xl sm:text-3xl text-white tracking-tight truncate">{session.userName}</h1>
+                <span className="bg-white/20 backdrop-blur-md text-white text-[10px] px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider border border-white/20 shrink-0">
                   {session.role}
                 </span>
               </div>
-              <p className="text-emerald-200 text-xs font-bold uppercase tracking-widest mt-1 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse"></span>
+              <p className="text-emerald-200 text-xs font-bold uppercase tracking-widest mt-1 flex items-center gap-1.5 truncate">
+                <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse shrink-0"></span>
                 {session.department} Department
               </p>
             </div>
             
             <button 
               onClick={() => window.location.reload()} 
-              className="p-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl backdrop-blur-md border border-white/20 active:scale-95 transition-all shadow-sm flex items-center gap-2"
+              className="min-w-[44px] min-h-[44px] p-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl backdrop-blur-md border border-white/20 active:scale-95 transition-all shadow-sm flex items-center justify-center gap-2 shrink-0"
               title="Refresh Dashboard"
+              aria-label="Refresh Dashboard"
             >
               <RefreshCw size={18} />
               <span className="text-xs font-black uppercase tracking-wider hidden sm:inline">Refresh</span>
@@ -206,61 +207,59 @@ export default function Dashboard() {
             onClick={() => navigate('/patients')}
             className="w-full bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 flex items-center p-3.5 sm:p-4 rounded-2xl shadow-xl gap-3 text-left border-2 border-emerald-500/30 dark:border-slate-800 hover:border-emerald-400 transition-all group"
           >
-            <Search size={22} className="text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform" />
-            <span className="font-bold text-base text-slate-500 dark:text-slate-400 flex-1">{t('searchPatientPlaceholder')}</span>
+            <Search size={20} className="text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform shrink-0" />
+            <span className="font-bold text-sm sm:text-base text-slate-500 dark:text-slate-400 flex-1 truncate">{t('searchPatientPlaceholder')}</span>
             <kbd className="hidden sm:inline-block px-2.5 py-1 text-xs font-black text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">⌘K</kbd>
           </button>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 space-y-6">
+      <div className="max-w-7xl mx-auto w-full px-3 sm:px-6 space-y-5 sm:space-y-6">
         
         {/* 2. STATS & QUICK ACTIONS ROW */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-5">
           
           {/* STATS BAR (7 COLS) */}
-          <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 flex items-center justify-around shadow-sm">
-            <div className="text-center px-2">
-              <p className="text-3xl font-black text-slate-900 dark:text-slate-100 tracking-tight">{data?.stats?.patientsToday || 0}</p>
-              <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mt-1">Today Registered</p>
+          <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-200/80 dark:border-slate-800 p-3 sm:p-5 grid grid-cols-3 gap-1 sm:gap-2 items-center shadow-sm">
+            <div className="text-center px-1">
+              <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-slate-100 tracking-tight">{data?.stats?.patientsToday || 0}</p>
+              <p className="text-[9px] sm:text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-tight sm:tracking-widest mt-1">Today Reg.</p>
             </div>
-            <div className="h-10 w-px bg-slate-200 dark:bg-slate-800"></div>
-            <div className="text-center px-2">
-              <p className="text-3xl font-black text-purple-600 dark:text-purple-400 tracking-tight">{data?.stats?.totalVisits || 0}</p>
-              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">{t('activeVisits')}</p>
+            <div className="text-center px-1 border-x border-slate-200 dark:border-slate-800">
+              <p className="text-2xl sm:text-3xl font-black text-purple-600 dark:text-purple-400 tracking-tight">{data?.stats?.totalVisits || 0}</p>
+              <p className="text-[9px] sm:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-tight sm:tracking-widest mt-1 truncate">{t('activeVisits')}</p>
             </div>
-            <div className="h-10 w-px bg-slate-200 dark:bg-slate-800"></div>
-            <div className="text-center px-2">
-              <p className="text-3xl font-black text-blue-600 dark:text-blue-400 tracking-tight">{data?.stats?.totalPatients || 0}</p>
-              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">{t('totalPatients')}</p>
+            <div className="text-center px-1">
+              <p className="text-2xl sm:text-3xl font-black text-blue-600 dark:text-blue-400 tracking-tight">{data?.stats?.totalPatients || 0}</p>
+              <p className="text-[9px] sm:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-tight sm:tracking-widest mt-1 truncate">{t('totalPatients')}</p>
             </div>
           </div>
 
           {/* QUICK ACTIONS BAR (5 COLS - HORIZONTALLY ALIGNED BUTTONS) */}
-          <div className="lg:col-span-5 grid grid-cols-2 gap-3">
+          <div className="lg:col-span-5 grid grid-cols-2 gap-2 sm:gap-3">
             <button 
               onClick={() => navigate('/patients/new')} 
-              className="bg-emerald-600 hover:bg-emerald-700 text-white p-4 rounded-2xl shadow-md flex items-center justify-start gap-3 border-b-4 border-emerald-800 active:translate-y-0.5 transition-all group"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white p-3 sm:p-4 rounded-2xl shadow-md flex items-center justify-start gap-2.5 sm:gap-3 border-b-4 border-emerald-800 active:translate-y-0.5 transition-all group min-h-[56px]"
             >
-              <div className="p-2.5 bg-emerald-500/40 rounded-xl group-hover:scale-110 transition-transform">
-                <FilePlus size={22} />
+              <div className="p-2 sm:p-2.5 bg-emerald-500/40 rounded-xl group-hover:scale-110 transition-transform shrink-0">
+                <FilePlus size={20} />
               </div>
-              <div className="text-left">
-                <span className="font-black text-sm block leading-tight">{t('registerPatient')}</span>
-                <span className="text-[10px] text-emerald-200 font-bold uppercase tracking-wider">New Record</span>
+              <div className="text-left min-w-0 flex-1">
+                <span className="font-black text-xs sm:text-sm block leading-tight truncate">{t('registerPatient')}</span>
+                <span className="text-[9px] sm:text-[10px] text-emerald-200 font-bold uppercase tracking-wider block truncate mt-0.5">New Record</span>
               </div>
             </button>
 
             <button 
               onClick={() => navigate('/medicines')} 
-              className="bg-white dark:bg-slate-900 hover:bg-purple-50/50 dark:hover:bg-slate-850 text-slate-800 dark:text-slate-100 p-4 rounded-2xl border-2 border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center justify-start gap-3 border-b-4 border-slate-300 dark:border-slate-750 active:translate-y-0.5 transition-all group"
+              className="bg-white dark:bg-slate-900 hover:bg-purple-50/50 dark:hover:bg-slate-850 text-slate-800 dark:text-slate-100 p-3 sm:p-4 rounded-2xl border-2 border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center justify-start gap-2.5 sm:gap-3 border-b-4 border-slate-300 dark:border-slate-750 active:translate-y-0.5 transition-all group min-h-[56px]"
             >
-              <div className="p-2.5 bg-purple-50 dark:bg-purple-950/40 rounded-xl text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform">
-                <Activity size={22} />
+              <div className="p-2 sm:p-2.5 bg-purple-50 dark:bg-purple-950/40 rounded-xl text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform shrink-0">
+                <Activity size={20} />
               </div>
-              <div className="text-left">
-                <span className="font-black text-sm block leading-tight">{t('medicines')}</span>
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Pharmacy Queue</span>
+              <div className="text-left min-w-0 flex-1">
+                <span className="font-black text-xs sm:text-sm block leading-tight truncate">{t('medicines')}</span>
+                <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold uppercase tracking-wider block truncate mt-0.5">Pharmacy Queue</span>
               </div>
             </button>
           </div>

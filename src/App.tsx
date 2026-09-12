@@ -448,27 +448,27 @@ function TopBar({ onSync, syncing, onToggleMenu, onOpenScanner }: { onSync: () =
   }, []);
 
   return (
-    <header className="h-14 flex items-center justify-between px-3 bg-emerald-600 text-white shadow-sm shrink-0 min-w-0">
+    <header className="h-[calc(3.5rem+env(safe-area-inset-top,0px))] pt-[env(safe-area-inset-top,0px)] flex items-center justify-between px-3 bg-emerald-600 text-white shadow-sm shrink-0 min-w-0 z-30">
       <div className="flex items-center gap-1.5 min-w-0 shrink">
         {session && (
           <button 
             onClick={onToggleMenu}
-            className="md:hidden p-1.5 rounded-lg hover:bg-emerald-700 active:bg-emerald-800 shrink-0"
+            className="md:hidden min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-emerald-700 active:bg-emerald-800 shrink-0 transition-colors"
             aria-label="Toggle Menu"
           >
-            <Menu size={20} />
+            <Menu size={22} />
           </button>
         )}
         {!isHome && (
           <button 
             onClick={() => navigate(-1)} 
-            className="p-1.5 rounded-full hover:bg-emerald-700 active:bg-emerald-800 shrink-0"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-emerald-700 active:bg-emerald-800 shrink-0 transition-colors"
             aria-label="Go Back"
           >
-            <ChevronLeft size={20} />
+            <ChevronLeft size={22} />
           </button>
         )}
-        <h1 className="text-base font-black tracking-tight truncate shrink-0">Nek Kadam</h1>
+        <h1 className="text-base font-black tracking-tight truncate shrink-0 ml-0.5">Nek Kadam</h1>
         {session && (
           <span className="hidden sm:inline-block bg-emerald-700 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border border-emerald-500/40 ml-1 truncate max-w-[140px]">
             {session.userName}
@@ -486,28 +486,28 @@ function TopBar({ onSync, syncing, onToggleMenu, onOpenScanner }: { onSync: () =
         {session && (
           <button 
             onClick={logout} 
-            className="px-2 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg flex items-center gap-1 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0"
+            className="min-h-[40px] px-2.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl flex items-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0 transition-all"
             title="Switch User"
           >
-            <LogOut size={13} />
+            <LogOut size={15} />
             <span className="hidden sm:inline">{t('switchUser')}</span>
           </button>
         )}
         <button 
           onClick={onOpenScanner} 
-          className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg flex items-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0"
+          className="min-h-[40px] px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl flex items-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0 transition-all"
           title="Scan OPD Card QR / Barcode"
         >
-           <QrCode size={13} className="text-emerald-200" />
+           <QrCode size={16} className="text-emerald-200" />
            <span className="hidden sm:inline">Scan</span>
         </button>
         <button 
           onClick={onSync} 
           disabled={syncing}
-          className="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg flex items-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0"
+          className="min-h-[40px] px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl flex items-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0 transition-all"
           title="Sync Records"
         >
-           <RefreshCw size={13} className={syncing ? 'animate-spin' : ''} />
+           <RefreshCw size={15} className={syncing ? 'animate-spin' : ''} />
            <span className="hidden sm:inline">{syncing ? 'Syncing...' : 'Sync'}</span>
         </button>
       </div>
@@ -529,13 +529,13 @@ function MobileBottomNav() {
     return (
       <Link 
         to={to} 
-        className={`flex flex-col items-center justify-center w-full py-1.5 transition-colors ${
+        className={`flex flex-col items-center justify-center w-full min-h-[44px] py-1 transition-colors ${
           isActive 
             ? 'text-emerald-600 dark:text-emerald-400 font-bold' 
             : 'text-slate-500 dark:text-slate-400 font-medium'
         }`}
       >
-        <div className={`p-1 rounded-xl transition-all ${isActive ? 'bg-emerald-50 dark:bg-emerald-950/40 scale-105' : ''}`}>
+        <div className={`p-1.5 rounded-xl transition-all ${isActive ? 'bg-emerald-50 dark:bg-emerald-950/40 scale-105' : ''}`}>
           <Icon size={20} />
         </div>
         <span className="text-[10px] tracking-tight">{label}</span>
@@ -544,7 +544,7 @@ function MobileBottomNav() {
   };
 
   return (
-    <div className="md:hidden flex items-center justify-around bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 h-16 shrink-0 pb-safe shadow-[0_-2px_10px_rgba(0,0,0,0.03)]">
+    <div className="md:hidden flex items-center justify-around bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 h-[calc(4rem+env(safe-area-inset-bottom,0px))] pb-[env(safe-area-inset-bottom,0px)] shrink-0 shadow-[0_-2px_10px_rgba(0,0,0,0.03)] z-30">
       <NavItem to="/" icon={LayoutDashboard} label={t('home')} />
       <NavItem to="/patients" icon={Users} label={t('patients')} />
       <NavItem to="/patients/new" icon={UserPlus} label={t('new')} />
@@ -749,11 +749,11 @@ function AppLayout() {
           />
           
           {/* Drawer content */}
-          <div className="relative flex-grow flex flex-col max-w-xs w-full bg-white dark:bg-slate-900 p-6 shadow-2xl animate-in slide-in-from-left duration-200">
+          <div className="relative flex-grow flex flex-col max-w-xs w-full bg-white dark:bg-slate-900 p-6 pt-[calc(1.5rem+env(safe-area-inset-top,0px))] pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] shadow-2xl animate-in slide-in-from-left duration-200">
             {/* Close button */}
             <button 
               onClick={() => setMobileMenuOpen(false)}
-              className="absolute top-4 right-4 p-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 rounded-lg active:bg-slate-100 dark:active:bg-slate-800"
+              className="absolute top-4 right-4 min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 rounded-xl active:bg-slate-100 dark:active:bg-slate-800 transition-colors"
               aria-label="Close menu"
             >
               <X size={22} />

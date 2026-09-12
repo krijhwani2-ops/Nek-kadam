@@ -51,6 +51,7 @@ export default function MedicineQueue() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [muted, setMuted] = useState<boolean>(isAudioMuted());
   const [toast, setToast] = useState<{ message: string; type: 'info' | 'conflict' | 'success' } | null>(null);
+  const [mobileTab, setMobileTab] = useState<'pending' | 'my-desk' | 'history'>('pending');
   
   const lastSyncRef = useRef<string>('');
   const seenTaskIdsRef = useRef<Set<string>>(new Set());
@@ -387,24 +388,24 @@ export default function MedicineQueue() {
   const finishedTasks = tasks.filter(t => t.status === 'READY' || t.status === 'DELIVERED').slice(0, 20);
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 text-slate-100 overflow-y-auto pb-8">
+    <div className="flex flex-col min-h-full bg-slate-900 text-slate-100 pb-8">
       
       {/* Header operations bar */}
-      <div className="bg-slate-950 px-6 py-5 flex flex-col md:flex-row justify-between items-center border-b border-slate-800 gap-4 shrink-0 shadow-lg relative">
+      <div className="bg-slate-950 px-4 sm:px-6 py-4 sm:py-5 flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-800 gap-3 sm:gap-4 shrink-0 shadow-lg relative">
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-emerald-500 to-indigo-500"></div>
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
-              <Sparkles className="text-amber-400 animate-pulse" size={24} /> 
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
+              <Sparkles className="text-amber-400 animate-pulse shrink-0" size={22} /> 
               Medicine Room Dispatch
             </h1>
             {error && (
-              <span className="bg-red-500/20 text-red-400 px-3 py-1 rounded-full text-xs font-bold border border-red-500/30 animate-pulse flex items-center gap-1.5">
+              <span className="bg-red-500/20 text-red-400 px-3 py-1 rounded-full text-xs font-bold border border-red-500/30 animate-pulse flex items-center gap-1.5 shrink-0">
                 <AlertCircle size={12} /> {error}
               </span>
             )}
           </div>
-          <p className="text-slate-400 text-xs mt-1 uppercase tracking-wider font-semibold">
+          <p className="text-slate-400 text-xs mt-1 uppercase tracking-wider font-semibold truncate">
             {session?.userName} • {session?.role} Dispatch Engine
           </p>
         </div>
@@ -492,10 +493,53 @@ export default function MedicineQueue() {
           <p className="text-slate-400 font-bold uppercase tracking-wider text-sm">Initializing dispatch stream...</p>
         </div>
       ) : (
-        <div className="px-6 mt-6 grid grid-cols-1 lg:grid-cols-12 gap-8 max-w-7xl mx-auto w-full">
-          
-          {/* LEFT: MY ACTIVE CLAIMED WORKSPACE (4 Columns) */}
-          <div className="lg:col-span-4 space-y-6">
+        <>
+          {/* Mobile 3-Tab Segmented Switcher */}
+          <div className="lg:hidden px-4 sm:px-6 pt-4 shrink-0">
+            <div className="flex bg-slate-950 p-1.5 rounded-2xl border border-slate-800 gap-1.5 shadow-inner">
+              <button
+                type="button"
+                onClick={() => setMobileTab('pending')}
+                className={`flex-1 py-2.5 px-2 min-h-[44px] rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
+                  mobileTab === 'pending'
+                    ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Clock size={14} className="shrink-0" />
+                <span className="truncate">Pipeline ({pendingTasks.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileTab('my-desk')}
+                className={`flex-1 py-2.5 px-2 min-h-[44px] rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
+                  mobileTab === 'my-desk'
+                    ? 'bg-blue-500 text-white shadow-md shadow-blue-500/20'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Play size={14} className="shrink-0" />
+                <span className="truncate">My Desk ({myInProgressTasks.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileTab('history')}
+                className={`flex-1 py-2.5 px-2 min-h-[44px] rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
+                  mobileTab === 'history'
+                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <CheckCircle2 size={14} className="shrink-0" />
+                <span className="truncate">History</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="px-4 sm:px-6 mt-4 sm:mt-6 grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-8 max-w-7xl mx-auto w-full">
+            
+            {/* LEFT: MY ACTIVE CLAIMED WORKSPACE (4 Columns) */}
+            <div className={`lg:col-span-4 space-y-6 ${mobileTab === 'my-desk' ? 'block' : 'hidden lg:block'}`}>
             <div className="bg-slate-950/80 rounded-3xl p-6 border border-slate-800 shadow-xl relative overflow-hidden">
               <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/10 rounded-full blur-[60px] pointer-events-none"></div>
               
@@ -571,7 +615,7 @@ export default function MedicineQueue() {
           </div>
 
           {/* MIDDLE: THE PENDING QUEUE (5 Columns) */}
-          <div className="lg:col-span-5 space-y-6">
+          <div className={`lg:col-span-5 space-y-6 ${mobileTab === 'pending' ? 'block' : 'hidden lg:block'}`}>
             <div className="bg-slate-950/80 rounded-3xl p-6 border border-slate-800 shadow-xl relative overflow-hidden">
               <div className="absolute top-0 right-0 w-48 h-48 bg-amber-500/10 rounded-full blur-[60px] pointer-events-none"></div>
 
@@ -585,9 +629,9 @@ export default function MedicineQueue() {
 
               <div className="space-y-4">
                 {pendingTasks.length === 0 ? (
-                  <div className="text-center py-20 border border-slate-800 rounded-2xl bg-slate-900/10 flex flex-col items-center justify-center">
-                    <CheckCircle2 className="text-emerald-500 w-16 h-16 mb-4 animate-bounce-subtle" />
-                    <p className="text-slate-300 font-black text-base">Queue Fully Cleared</p>
+                  <div className="text-center py-12 border-2 border-dashed border-slate-800 rounded-2xl bg-slate-900/40">
+                    <CheckCircle2 className="mx-auto text-slate-700 w-10 h-10 mb-3" />
+                    <p className="text-slate-500 text-sm font-bold">All prescriptions packed!</p>
                     <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-wider font-semibold">Ready for new Doctor prescriptions</p>
                   </div>
                 ) : (
@@ -640,7 +684,7 @@ export default function MedicineQueue() {
           </div>
 
           {/* RIGHT: COMPLETED AND COLLABORATORS COLUMN (3 Columns) */}
-          <div className="lg:col-span-3 space-y-6">
+          <div className={`lg:col-span-3 space-y-6 ${mobileTab === 'history' ? 'block' : 'hidden lg:block'}`}>
             
             {/* Other Active Volunteers: Locked Order Status for Duplicate Dispensing Prevention */}
             {otherInProgressTasks.length > 0 && (
@@ -686,7 +730,7 @@ export default function MedicineQueue() {
                   finishedTasks.map(task => (
                     <div key={task.id} className="bg-slate-900/30 border border-slate-800 p-3 rounded-xl space-y-1 hover:border-slate-700 transition-all">
                       <div className="flex justify-between items-center">
-                        <p className="font-black text-slate-300 text-xs truncate max-w-[120px]">{task.patientName}</p>
+                        <p className="font-black text-slate-300 text-xs truncate flex-1 min-w-0 pr-2">{task.patientName}</p>
                         {/* UI/UX Pro Max Emerald Green Badge for Dispensed/Ready */}
                         <span className={`text-[8px] font-black px-2 py-0.5 rounded border uppercase shrink-0 flex items-center gap-1 ${
                           task.status === 'DELIVERED' 
@@ -709,11 +753,11 @@ export default function MedicineQueue() {
               </div>
             </div>
           </div>
-
         </div>
-      )}
-    </div>
-  );
+      </>
+    )}
+  </div>
+);
 }
 
 function CountdownBadge({ claimedAt }: { claimedAt?: string }) {

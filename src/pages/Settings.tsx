@@ -586,38 +586,38 @@ function UserRow({ user, departments, onUpdate }: { user: any, departments: any[
 
   if (editing) {
     return (
-      <div className="p-4 bg-slate-50 flex items-center gap-4 flex-wrap">
-        <div className="w-48">
-          <span className="font-bold text-slate-800 block mb-1">{user.name}</span>
-          <label className="flex items-center gap-2 text-sm text-slate-600">
+      <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+        <div className="sm:col-span-2 lg:col-span-1">
+          <span className="font-bold text-slate-800 dark:text-slate-100 block mb-1">{user.name}</span>
+          <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
             <input type="checkbox" checked={form.is_active} onChange={e => setForm({...form, is_active: e.target.checked})} />
             Active Account
           </label>
         </div>
-        <div className="w-32">
+        <div className="w-full">
           <label className="text-xs font-bold text-slate-400 block mb-1">Passcode</label>
-          <input type="text" className="input-field py-2 px-3 text-sm" value={form.passcode} onChange={e => setForm({...form, passcode: e.target.value})} maxLength={6} />
+          <input type="text" className="input-field !py-2 px-3 text-sm" value={form.passcode} onChange={e => setForm({...form, passcode: e.target.value})} maxLength={6} />
         </div>
-        <div className="w-40">
+        <div className="w-full">
           <label className="text-xs font-bold text-slate-400 block mb-1">Department</label>
-          <select className="input-field py-2 px-3 text-sm" value={form.department} onChange={e => setForm({...form, department: e.target.value})}>
+          <select className="input-field !py-2 px-3 text-sm" value={form.department} onChange={e => setForm({...form, department: e.target.value})}>
             <option value="">Select Dept</option>
             {departments.map(d => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
         </div>
-        <div className="w-32">
+        <div className="w-full">
           <label className="text-xs font-bold text-slate-400 block mb-1">Role</label>
-          <select className="input-field py-2 px-3 text-sm" value={form.role} onChange={e => setForm({...form, role: e.target.value})}>
+          <select className="input-field !py-2 px-3 text-sm" value={form.role} onChange={e => setForm({...form, role: e.target.value})}>
             <option value="volunteer">Volunteer</option>
             <option value="doctor">Doctor</option>
             <option value="admin">Admin</option>
           </select>
         </div>
-        <div className="flex gap-2 mt-4 md:mt-0 md:ml-auto">
-          <button onClick={() => setEditing(false)} className="px-4 py-2 text-slate-500 font-bold hover:bg-slate-200 rounded-lg">Cancel</button>
-          <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg flex items-center gap-2">
+        <div className="col-span-full flex justify-end gap-2 pt-2">
+          <button onClick={() => setEditing(false)} className="min-h-[40px] px-4 py-2 text-slate-500 font-bold hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-all">Cancel</button>
+          <button onClick={handleSave} disabled={saving} className="min-h-[40px] px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center gap-2 shadow-sm transition-all active:scale-95">
             <Save size={16} /> Save
           </button>
         </div>
@@ -626,21 +626,21 @@ function UserRow({ user, departments, onUpdate }: { user: any, departments: any[
   }
 
   return (
-    <div className={`p-4 flex items-center justify-between hover:bg-slate-50 ${user.is_active ? '' : 'opacity-50'}`}>
-      <div className="flex items-center gap-4">
-        <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+    <div className={`p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${user.is_active ? '' : 'opacity-50'}`}>
+      <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+        <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold shrink-0">
           {user.name.charAt(0)}
         </div>
-        <div>
-          <h4 className="font-bold text-slate-800">{user.name} {user.is_active === 0 && '(Inactive)'}</h4>
-          <p className="text-xs text-slate-500">{user.department} • <span className="uppercase text-[10px] font-black tracking-widest bg-slate-200 px-1.5 py-0.5 rounded">{user.role}</span></p>
+        <div className="min-w-0">
+          <h4 className="font-bold text-slate-800 dark:text-slate-100 truncate">{user.name} {user.is_active === 0 && '(Inactive)'}</h4>
+          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.department} • <span className="uppercase text-[10px] font-black tracking-widest bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded">{user.role}</span></p>
         </div>
       </div>
-      <div className="flex items-center gap-4">
-        <div className="hidden md:flex items-center gap-1 text-slate-450 text-xs bg-slate-100 px-2 py-1 rounded font-mono">
+      <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+        <div className="hidden md:flex items-center gap-1 text-slate-400 text-xs bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded font-mono">
           <Key size={14} /> ••••
         </div>
-        <button onClick={() => setEditing(true)} className="px-4 py-1.5 border border-slate-200 text-slate-655 font-bold text-sm rounded hover:bg-slate-100">
+        <button onClick={() => setEditing(true)} className="min-h-[40px] px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold text-sm rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:scale-95">
           Edit
         </button>
       </div>
