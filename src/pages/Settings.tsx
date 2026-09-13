@@ -310,12 +310,14 @@ export default function Settings() {
                   <div className="flex-1 flex flex-col justify-between space-y-4">
                     <div className="space-y-1">
                       <div className="flex justify-between items-center mb-1">
-                        <label className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest block">
+                        <label htmlFor="lan-host-ip" className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest block">
                           LAN Host Server IP
                         </label>
                         <span className="text-[10px] font-bold text-slate-400">Port: 3001</span>
                       </div>
                       <input 
+                        id="lan-host-ip"
+                        name="lan-host-ip"
                         type="text" 
                         className="input-field dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100" 
                         value={serverIp} 
@@ -673,16 +675,16 @@ function UserForm({ departments, onClose }: { departments: any[], onClose: () =>
   return (
     <form onSubmit={handleSave} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
       <div>
-        <label className="text-xs font-bold text-slate-400 block mb-1">Name</label>
-        <input type="text" required className="input-field py-2" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+        <label htmlFor="user-name" className="text-xs font-bold text-slate-400 block mb-1">Name</label>
+        <input id="user-name" name="user-name" type="text" required className="input-field py-2" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
       </div>
       <div>
-        <label className="text-xs font-bold text-slate-400 block mb-1">Passcode</label>
-        <input type="password" required maxLength={6} className="input-field py-2" value={form.passcode} onChange={e => setForm({...form, passcode: e.target.value})} />
+        <label htmlFor="user-passcode" className="text-xs font-bold text-slate-400 block mb-1">Passcode</label>
+        <input id="user-passcode" name="user-passcode" type="password" required maxLength={6} className="input-field py-2" value={form.passcode} onChange={e => setForm({...form, passcode: e.target.value})} />
       </div>
       <div>
-        <label className="text-xs font-bold text-slate-400 block mb-1">Department</label>
-        <select className="input-field py-2" value={form.department} onChange={e => setForm({...form, department: e.target.value})}>
+        <label htmlFor="user-department" className="text-xs font-bold text-slate-400 block mb-1">Department</label>
+        <select id="user-department" name="user-department" className="input-field py-2" value={form.department} onChange={e => setForm({...form, department: e.target.value})}>
             {departments.map(d => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}

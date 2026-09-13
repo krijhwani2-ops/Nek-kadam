@@ -1415,8 +1415,16 @@ app.post('/rpc/insert', async (req, res) => {
         const cols = Object.keys(item);
         const params = Object.values(item);
         const ph = cols.map((_, i) => `$${i + 1}`).join(',');
+        let conflictClause = '';
+        if (cols.includes('id')) {
+          const upd = cols
+            .filter((c) => c !== 'id')
+            .map((c) => `"${c}"=EXCLUDED."${c}"`)
+            .join(',');
+          conflictClause = upd ? ` ON CONFLICT ("id") DO UPDATE SET ${upd}` : ` ON CONFLICT ("id") DO NOTHING`;
+        }
         await client.query(
-          `INSERT INTO "${table}" (${cols.map((c) => `"${c}"`).join(',')}) VALUES (${ph})`,
+          `INSERT INTO "${table}" (${cols.map((c) => `"${c}"`).join(',')}) VALUES (${ph})${conflictClause}`,
           params
         );
       }

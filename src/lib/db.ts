@@ -561,12 +561,12 @@ export async function syncPendingOps(): Promise<{ synced: number; failed: number
       if (res.ok) {
         const result = await res.json().catch(() => ({}));
         if (result && result.error) {
-          console.error('[SYNC] Server returned error for operation:', result.error, op);
-          // For UNIQUE constraint errors on medicines, drop them (they already exist)
-          if (String(result.error).includes('UNIQUE constraint') && op.query?.table === 'medicines') {
-            console.warn('[SYNC] Dropping duplicate medicine insert (already exists on server).');
+          const errMsg = String(result.error);
+          if (errMsg.includes('UNIQUE constraint') || errMsg.includes('duplicate key') || errMsg.includes('already exists')) {
+            console.warn('[SYNC] Record already exists on server. Marking synced:', op);
             synced++;
           } else {
+            console.error('[SYNC] Server returned error for operation:', result.error, op);
             failed++;
             failedOps.push(op);
           }
@@ -574,8 +574,15 @@ export async function syncPendingOps(): Promise<{ synced: number; failed: number
           synced++;
         }
       } else {
-        failed++;
-        failedOps.push(op);
+        const errJson = await res.json().catch(() => ({}));
+        const errMsg = String(errJson?.error || '');
+        if (errMsg.includes('UNIQUE constraint') || errMsg.includes('duplicate key') || errMsg.includes('already exists')) {
+          console.warn('[SYNC] Record already exists on server (duplicate key). Marking synced:', op);
+          synced++;
+        } else {
+          failed++;
+          failedOps.push(op);
+        }
       }
     } catch {
       failed++;
