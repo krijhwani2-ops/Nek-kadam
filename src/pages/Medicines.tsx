@@ -12,6 +12,7 @@ export default function Medicines() {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [displayLimit, setDisplayLimit] = useState(60);
   
   // Add New State
   const [showAddForm, setShowAddForm] = useState(false);
@@ -20,6 +21,10 @@ export default function Medicines() {
   const [bulkText, setBulkText] = useState('');
   const [importing, setImporting] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
+
+  useEffect(() => {
+    setDisplayLimit(60);
+  }, [searchTerm]);
 
   useEffect(() => {
     fetchMedicines();
@@ -256,7 +261,7 @@ export default function Medicines() {
             </span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-0 divide-y divide-x divide-slate-100 dark:divide-slate-800">
-            {filteredMedicines.map(med => (
+            {filteredMedicines.slice(0, displayLimit).map(med => (
               <div key={med.code} className="p-3.5 hover:bg-brand-lightGreen/10 dark:hover:bg-slate-800/50 transition-all group flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 flex items-center justify-center text-brand-darkGreen dark:text-emerald-400 font-black text-xs group-hover:border-brand-green transition-colors">
@@ -275,6 +280,17 @@ export default function Medicines() {
               </div>
             )}
           </div>
+          {filteredMedicines.length > displayLimit && (
+            <div className="p-4 text-center border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+              <button
+                type="button"
+                onClick={() => setDisplayLimit(prev => prev + 60)}
+                className="px-6 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-all shadow-sm active:scale-95"
+              >
+                Load More ({filteredMedicines.length - displayLimit} remaining)
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

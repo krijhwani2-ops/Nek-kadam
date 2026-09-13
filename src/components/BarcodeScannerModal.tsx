@@ -86,7 +86,8 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScannedPatient 
     }
 
     // 2. If scanned code has a prefix like CARD-4814, NK-4814, OPD-4814, PATIENT:4814
-    const prefixMatch = trimmed.match(/(?:CARD|NK|OPD|PATIENT|ID)[-:\s_]+([a-zA-Z0-9_-]+)/i);
+    const prefixRegex = new RegExp('(?:CARD|NK|OPD|PATIENT|ID)[:_\\s-]+([a-zA-Z0-9_-]+)', 'i');
+    const prefixMatch = trimmed.match(prefixRegex);
     if (prefixMatch && prefixMatch[1]) {
       return cleanPatientId(prefixMatch[1]);
     }

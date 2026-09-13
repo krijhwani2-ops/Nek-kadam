@@ -1866,8 +1866,11 @@ app.get('/api/backup/download', async (req, res) => {
     }
 
     // Fallback: export JSON if local sqlite file not available
-    const tables = ['patients', 'visits', 'medicines'];
-    const snapshot = { exportedAt: now.toISOString(), data: {} };
+    const tables = [
+      'patients', 'visits', 'prescription_groups', 'group_medicines',
+      'medicines', 'tokens', 'departments', 'users', 'medicine_tasks', 'medicine_task_items'
+    ];
+    const snapshot = { exportedAt: now.toISOString(), system: 'Nek Kadam Clinical Management System (PostgreSQL)', data: {} };
     for (const t of tables) {
       try { snapshot.data[t] = await qr(`SELECT * FROM "${t}"`, []); } catch (_) { snapshot.data[t] = []; }
     }

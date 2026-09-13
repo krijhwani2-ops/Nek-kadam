@@ -90,3 +90,5 @@ coverage/
 .agents/
 .claude/
 .claude-plugin/
+data/
+*.png

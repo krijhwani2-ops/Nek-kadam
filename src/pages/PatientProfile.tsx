@@ -2,9 +2,11 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db, checkServerOnline, saveVisitOffline, getPendingVisitsForPatient, cleanPatientId } from '../lib/db';
 import { getBaseUrl } from '../lib/session';
-import { Phone, CreditCard, Plus, Clock, Trash2, X, Printer, FileText, Calendar, Stethoscope, RefreshCw, QrCode } from 'lucide-react';
+import { Phone, CreditCard, Plus, Clock, Trash2, X, Printer, FileText, Calendar, Stethoscope, RefreshCw, QrCode, ScanFace } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Spinner } from '../components/ui';
+import FaceEnrollmentModal from '../components/face/FaceEnrollmentModal';
+import { getPatientBiometric } from '../lib/face/biometricStore';
 
 interface PrescribedMed {
   code: string;
@@ -83,6 +85,8 @@ export default function PatientProfile() {
   const [dosages, setDosages] = useState<any[]>([]);
   const [mobileActiveTab, setMobileActiveTab] = useState<'history' | 'prescription'>('history');
   const [showOpdSlip, setShowOpdSlip] = useState(false);
+  const [isFaceEnrollOpen, setIsFaceEnrollOpen] = useState(false);
+  const [hasFaceEnrolled, setHasFaceEnrolled] = useState(false);
 
   // New Visit State
   const [doctorName, setDoctorName] = useState('');
@@ -212,6 +216,12 @@ export default function PatientProfile() {
       if (enrichedVisits.length === 0) {
         setMobileActiveTab('prescription');
       }
+
+      // Check offline biometric enrollment
+      try {
+        const bio = await getPatientBiometric(patientData.card_number || patientData.id || cleanId);
+        setHasFaceEnrolled(!!bio);
+      } catch (_bioErr) {}
     } catch (e) {
       console.error('Failed to fetch patient data:', e);
     }
@@ -828,6 +838,30 @@ export default function PatientProfile() {
               </div>
               <span className="text-[9px] font-black text-emerald-700 dark:text-emerald-400 flex items-center gap-1 uppercase tracking-wider group-hover:underline">
                 <Printer size={10} /> Print Slip
+              </span>
+            </div>
+
+            {/* Patient Face ID Biometric Card */}
+            <div 
+              onClick={() => setIsFaceEnrollOpen(true)}
+              className={`p-2 sm:p-2.5 rounded-2xl border shadow-sm hover:shadow-md cursor-pointer group transition-all flex flex-col items-center gap-1 min-w-[75px] ${
+                hasFaceEnrolled 
+                  ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-500/40' 
+                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
+              }`}
+              title={hasFaceEnrolled ? "Face ID Active! Click to re-scan or update face" : "Click to Enroll Face ID for 1-second reception check-in"}
+            >
+              <div className={`p-2 rounded-xl flex items-center justify-center transition-all ${
+                hasFaceEnrolled 
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' 
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 group-hover:bg-emerald-50 dark:group-hover:bg-emerald-950 group-hover:text-emerald-600'
+              }`}>
+                <ScanFace size={26} />
+              </div>
+              <span className={`text-[9px] font-black flex items-center gap-0.5 uppercase tracking-wider ${
+                hasFaceEnrolled ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'
+              } group-hover:underline`}>
+                {hasFaceEnrolled ? '✓ Face ID' : '+ Face ID'}
               </span>
             </div>
           </div>
@@ -1583,6 +1617,26 @@ export default function PatientProfile() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Biometric Face ID Enrollment Modal */}
+      {patient && (
+        <FaceEnrollmentModal
+          isOpen={isFaceEnrollOpen}
+          onClose={() => setIsFaceEnrollOpen(false)}
+          patient={{
+            id: patient.id,
+            cardNumber: patient.card_number,
+            name: patient.name,
+            gender: patient.gender,
+            age: patient.age,
+            phone: patient.phone
+          }}
+          onEnrollmentComplete={async () => {
+            const bio = await getPatientBiometric(patient.card_number || patient.id);
+            setHasFaceEnrolled(!!bio);
+          }}
+        />
       )}
     </div>
   );

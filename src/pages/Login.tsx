@@ -276,7 +276,7 @@ export default function Login() {
                         >
                           <option value="" disabled>Select your name...</option>
                           {users.map(u => (
-                            <option key={u.id} value={u.name}>{u.name} ({u.department})</option>
+                            <option key={u.id} value={u.name}>{u.name}{u.department ? ` (${u.department})` : ''}</option>
                           ))}
                         </select>
                       )}

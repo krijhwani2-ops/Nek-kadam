@@ -9,17 +9,19 @@ import {
   UserPlus, HeartPulse, FileDown,
   LayoutDashboard, ChevronLeft, ListChecks,
   ClipboardList, Monitor, Menu, X, MessageSquare,
-  Smartphone, QrCode, Download
+  Smartphone, QrCode, Download, ScanFace
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { useApp } from './contexts/AppContext';
 import { QRCodeSVG } from 'qrcode.react';
 import BarcodeScannerModal from './components/BarcodeScannerModal';
+import FaceScannerModal from './components/face/FaceScannerModal';
 
 // Pages
 import Dashboard from './pages/Dashboard';
 import PatientsList from './pages/PatientsList';
 import PatientProfile from './pages/PatientProfile';
+import FaceRecognitionDemo from './pages/FaceRecognitionDemo';
 import NewPatient from './pages/NewPatient';
 import Medicines from './pages/Medicines';
 import ImportPatients from './pages/ImportPatients';
@@ -263,10 +265,14 @@ function Sidebar() {
         const ops = await getPendingOps();
         setPendingCount(ops.length);
         
-        const ip = getServerIp();
-        setMobileUrl(`http://${ip}:5173`);
-
-        const { getBaseUrl } = await import('./lib/session');
+        const { getBaseUrl, isPrivateNetwork } = await import('./lib/session');
+        const isCloudHost = typeof window !== 'undefined' && window.location.hostname && !isPrivateNetwork(window.location.hostname);
+        if (isCloudHost) {
+          setMobileUrl(window.location.origin);
+        } else {
+          const ip = getServerIp() || '192.168.29.180';
+          setMobileUrl(`http://${ip}:5173`);
+        }
         const presenceRes = await fetch(`${getBaseUrl()}/api/presence`);
         const pJson = await presenceRes.json();
         if (pJson.data) {
@@ -304,18 +310,19 @@ function Sidebar() {
 
       <div className="mt-8 space-y-1">
         <p className="px-4 text-[10px] uppercase tracking-widest font-bold text-slate-400 mb-2">{t('tools')}</p>
+        <NavLink to="/face-id" icon={ScanFace} label="Face ID System" />
         <NavLink to="/import" icon={FileDown} label={t('dataImport')} />
         <NavLink to="/settings" icon={Settings} label={t('settings')} />
         <NavLink to="/demo" icon={Smartphone} label="APK Modern Demo" />
         <a 
           href={`${getBaseUrl()}/apk/nek-kadam.apk`}
-          download="nek-kadam-v1.2.0.apk"
+          download={`nek-kadam-v${APP_VERSION}.apk`}
           className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/80 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-all shadow-sm group"
           title="Direct Download Latest Android APK"
         >
           <Download size={18} className="text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform" />
           <span className="truncate">Download APK</span>
-          <span className="ml-auto text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-600 text-white shrink-0">v1.2</span>
+          <span className="ml-auto text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-600 text-white shrink-0">v{APP_VERSION}</span>
         </a>
       </div>
 
@@ -416,7 +423,7 @@ function Sidebar() {
   );
 }
 
-function TopBar({ onSync, syncing, onToggleMenu, onOpenScanner }: { onSync: () => void, syncing: boolean, onToggleMenu: () => void, onOpenScanner: () => void }) {
+function TopBar({ onSync, syncing, onToggleMenu, onOpenScanner, onOpenFaceScanner }: { onSync: () => void, syncing: boolean, onToggleMenu: () => void, onOpenScanner: () => void, onOpenFaceScanner?: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
   const isHome = location.pathname === '/' || location.pathname === '/dashboard';
@@ -493,6 +500,16 @@ function TopBar({ onSync, syncing, onToggleMenu, onOpenScanner }: { onSync: () =
             <span className="hidden sm:inline">{t('switchUser')}</span>
           </button>
         )}
+        {onOpenFaceScanner && (
+          <button 
+            onClick={onOpenFaceScanner} 
+            className="min-h-[40px] px-2.5 sm:px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl flex items-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0 transition-all"
+            title="Scan Patient Face (Offline AI Recognition)"
+          >
+             <ScanFace size={16} className="text-emerald-200" />
+             <span className="hidden sm:inline">Face ID</span>
+          </button>
+        )}
         <button 
           onClick={onOpenScanner} 
           className="min-h-[40px] px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl flex items-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0 transition-all"
@@ -560,6 +577,7 @@ function AppLayout() {
   const [syncing, setSyncing] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isGlobalScannerOpen, setIsGlobalScannerOpen] = useState(false);
+  const [isFaceScannerOpen, setIsFaceScannerOpen] = useState(false);
   const location = useLocation();
 
   // Screen/module transition tracking
@@ -575,6 +593,8 @@ function AppLayout() {
         screenName = 'Patient Profile';
       } else if (path === '/patients') {
         screenName = 'Patient Directory';
+      } else if (path === '/face-id') {
+        screenName = 'Face ID Desk';
       } else if (path === '/attendance') {
         screenName = 'Attendance';
       } else if (path === '/medicines') {
@@ -783,6 +803,7 @@ function AppLayout() {
               
               <div className="pt-6 mt-6 border-t border-slate-100 dark:border-slate-800 space-y-1">
                 <p className="px-4 text-[9px] uppercase tracking-widest font-bold text-slate-400 dark:text-slate-500 mb-2">{t('tools')}</p>
+                <NavLink to="/face-id" icon={ScanFace} label="Face ID System" />
                 <NavLink to="/import" icon={FileDown} label={t('dataImport')} />
                 <NavLink to="/settings" icon={Settings} label={t('settings')} />
                 <NavLink to="/demo" icon={Smartphone} label="APK Modern Demo" />
@@ -810,6 +831,7 @@ function AppLayout() {
             syncing={syncing} 
             onToggleMenu={() => setMobileMenuOpen(true)} 
             onOpenScanner={() => setIsGlobalScannerOpen(true)}
+            onOpenFaceScanner={() => setIsFaceScannerOpen(true)}
           />
         )}
         
@@ -832,6 +854,7 @@ function AppLayout() {
                   <Route path="/med-dashboard" element={<MedicineDashboard />} />
                   <Route path="/profile/:userId" element={<UserProfile />} />
                   <Route path="/chat" element={<Chat />} />
+                  <Route path="/face-id" element={<FaceRecognitionDemo />} />
                 </>
               )}
               
@@ -848,6 +871,12 @@ function AppLayout() {
       <BarcodeScannerModal
         isOpen={isGlobalScannerOpen}
         onClose={() => setIsGlobalScannerOpen(false)}
+      />
+
+      {/* Offline AI Patient Face Recognition Scanner Modal */}
+      <FaceScannerModal
+        isOpen={isFaceScannerOpen}
+        onClose={() => setIsFaceScannerOpen(false)}
       />
     </div>
   );

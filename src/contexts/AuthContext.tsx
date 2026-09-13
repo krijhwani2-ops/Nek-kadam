@@ -166,6 +166,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(null);
     }
     setLoading(false);
+
+    const handleAuthExpired = () => {
+      console.warn('[AUTH] Session token expired or unauthorized. Resetting local session.');
+      localStorage.removeItem('nk_token');
+      localStorage.removeItem('nk_current_user');
+      void setStoredSession(null);
+      setSession(null);
+    };
+
+    window.addEventListener('nk:auth_expired', handleAuthExpired);
+    return () => window.removeEventListener('nk:auth_expired', handleAuthExpired);
   }, []);
 
   const login = useCallback((user: { id: string; name: string; department: string; role?: string }, token?: string) => {

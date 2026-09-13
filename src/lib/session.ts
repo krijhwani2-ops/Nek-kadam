@@ -163,9 +163,11 @@ export async function setLastSyncTime(timestamp: string): Promise<void> {
 }
 
 // ─── API Calls with Auth ───
+let refreshPromise: Promise<boolean> | null = null;
+
 export async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
   const session = await getStoredSession();
-  const token = session?.sessionId || (typeof window !== 'undefined' ? localStorage.getItem('nk_token') : '') || '';
+  let token = session?.sessionId || (typeof window !== 'undefined' ? localStorage.getItem('nk_token') : '') || '';
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> || {}),
@@ -174,10 +176,47 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}): Pro
     headers['Authorization'] = `Bearer ${token}`;
   }
   const baseUrl = getBaseUrl();
-  return fetch(`${baseUrl}${endpoint}`, {
+  let res = await fetch(`${baseUrl}${endpoint}`, {
     ...options,
     headers,
   });
+
+  // Handle 401 Unauthorized by attempting transparent PC login recovery on desktop/web
+  if (res.status === 401 && !endpoint.startsWith('/api/login') && !endpoint.startsWith('/api/pc-login')) {
+    if (!refreshPromise && !checkIsCapacitor()) {
+      refreshPromise = (async () => {
+        try {
+          const pc = await loginWithPC();
+          return pc.success;
+        } catch {
+          return false;
+        } finally {
+          refreshPromise = null;
+        }
+      })();
+    }
+
+    if (refreshPromise) {
+      const renewed = await refreshPromise;
+      if (renewed) {
+        const freshSession = await getStoredSession();
+        const freshToken = freshSession?.sessionId || (typeof window !== 'undefined' ? localStorage.getItem('nk_token') : '') || '';
+        if (freshToken) {
+          headers['Authorization'] = `Bearer ${freshToken}`;
+          res = await fetch(`${baseUrl}${endpoint}`, {
+            ...options,
+            headers,
+          });
+        }
+      } else if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('nk:auth_expired', { detail: { endpoint } }));
+      }
+    } else if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('nk:auth_expired', { detail: { endpoint } }));
+    }
+  }
+
+  return res;
 }
 
 // ─── Auth Operations ───

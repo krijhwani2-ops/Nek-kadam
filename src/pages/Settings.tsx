@@ -661,12 +661,12 @@ function UserForm({ departments, onClose }: { departments: any[], onClose: () =>
     e.preventDefault();
     if (!form.name || !form.passcode) return;
     setSaving(true);
-    const success = await createAdminUser(form);
+    const result = await createAdminUser(form);
     setSaving(false);
-    if (success) {
+    if (result && result.success) {
       onClose();
     } else {
-      alert("Failed to create user. Please check if department is valid.");
+      alert(result?.error || "Failed to create user. Please check if department is valid.");
     }
   }
 

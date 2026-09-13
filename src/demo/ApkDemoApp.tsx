@@ -61,6 +61,21 @@ export default function ApkDemoApp() {
   return (
     <div className={`min-h-screen w-full transition-colors duration-300 ${variantMeta[selectedVariant].bg} flex flex-col items-center justify-start`}>
       
+      {/* ── MOBILE TOP BAR (Always provides back navigation on mobile) ── */}
+      {!isDesktop && (
+        <div className="w-full px-4 pt-3 pb-2 flex items-center justify-between z-40 max-w-md">
+          <a
+            href="/"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-md border border-white/20 text-white font-bold text-xs shadow-lg active:scale-95 transition-all"
+          >
+            <ArrowLeft size={14} /> Back to App
+          </a>
+          <div className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-white/10 text-white/90 backdrop-blur-md border border-white/10">
+            {variantMeta[selectedVariant].name}
+          </div>
+        </div>
+      )}
+
       {/* ── DESKTOP CONTROL BAR (Only visible on wide desktop screens) ── */}
       {isDesktop && (
         <div className="w-full max-w-2xl mt-4 mb-2 px-4 py-2 bg-slate-900/90 backdrop-blur-md text-white rounded-2xl border border-slate-800 shadow-xl flex items-center justify-between text-xs z-50">
