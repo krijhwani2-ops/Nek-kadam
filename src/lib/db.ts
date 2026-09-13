@@ -523,7 +523,7 @@ export async function syncPendingOps(): Promise<{ synced: number; failed: number
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 8000);
       const session = await getStoredSession();
-      const token = session?.sessionId || localStorage.getItem('nk_token') || '';
+      let token = session?.sessionId || localStorage.getItem('nk_token') || '';
       
       // Determine the correct endpoint based on action type
       let fetchUrl: string;
@@ -549,11 +549,27 @@ export async function syncPendingOps(): Promise<{ synced: number; failed: number
         body: fetchBody,
         signal: controller.signal
       });
-      clearTimeout(timeout);
       if (res.status === 401) {
-        console.warn('[SYNC] Received 401 Unauthorized. Clearing invalid session token for recovery.');
-        localStorage.removeItem('nk_token');
-        await setStoredSession(null);
+        console.warn('[SYNC] Received 401 Unauthorized. Attempting session refresh...');
+        try {
+          const { loginWithPC } = await import('./session');
+          const pcRes = await loginWithPC();
+          if (pcRes.success && pcRes.token) {
+            token = pcRes.token;
+            const retryRes = await fetch(fetchUrl, {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: fetchBody,
+            });
+            if (retryRes.ok) {
+              synced++;
+              continue;
+            }
+          }
+        } catch (_) {}
         failed++;
         failedOps.push(op);
         continue;

@@ -34,7 +34,7 @@ async function runPgMigrations(pool, migrationsDir) {
       if (rec.rowCount) continue;
 
       const fullPath = path.join(abs, filename);
-      const sql = fs.readFileSync(fullPath, 'utf8');
+      const sql = fs.readFileSync(fullPath, 'utf8').replace(/^\uFEFF/, '');
 
       console.log('[MIGRATE] applying', filename);
       await client.query('BEGIN');

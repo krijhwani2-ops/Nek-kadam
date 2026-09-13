@@ -12,10 +12,12 @@ ALTER TABLE education_students ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ D
 ALTER TABLE medicine_task_items ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE medicine_tasks ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE tokens ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE attendance ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE patients ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 -- 2. Backfill NULL values with existing timestamps or current time
+UPDATE attendance SET updated_at = NOW() WHERE updated_at IS NULL;
 UPDATE visits SET updated_at = COALESCE(created_at, NOW()) WHERE updated_at IS NULL;
 UPDATE prescription_groups SET updated_at = COALESCE(created_at, NOW()) WHERE updated_at IS NULL;
 UPDATE group_medicines SET updated_at = COALESCE(created_at, NOW()) WHERE updated_at IS NULL;
