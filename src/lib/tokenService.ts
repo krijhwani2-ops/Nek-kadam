@@ -2,32 +2,21 @@
 // All token operations go through here. Direct API calls to the server.
 // No caching for tokens — always fresh data for queue accuracy.
 
-const SERVER_PORT = 3001;
-
-function getBaseUrl(): string {
-  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    return `http://${window.location.hostname}:${SERVER_PORT}`;
-  }
-  
-  const savedIp = typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_SERVER_IP') : null;
-  const ip = savedIp || '192.168.29.180';
-
-  if (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost' && !window.location.hostname.includes('127.0.0.1')) {
-    return `${window.location.protocol}//${window.location.hostname}:${SERVER_PORT}`;
-  }
-  return `http://${ip}:${SERVER_PORT}`;
-}
+import { apiFetch } from './session';
 
 async function apiCall(path: string, options?: RequestInit): Promise<any> {
   try {
-    const res = await fetch(`${getBaseUrl()}${path}`, {
+    const res = await apiFetch(path, {
       ...options,
-      headers: { 'Content-Type': 'application/json', ...(options?.headers || {}) },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(8000),
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      return { error: err.error || `Server Error: ${res.status}` };
+    }
     return await res.json();
   } catch (e: any) {
-    return { error: e.message || 'Network error' };
+    return { error: e.name === 'TimeoutError' ? 'Request timed out. Please try again.' : e.message || 'Network error' };
   }
 }
 

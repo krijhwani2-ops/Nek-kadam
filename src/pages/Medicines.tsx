@@ -148,6 +148,8 @@ export default function Medicines() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
               type="text"
+              id="medicine-search"
+              name="medicine-search"
               placeholder="Search code or name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -181,7 +183,7 @@ export default function Medicines() {
         <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800/80 shadow-sm animate-fade-in">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-extrabold text-brand-darkGreen dark:text-emerald-400 flex items-center gap-2">
-              <Plus className="text-brand-green" /> Register New Medicine
+              <Plus className="text-brand-green" /> Add Single Medicine
             </h2>
             <button onClick={() => setShowAddForm(false)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
               <X size={18} className="text-slate-400" />
@@ -189,8 +191,10 @@ export default function Medicines() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1 ml-1">Medicine Code</label>
+              <label htmlFor="medicine-code" className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1 ml-1">Medicine Code</label>
               <input 
+                id="medicine-code"
+                name="medicine-code"
                 value={newMed.code}
                 onChange={(e) => setNewMed({...newMed, code: e.target.value})}
                 placeholder="e.g. A1, B12"
@@ -198,8 +202,10 @@ export default function Medicines() {
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1 ml-1">Full Medicine Name</label>
+              <label htmlFor="medicine-name" className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-1 ml-1">Full Medicine Name</label>
               <input 
+                id="medicine-name"
+                name="medicine-name"
                 value={newMed.name}
                 onChange={(e) => setNewMed({...newMed, name: e.target.value})}
                 placeholder="e.g. Aconitum Napellus"
@@ -232,6 +238,8 @@ export default function Medicines() {
               Existing codes will be updated.
             </p>
             <textarea 
+              id="bulk-medicines"
+              name="bulk-medicines"
               value={bulkText}
               onChange={(e) => setBulkText(e.target.value)}
               placeholder={"A1, Aconitum Napellus\nA2, Allium Cepa\n..."}

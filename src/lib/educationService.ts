@@ -1,35 +1,11 @@
 // ─── Nek Kadam: Education & Attendance Service ───
-import { getStoredSession } from './session';
-
-const SERVER_PORT = 3001;
-
-function getBaseUrl(): string {
-  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    return `http://${window.location.hostname}:${SERVER_PORT}`;
-  }
-  
-  const savedIp = typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_SERVER_IP') : null;
-  const ip = savedIp || '192.168.29.180';
-
-  if (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost' && !window.location.hostname.includes('127.0.0.1')) {
-    return `${window.location.protocol}//${window.location.hostname}:${SERVER_PORT}`;
-  }
-  return `http://${ip}:${SERVER_PORT}`;
-}
+import { apiFetch } from './session';
 
 async function apiCall(path: string, options?: RequestInit): Promise<any> {
   try {
-    const session = await getStoredSession();
-    const headers: any = { 
-      'Content-Type': 'application/json', 
-      ...(options?.headers || {}) 
-    };
-    if (session?.sessionId) headers['Authorization'] = `Bearer ${session.sessionId}`;
-
-    const res = await fetch(`${getBaseUrl()}${path}`, {
+    const res = await apiFetch(path, {
       ...options,
-      headers,
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(8000),
     });
     
     if (!res.ok) {
