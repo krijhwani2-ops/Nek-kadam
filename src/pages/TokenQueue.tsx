@@ -91,22 +91,26 @@ export default function TokenQueue() {
 
   async function handleCreate() {
     if (!selectedPatient) { setCreateError('Select a patient first'); return; }
+    if (busy) return;
     setCreateError('');
     setBusy('create');
-    const res = await createToken({
-      personId: selectedPatient.card_number,
-      personName: selectedPatient.name,
-      personCard: selectedPatient.card_number,
-      priority: newPriority,
-      userId: session?.userId,
-    });
-    if (res.error) { setCreateError(res.error); setBusy(''); return; }
-    setShowCreate(false);
-    setSelectedPatient(null);
-    setPatientQuery('');
-    setNewPriority('NORMAL');
-    await loadAll();
-    setBusy('');
+    try {
+      const res = await createToken({
+        personId: selectedPatient.card_number,
+        personName: selectedPatient.name,
+        personCard: selectedPatient.card_number,
+        priority: newPriority,
+        userId: session?.userId,
+      });
+      if (res.error) { setCreateError(res.error); return; }
+      setShowCreate(false);
+      setSelectedPatient(null);
+      setPatientQuery('');
+      setNewPriority('NORMAL');
+      await loadAll();
+    } finally {
+      setBusy('');
+    }
   }
 
   if (!session) return null;

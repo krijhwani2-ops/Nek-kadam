@@ -124,7 +124,7 @@ export default function PatientsList() {
         {localQuery && (
           <button
             onClick={() => { setLocalQuery(''); setSearchQuery(''); }}
-            className="min-w-[40px] min-h-[40px] flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl leading-none font-bold"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl leading-none font-bold"
             aria-label="Clear search"
           >
             ×
@@ -133,10 +133,10 @@ export default function PatientsList() {
         <button
           type="button"
           onClick={() => setIsScannerOpen(true)}
-          className="min-h-[38px] flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-black border border-emerald-500/20 transition-all shrink-0 active:scale-95"
+          className="min-h-[44px] min-w-[44px] flex items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-black border border-emerald-500/20 transition-all shrink-0 active:scale-95"
           title="Scan OPD Card QR or Barcode"
         >
-          <QrCode size={15} />
+          <QrCode size={16} />
           <span className="hidden sm:inline">Scan</span>
         </button>
       </div>

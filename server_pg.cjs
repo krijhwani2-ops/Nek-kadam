@@ -977,7 +977,21 @@ app.post('/api/tokens/skip', async (req, res) => {
 app.post('/api/tokens/requeue', async (req, res) => {
   try {
     const id = req.body?.tokenId;
-    await q(`UPDATE tokens SET status = 'WAITING', updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [id]);
+    if (!id) return res.status(400).json({ error: 'tokenId is required' });
+    const current = await qr1('SELECT "currentDepartmentId", "dateKey" FROM tokens WHERE id = $1', [id]);
+    if (current) {
+      const maxSeqRow = await qr1(
+        'SELECT MAX("sequenceIndex") AS m FROM tokens WHERE "currentDepartmentId" = $1 AND "dateKey" = $2',
+        [current.currentDepartmentId, current.dateKey]
+      );
+      const nextSeq = (Number(maxSeqRow?.m) || 0) + 1;
+      await q(
+        `UPDATE tokens SET status = 'WAITING', "sequenceIndex" = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+        [id, nextSeq]
+      );
+    } else {
+      await q(`UPDATE tokens SET status = 'WAITING', updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [id]);
+    }
     res.json({ data: await loadTokenWithDept(id) });
   } catch (e) {
     res.status(500).json({ error: e.message });

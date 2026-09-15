@@ -183,7 +183,7 @@ export default function Medicines() {
         <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800/80 shadow-sm animate-fade-in">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-extrabold text-brand-darkGreen dark:text-emerald-400 flex items-center gap-2">
-              <Plus className="text-brand-green" /> Add Single Medicine
+              <Plus className="text-brand-green" /> Register New Medicine
             </h2>
             <button onClick={() => setShowAddForm(false)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
               <X size={18} className="text-slate-400" />

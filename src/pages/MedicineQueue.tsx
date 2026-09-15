@@ -377,6 +377,45 @@ export default function MedicineQueue() {
     }
   };
 
+  // Handle Handover / Delivery to Patient (Decoupled Handover Workflow)
+  const handleDeliver = async (taskId: string) => {
+    try {
+      const res = await fetch(`${getBaseUrl()}/api/queue/deliver`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('nk_token') || ''}`
+        },
+        body: JSON.stringify({ taskId })
+      });
+
+      if (!res.ok) {
+        const result = await res.json();
+        alert(result.error || 'Failed to record handover.');
+        return;
+      }
+
+      setTasks(prev => prev.map(t => {
+        if (t.id === taskId) {
+          return {
+            ...t,
+            status: 'DELIVERED',
+            deliveredBy: session?.userName || 'Volunteer',
+            deliveredAt: new Date().toISOString()
+          };
+        }
+        return t;
+      }));
+
+      setToast({
+        message: `Medicine handed over to patient!`,
+        type: 'success'
+      });
+    } catch (e) {
+      alert('Network error. Failed to record handover.');
+    }
+  };
+
   // Filter tasks into columns
   const pendingTasks = tasks.filter(t => t.status === 'PENDING');
   const myInProgressTasks = tasks.filter(
@@ -747,6 +786,15 @@ export default function MedicineQueue() {
                           : `Prepared by ${task.completedBy || 'Volunteer'}`
                         }
                       </p>
+                      {task.status === 'READY' && (
+                        <button
+                          onClick={() => handleDeliver(task.id)}
+                          className="mt-2 w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-1.5 px-3 rounded-lg text-[10px] uppercase tracking-wider flex items-center justify-center gap-1 transition-all"
+                        >
+                          <PackageCheck size={12} />
+                          <span>Handover to Patient</span>
+                        </button>
+                      )}
                     </div>
                   ))
                 )}

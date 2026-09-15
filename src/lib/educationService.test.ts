@@ -5,6 +5,7 @@ import * as sessionModule from './session';
 // Mock the session module
 vi.mock('./session', () => ({
   getStoredSession: vi.fn(),
+  apiFetch: vi.fn((path: string, options?: RequestInit) => fetch(path, options)),
 }));
 
 describe('educationService - apiCall error handling', () => {

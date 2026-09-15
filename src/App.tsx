@@ -48,11 +48,22 @@ function BackButtonHandler() {
     let removeListener: (() => void) | null = null;
     try {
       CapApp.addListener('backButton', () => {
-        // If mobile drawer or modal is open, dismiss it first
-        const closeBtn = document.querySelector('button[aria-label="Close menu"]') as HTMLButtonElement | null;
-        if (closeBtn && closeBtn.offsetParent !== null) {
-          closeBtn.click();
+        // If mobile drawer, scanner, or modal is open, dismiss it first
+        const modalCloseBtn = document.querySelector(
+          '[role="dialog"] button[aria-label*="close" i], button[aria-label="Close menu"], button[aria-label="Close modal"], button[aria-label="Close"]'
+        ) as HTMLButtonElement | null;
+        if (modalCloseBtn && modalCloseBtn.offsetParent !== null) {
+          modalCloseBtn.click();
           return;
+        }
+
+        const openModal = document.querySelector('.fixed.inset-0.z-50') as HTMLElement | null;
+        if (openModal) {
+          const dismissBtn = openModal.querySelector('button') as HTMLButtonElement | null;
+          if (dismissBtn) {
+            dismissBtn.click();
+            return;
+          }
         }
 
         if (location.pathname === '/' || location.pathname === '/dashboard') {
