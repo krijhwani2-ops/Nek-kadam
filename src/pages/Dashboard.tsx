@@ -361,9 +361,9 @@ export default function Dashboard() {
             <div className="divide-y-2 divide-slate-50 dark:divide-slate-800 max-h-[300px] overflow-y-auto">
               {data?.recentLogs?.map(log => (
                 <div key={log.id} className="px-5 py-3.5 flex items-center justify-between gap-3 text-sm hover:bg-slate-50/50 dark:hover:bg-slate-850/50 transition-colors">
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div className="w-2.5 h-2.5 rounded-full bg-purple-500 shrink-0"></div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-slate-800 dark:text-slate-200 font-semibold truncate">
                         <span className="font-black text-slate-900 dark:text-slate-100">{log.userName}</span> 
                         <span className="text-slate-400 text-xs font-bold mx-1.5">({log.deptCode})</span> 

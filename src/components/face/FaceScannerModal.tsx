@@ -90,7 +90,18 @@ export default function FaceScannerModal({
 
   // Initialize camera and load enrolled vector profiles
   useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showEnrollSearch) {
+          setShowEnrollSearch(false);
+        } else {
+          onClose();
+        }
+      }
+    };
+
     if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
       loadBiometrics();
       startCamera();
     } else {
@@ -98,9 +109,10 @@ export default function FaceScannerModal({
       resetState();
     }
     return () => {
+      window.removeEventListener('keydown', handleKeyDown);
       stopCamera();
     };
-  }, [isOpen, facingMode]);
+  }, [isOpen, facingMode, showEnrollSearch]);
 
   async function loadBiometrics() {
     const list = await loadEnrolledBiometrics(true);
@@ -338,8 +350,14 @@ export default function FaceScannerModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200 cursor-pointer"
+      onClick={onClose}
+    >
+      <div 
+        className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] cursor-default"
+        onClick={(e) => e.stopPropagation()}
+      >
         
         {/* Header Bar */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-slate-900/90">
@@ -363,7 +381,7 @@ export default function FaceScannerModal({
             <button
               type="button"
               onClick={() => setAutoOpenProfile(prev => !prev)}
-              className={`px-2 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1 border transition-all ${
+              className={`min-h-[44px] px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1 border transition-all ${
                 autoOpenProfile 
                   ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300 shadow-sm' 
                   : 'bg-slate-800 border-slate-700 text-slate-400'
@@ -376,15 +394,17 @@ export default function FaceScannerModal({
             <button
               type="button"
               onClick={toggleCameraFacing}
-              className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white active:scale-95 transition-all"
+              className="min-h-[44px] min-w-[44px] p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white flex items-center justify-center active:scale-95 transition-all"
               title="Flip Camera"
+              aria-label="Flip Camera"
             >
               <FlipHorizontal size={18} />
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white active:scale-95 transition-all"
+              className="min-h-[44px] min-w-[44px] p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white flex items-center justify-center active:scale-95 transition-all"
+              aria-label="Close Face ID"
             >
               <X size={18} />
             </button>
@@ -406,9 +426,10 @@ export default function FaceScannerModal({
                   <button 
                     type="button"
                     onClick={() => setShowEnrollSearch(false)}
-                    className="p-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
+                    className="min-h-[44px] min-w-[44px] p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center"
+                    aria-label="Close link search"
                   >
-                    <X size={16} />
+                    <X size={18} />
                   </button>
                 </div>
                 <p className="text-[11px] text-slate-300">

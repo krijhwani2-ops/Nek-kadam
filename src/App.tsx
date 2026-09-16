@@ -9,7 +9,7 @@ import {
   UserPlus, HeartPulse, FileDown,
   LayoutDashboard, ChevronLeft, ListChecks,
   ClipboardList, Monitor, Menu, X, MessageSquare,
-  Smartphone, QrCode, Download, ScanFace
+  Smartphone, QrCode, Download, ScanFace, Ticket
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { useApp } from './contexts/AppContext';
@@ -29,6 +29,7 @@ import Login from './pages/Login';
 import SplashScreen from './components/SplashScreen';
 import SettingsPage from './pages/Settings';
 import Attendance from './pages/Attendance';
+import TokenQueue from './pages/TokenQueue';
 import MedicineQueue from './pages/MedicineQueue';
 import MedicineDashboard from './pages/MedicineDashboard';
 import UserProfile from './pages/UserProfile';
@@ -311,6 +312,7 @@ function Sidebar() {
       <div className="space-y-1">
         <NavLink to="/" icon={LayoutDashboard} label={t('dashboard')} />
         <NavLink to="/attendance" icon={ListChecks} label={t('attendance')} />
+        <NavLink to="/tokens" icon={Ticket} label="Token Queue" />
         <NavLink to="/patients" icon={Users} label={t('patients')} />
         <NavLink to="/patients/new" icon={UserPlus} label={t('registerPatient')} />
         <NavLink to="/medicines" icon={Database} label={t('medicinesDb')} />
@@ -504,38 +506,38 @@ function TopBar({ onSync, syncing, onToggleMenu, onOpenScanner, onOpenFaceScanne
         {session && (
           <button 
             onClick={logout} 
-            className="min-h-[40px] px-2.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl flex items-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0 transition-all"
+            className="min-h-[44px] min-w-[44px] px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl flex items-center justify-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0 transition-all"
             title="Switch User"
           >
-            <LogOut size={15} />
+            <LogOut size={16} />
             <span className="hidden sm:inline">{t('switchUser')}</span>
           </button>
         )}
         {onOpenFaceScanner && (
           <button 
             onClick={onOpenFaceScanner} 
-            className="min-h-[40px] px-2.5 sm:px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl flex items-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0 transition-all"
+            className="min-h-[44px] min-w-[44px] px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl flex items-center justify-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0 transition-all"
             title="Scan Patient Face (Offline AI Recognition)"
           >
-             <ScanFace size={16} className="text-emerald-200" />
+             <ScanFace size={18} className="text-emerald-200" />
              <span className="hidden sm:inline">Face ID</span>
           </button>
         )}
         <button 
           onClick={onOpenScanner} 
-          className="min-h-[40px] px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl flex items-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0 transition-all"
+          className="min-h-[44px] min-w-[44px] px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl flex items-center justify-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0 transition-all"
           title="Scan OPD Card QR / Barcode"
         >
-           <QrCode size={16} className="text-emerald-200" />
+           <QrCode size={18} className="text-emerald-200" />
            <span className="hidden sm:inline">Scan</span>
         </button>
         <button 
           onClick={onSync} 
           disabled={syncing}
-          className="min-h-[40px] px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl flex items-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0 transition-all"
+          className="min-h-[44px] min-w-[44px] px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl flex items-center justify-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0 transition-all"
           title="Sync Records"
         >
-           <RefreshCw size={15} className={syncing ? 'animate-spin' : ''} />
+           <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
            <span className="hidden sm:inline">{syncing ? 'Syncing...' : 'Sync'}</span>
         </button>
       </div>
@@ -805,6 +807,7 @@ function AppLayout() {
             <div className="flex-grow overflow-y-auto space-y-1 pr-1 custom-scrollbar" onClick={() => setMobileMenuOpen(false)}>
               <NavLink to="/" icon={LayoutDashboard} label={t('dashboard')} />
               <NavLink to="/attendance" icon={ListChecks} label={t('attendance')} />
+              <NavLink to="/tokens" icon={Ticket} label="Token Queue" />
               <NavLink to="/patients" icon={Users} label={t('patients')} />
               <NavLink to="/patients/new" icon={UserPlus} label={t('registerPatient')} />
               <NavLink to="/medicines" icon={Database} label={t('medicinesDb')} />
@@ -855,6 +858,7 @@ function AppLayout() {
                 <>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/attendance" element={<Attendance />} />
+                  <Route path="/tokens" element={<TokenQueue />} />
                   <Route path="/patients" element={<PatientsList />} />
                   <Route path="/patients/new" element={<NewPatient />} />
                   <Route path="/patients/:id" element={<PatientProfile />} />

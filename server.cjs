@@ -315,6 +315,16 @@ db.exec(`
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS token_events (
+    id TEXT PRIMARY KEY,
+    tokenId TEXT,
+    userId TEXT,
+    departmentId TEXT,
+    event TEXT,
+    metadata TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE TABLE IF NOT EXISTS batches (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -860,6 +870,59 @@ app.get('/api/tokens/dashboard', (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+function loadTokenWithDept(id) {
+  return db.prepare(`
+    SELECT t.*, d.code AS departmentCode
+    FROM tokens t
+    LEFT JOIN departments d ON t.currentDepartmentId = d.id
+    WHERE t.id = ?
+  `).get(id);
+}
+
+function deptOrderIds() {
+  const rows = db.prepare('SELECT id FROM departments WHERE isActive = 1 ORDER BY code ASC').all();
+  return rows.map(r => r.id);
+}
+
+app.get('/api/tokens', (req, res) => {
+  try {
+    const dateKey = req.query.dateKey || todayKey();
+    const departmentId = req.query.departmentId;
+    const status = req.query.status;
+    const params = [dateKey];
+    let sql = `
+      SELECT t.*, d.code AS departmentCode
+      FROM tokens t
+      JOIN departments d ON t.currentDepartmentId = d.id
+      WHERE t.dateKey = ? AND t.isDeleted = 0
+    `;
+    if (departmentId) {
+      sql += ` AND t.currentDepartmentId = ?`;
+      params.push(departmentId);
+    }
+    if (status) {
+      sql += ` AND t.status = ?`;
+      params.push(status);
+    }
+    sql += ` ORDER BY t.priority DESC, t.sequenceIndex ASC`;
+    const rows = db.prepare(sql).all(...params);
+    res.json({ data: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/tokens/:tokenId/events', (req, res) => {
+  try {
+    const rows = db.prepare(
+      `SELECT id, tokenId, userId, departmentId, event, metadata, timestamp FROM token_events WHERE tokenId = ? ORDER BY timestamp DESC`
+    ).all(req.params.tokenId);
+    res.json({ data: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/tokens/create', (req, res) => {
   try {
     const result = db.transaction(() => {
@@ -878,8 +941,7 @@ app.post('/api/tokens/create', (req, res) => {
       db.prepare('INSERT INTO tokens (id, tokenNumber, dateKey, personId, personName, personCard, currentDepartmentId, status, priority, sequenceIndex) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .run(tokenId, nextNum, dateKey, personId, personName, personCard || personId, reception.id, 'WAITING', priority || 'NORMAL', nextSeq);
       
-      const token = db.prepare('SELECT * FROM tokens WHERE id = ?').get(tokenId);
-      return { data: token };
+      return { data: loadTokenWithDept(tokenId) };
     })();
     res.json(result);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -901,8 +963,87 @@ app.post('/api/tokens/start', (req, res) => {
     }
     
     db.prepare("UPDATE tokens SET status = 'IN_PROGRESS' WHERE id = ?").run(targetId);
-    res.json({ data: db.prepare('SELECT * FROM tokens WHERE id = ?').get(targetId) });
+    res.json({ data: loadTokenWithDept(targetId) });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/tokens/move', (req, res) => {
+  try {
+    const { tokenId } = req.body || {};
+    const t = db.prepare('SELECT * FROM tokens WHERE id = ?').get(tokenId);
+    if (!t) return res.json({ error: 'Token not found' });
+    const curDept = t.currentDepartmentId;
+    const dk = t.dateKey;
+    const order = deptOrderIds();
+    const ix = order.indexOf(curDept);
+    if (ix >= 0 && ix < order.length - 1) {
+      const nextDept = order[ix + 1];
+      const maxSeqRow = db.prepare(
+        'SELECT MAX(sequenceIndex) AS m FROM tokens WHERE currentDepartmentId = ? AND dateKey = ?'
+      ).get(nextDept, dk);
+      const nextSeq = (Number(maxSeqRow?.m) || 0) + 1;
+      db.prepare(
+        `UPDATE tokens SET currentDepartmentId = ?, status = 'WAITING', sequenceIndex = ?, updated_at = datetime('now') WHERE id = ?`
+      ).run(nextDept, nextSeq, tokenId);
+    } else {
+      db.prepare(`UPDATE tokens SET status = 'DONE', updated_at = datetime('now') WHERE id = ?`).run(tokenId);
+    }
+    res.json({ data: loadTokenWithDept(tokenId) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/tokens/skip', (req, res) => {
+  try {
+    const { tokenId } = req.body || {};
+    db.prepare(`UPDATE tokens SET status = 'SKIPPED', updated_at = datetime('now') WHERE id = ?`).run(tokenId);
+    res.json({ data: loadTokenWithDept(tokenId) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/tokens/requeue', (req, res) => {
+  try {
+    const id = req.body?.tokenId;
+    if (!id) return res.status(400).json({ error: 'tokenId is required' });
+    const current = db.prepare('SELECT currentDepartmentId, dateKey FROM tokens WHERE id = ?').get(id);
+    if (current) {
+      const maxSeqRow = db.prepare(
+        'SELECT MAX(sequenceIndex) AS m FROM tokens WHERE currentDepartmentId = ? AND dateKey = ?'
+      ).get(current.currentDepartmentId, current.dateKey);
+      const nextSeq = (Number(maxSeqRow?.m) || 0) + 1;
+      db.prepare(
+        `UPDATE tokens SET status = 'WAITING', sequenceIndex = ?, updated_at = datetime('now') WHERE id = ?`
+      ).run(nextSeq, id);
+    } else {
+      db.prepare(`UPDATE tokens SET status = 'WAITING', updated_at = datetime('now') WHERE id = ?`).run(id);
+    }
+    res.json({ data: loadTokenWithDept(id) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/tokens/cancel', (req, res) => {
+  try {
+    const { tokenId } = req.body || {};
+    db.prepare(`UPDATE tokens SET status = 'CANCELLED', isDeleted = 1, updated_at = datetime('now') WHERE id = ?`).run(tokenId);
+    res.json({ data: loadTokenWithDept(tokenId) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/tokens/priority', (req, res) => {
+  try {
+    const { tokenId, priority } = req.body || {};
+    db.prepare(`UPDATE tokens SET priority = ?, updated_at = datetime('now') WHERE id = ?`).run(priority, tokenId);
+    res.json({ data: loadTokenWithDept(tokenId) });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get('/api/users', (req, res) => {

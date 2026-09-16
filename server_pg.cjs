@@ -154,8 +154,38 @@ function todayKey() {
 const activeSessions = new Map();
 
 // ─── Schema: versioned SQL under infra/postgres/migrations (single source of truth) ───
-async function ensureSchema() {
-  await runPgMigrations(pool, migrationsDir);
+async function initDb() {
+  try {
+    await runPgMigrations(pool, migrationsDir);
+  } catch (migErr) {
+    console.warn('[MIGRATIONS WARNING] Migrations deferred/warned:', migErr.message);
+  }
+
+  // Auto-heal schema fix statements for live databases (Render / Supabase)
+  const autoHealStatements = [
+    'ALTER TABLE users ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN DEFAULT true;',
+    'ALTER TABLE departments ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN DEFAULT true;',
+    'ALTER TABLE batches ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN DEFAULT true;',
+    'ALTER TABLE education_students ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN DEFAULT true;',
+    'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS "dateKey" TEXT;',
+    'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS "personId" TEXT;',
+    'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS "personName" TEXT;',
+    'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS "personCard" TEXT;',
+    'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS "currentDepartmentId" TEXT;',
+    'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS "sourceDepartmentId" TEXT;',
+    'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS priority INTEGER DEFAULT 0;',
+    'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS "sequenceIndex" INTEGER DEFAULT 0;',
+    'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS "isDeleted" BOOLEAN DEFAULT false;'
+  ];
+
+  for (const stmt of autoHealStatements) {
+    try {
+      await pool.query(stmt);
+    } catch (err) {
+      console.warn(`[SCHEMA AUTO-HEAL WARNING] Statement failed (${stmt}):`, err.message);
+    }
+  }
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS chat_messages (
       id TEXT PRIMARY KEY,
@@ -179,7 +209,9 @@ async function ensureSchema() {
       "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
+  console.log('[SCHEMA AUTO-HEAL] PostgreSQL schema auto-heal verified.');
 }
+const ensureSchema = initDb;
 
 async function saveSessionPg(token, session) {
   activeSessions.set(token, session);
@@ -618,7 +650,7 @@ app.get('/api/admin/users', async (_req, res) => {
 
 app.get('/api/admin/departments', async (_req, res) => {
   try {
-    const depts = await qr('SELECT id, name, code FROM departments WHERE "isActive" = 1 ORDER BY name', []);
+    const depts = await qr("SELECT id, name, code FROM departments WHERE COALESCE(\"isActive\"::text, '1') IN ('1', 'true', 't') ORDER BY name", []);
     res.json({ data: depts });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -640,7 +672,7 @@ app.post('/api/admin/users/create', async (req, res) => {
       deptId = firstDept?.id || null;
     }
     await q(
-      `INSERT INTO users (id, name, passcode, "departmentId", role, "isActive") VALUES ($1,$2,$3,$4,$5,1)`,
+      `INSERT INTO users (id, name, passcode, "departmentId", role, "isActive") VALUES ($1,$2,$3,$4,$5,true)`,
       [uuid(), name, hash, deptId, String(role).toUpperCase()]
     );
     res.json({ ok: true });
@@ -654,7 +686,7 @@ app.post('/api/admin/users/update', async (req, res) => {
     const { id, name, passcode, department, role, is_active } = req.body || {};
     const dept = await qr1lite('SELECT id FROM departments WHERE name = ? OR code = ?', [department, department]);
     const deptId = dept?.id || null;
-    const params = [name, String(role).toUpperCase(), is_active ? 1 : 0];
+    const params = [name, String(role).toUpperCase(), is_active ? true : false];
     let sql = 'UPDATE users SET name = $1, role = $2, "isActive" = $3';
     let idx = 4;
     if (passcode && String(passcode).length > 0) {
@@ -723,7 +755,7 @@ async function loadTokenWithDept(id) {
 app.get('/api/tokens/dashboard', async (_req, res) => {
   try {
     const dateKey = todayKey();
-    const depts = await qr('SELECT id, name, code FROM departments WHERE "isActive" = 1');
+    const depts = await qr("SELECT id, name, code FROM departments WHERE COALESCE(\"isActive\"::text, '1') IN ('1', 'true', 't')");
 
     const statsRows = await qr(
       `
@@ -734,7 +766,7 @@ app.get('/api/tokens/dashboard', async (_req, res) => {
         COALESCE(SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END),0)::int AS done,
         COALESCE(SUM(CASE WHEN status = 'SKIPPED' THEN 1 ELSE 0 END),0)::int AS skipped
       FROM tokens
-      WHERE "dateKey" = $1 AND "isDeleted" = 0
+      WHERE "dateKey" = $1 AND COALESCE("isDeleted"::text, '0') NOT IN ('1', 'true', 't')
       GROUP BY "currentDepartmentId"
       `,
       [dateKey]
@@ -744,7 +776,7 @@ app.get('/api/tokens/dashboard', async (_req, res) => {
       `
       SELECT DISTINCT ON (t."currentDepartmentId") t.*, d.code AS "departmentCode"
       FROM tokens t JOIN departments d ON t."currentDepartmentId" = d.id
-      WHERE t."dateKey" = $1 AND t.status = 'IN_PROGRESS' AND t."isDeleted" = 0
+      WHERE t."dateKey" = $1 AND t.status = 'IN_PROGRESS' AND COALESCE(t."isDeleted"::text, '0') NOT IN ('1', 'true', 't')
       ORDER BY t."currentDepartmentId", t.id
       `,
       [dateKey]
@@ -754,7 +786,7 @@ app.get('/api/tokens/dashboard', async (_req, res) => {
       `
       SELECT DISTINCT ON (t."currentDepartmentId") t.*, d.code AS "departmentCode"
       FROM tokens t JOIN departments d ON t."currentDepartmentId" = d.id
-      WHERE t."dateKey" = $1 AND t.status = 'WAITING' AND t."isDeleted" = 0
+      WHERE t."dateKey" = $1 AND t.status = 'WAITING' AND COALESCE(t."isDeleted"::text, '0') NOT IN ('1', 'true', 't')
       ORDER BY t."currentDepartmentId", t.priority DESC, t."sequenceIndex" ASC
       `,
       [dateKey]
@@ -811,7 +843,7 @@ app.get('/api/tokens/dashboard', async (_req, res) => {
         COUNT(*)::int AS total,
         COALESCE(SUM(CASE WHEN status = 'DONE' THEN 1 ELSE 0 END),0)::int AS done
       FROM tokens
-      WHERE "dateKey" = $1 AND "isDeleted" = 0
+      WHERE "dateKey" = $1 AND COALESCE("isDeleted"::text, '0') NOT IN ('1', 'true', 't')
       `,
       [dateKey]
     );
@@ -838,7 +870,7 @@ app.get('/api/tokens', async (req, res) => {
       SELECT t.*, d.code AS "departmentCode"
       FROM tokens t
       JOIN departments d ON t."currentDepartmentId" = d.id
-      WHERE t."dateKey" = $1 AND t."isDeleted" = 0
+      WHERE t."dateKey" = $1 AND COALESCE(t."isDeleted"::text, '0') NOT IN ('1', 'true', 't')
     `;
     if (departmentId) {
       sql += ` AND t."currentDepartmentId" = $${params.length + 1}`;
@@ -875,7 +907,7 @@ app.post('/api/tokens/create', async (req, res) => {
     const { personId, personName, personCard, priority } = req.body || {};
     const dateKey = todayKey();
     const exists = await qr1lite(
-      'SELECT id, "tokenNumber", status FROM tokens WHERE "personId" = ? AND "dateKey" = ? AND "isDeleted" = 0',
+      'SELECT id, "tokenNumber", status FROM tokens WHERE "personId" = ? AND "dateKey" = ? AND COALESCE("isDeleted"::text, \'0\') NOT IN (\'1\', \'true\', \'t\')',
       [personId, dateKey]
     );
     if (exists) return res.json({ error: `Token #${exists.tokennumber || exists.tokenNumber} already exists today (Status: ${exists.status})` });
@@ -894,7 +926,7 @@ app.post('/api/tokens/create', async (req, res) => {
     const tokenId = uuid();
     await q(
       `INSERT INTO tokens (id, "tokenNumber", "dateKey", "personId", "personName", "personCard", "currentDepartmentId", status, priority, "sequenceIndex", "isDeleted")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'WAITING',$8,$9,0)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'WAITING',$8,$9,false)`,
       [tokenId, nextNum, dateKey, personId, personName, personCard || personId, receptionId, priority || 'NORMAL', nextSeq]
     );
     const mapped = await loadTokenWithDept(tokenId);
@@ -916,7 +948,7 @@ app.post('/api/tokens/start', async (req, res) => {
     let targetId = tokenId;
     if (!targetId) {
       const next = await qr1(
-        `SELECT id FROM tokens WHERE "currentDepartmentId" = $1 AND "dateKey" = $2 AND status = 'WAITING' AND "isDeleted" = 0
+        `SELECT id FROM tokens WHERE "currentDepartmentId" = $1 AND "dateKey" = $2 AND status = 'WAITING' AND COALESCE("isDeleted"::text, '0') NOT IN ('1', 'true', 't')
          ORDER BY priority DESC, "sequenceIndex" ASC LIMIT 1`,
         [departmentId, dateKey]
       );
@@ -932,7 +964,7 @@ app.post('/api/tokens/start', async (req, res) => {
 });
 
 async function deptOrderIds() {
-  const rows = await qr('SELECT id FROM departments WHERE "isActive" = 1 ORDER BY code ASC');
+  const rows = await qr("SELECT id FROM departments WHERE COALESCE(\"isActive\"::text, '1') IN ('1', 'true', 't') ORDER BY code ASC");
   return rows.map((r) => r.id);
 }
 
@@ -1000,7 +1032,7 @@ app.post('/api/tokens/requeue', async (req, res) => {
 
 app.post('/api/tokens/cancel', async (req, res) => {
   try {
-    await q(`UPDATE tokens SET status = 'CANCELLED', "isDeleted" = 1, updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [req.body?.tokenId]);
+    await q(`UPDATE tokens SET status = 'CANCELLED', "isDeleted" = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [req.body?.tokenId]);
     res.json({ data: await loadTokenWithDept(req.body?.tokenId) });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1020,7 +1052,8 @@ app.post('/api/tokens/priority', async (req, res) => {
 // ─── Education ───
 app.get('/api/education/batches', async (_req, res) => {
   try {
-    const data = await qr('SELECT * FROM batches WHERE "isActive" = 1');
+    // Boolean-safe query: ("isActive" = true OR "isActive" = 1 OR "isActive" IS TRUE)
+    const data = await qr("SELECT * FROM batches WHERE COALESCE(\"isActive\"::text, '1') IN ('1', 'true', 't')");
     res.json({ data });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1030,7 +1063,7 @@ app.get('/api/education/batches', async (_req, res) => {
 app.post('/api/education/batches/create', async (req, res) => {
   try {
     const { name, timing } = req.body || {};
-    await q('INSERT INTO batches (id, name, timing, "isActive") VALUES ($1, $2, $3, 1)', [uuid(), name, timing || null]);
+    await q('INSERT INTO batches (id, name, timing, "isActive") VALUES ($1, $2, $3, true)', [uuid(), name, timing || null]);
     res.json({ success: true });
   } catch (e) {
     res.json({ error: e.message });
@@ -1046,7 +1079,7 @@ app.get('/api/education/batches/:batchId/students', async (req, res) => {
         (SELECT status FROM attendance WHERE "studentId" = es.id AND date = $2) AS "todayStatus"
       FROM education_students es
       JOIN patients p ON (es."patientId" = p.card_number OR es."patientId" = p.id)
-      WHERE es."batchId" = $1 AND es."isActive" = 1
+      WHERE es."batchId" = $1 AND COALESCE(es."isActive"::text, '1') IN ('1', 'true', 't')
       `,
       [req.params.batchId, targetDate]
     );
@@ -1099,7 +1132,7 @@ app.post('/api/education/enroll-existing', async (req, res) => {
     const dup = await qr1('SELECT id FROM education_students WHERE "patientId" = $1 AND "batchId" = $2', [cardUse, batchId]);
     if (dup) return res.json({ error: 'Already enrolled in this batch' });
 
-    await q(`INSERT INTO education_students (id, "patientId", "batchId", "isActive") VALUES ($1,$2,$3,1)`, [uuid(), cardUse, batchId]);
+    await q(`INSERT INTO education_students (id, "patientId", "batchId", "isActive") VALUES ($1,$2,$3,true)`, [uuid(), cardUse, batchId]);
     res.json({ success: true });
   } catch (e) {
     res.json({ error: e.message });
@@ -1163,7 +1196,7 @@ app.post('/api/education/students/create', async (req, res) => {
     const exists = await qr1(`SELECT id FROM education_students WHERE "patientId" = $1 AND "batchId" = $2`, [cardNumber, batchId]);
     if (exists) return res.json({ error: 'Student already exists in this batch' });
 
-    await q(`INSERT INTO education_students (id, "patientId", "batchId", "isActive") VALUES ($1,$2,$3,1)`, [uuid(), cardNumber, batchId]);
+    await q(`INSERT INTO education_students (id, "patientId", "batchId", "isActive") VALUES ($1,$2,$3,true)`, [uuid(), cardNumber, batchId]);
     res.json({ success: true });
   } catch (e) {
     res.json({ error: e.message });
@@ -1951,7 +1984,7 @@ app.use((req, res, next) => {
 async function bootstrap() {
   attachGracefulShutdown();
   try {
-    await ensureSchema();
+    await initDb();
   } catch (schemaErr) {
     console.warn('[SCHEMA WARNING] Schema check deferred/warned:', schemaErr.message);
   }

@@ -235,16 +235,19 @@ html.dark .app-bg {
   body * {
     visibility: hidden;
   }
-  .printable-prescription, .printable-prescription * {
-    visibility: visible;
+  .printable-prescription, .printable-prescription *,
+  .printable-opd-token, .printable-opd-token * {
+    visibility: visible !important;
   }
-  .printable-prescription {
+  .printable-prescription,
+  .printable-opd-token {
+    display: block !important;
     position: absolute;
     left: 0;
     top: 0;
     width: 100%;
     margin: 0;
-    padding: 0;
+    padding: 16px;
     background: white;
   }
   .no-print {

@@ -105,6 +105,7 @@ export default function PatientProfile() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showResults, setShowResults] = useState(false);
   const [addingVisit, setAddingVisit] = useState(false);
+  const isSavingRef = useRef(false);
 
   // Visit Details Modal State
   const [selectedVisit, setSelectedVisit] = useState<any>(null);
@@ -444,14 +445,20 @@ export default function PatientProfile() {
   };
 
   async function handleSaveVisit() {
-    console.log('[VISIT SAVE] Starting save process...');
+    if (isSavingRef.current || addingVisit) {
+      console.log('[VISIT SAVE] Save already in progress, ignoring duplicate click.');
+      return;
+    }
+
     const hasMeds = medicineGroups.some(g => g.meds.length > 0);
     if (!hasMeds) {
       alert("Please add a medicine.");
       return;
     }
     
+    isSavingRef.current = true;
     setAddingVisit(true);
+    console.log('[VISIT SAVE] Starting save process...');
 
     const payload = {
       patientId: patient.card_number,
@@ -478,7 +485,6 @@ export default function PatientProfile() {
         setMedicineGroups([{ power: '', dosage: 'BD', meds: [] }]);
         setActiveGroupIndex(0);
         setVisitNotes('');
-        setAddingVisit(false);
         
         await fetchPatientData();
         alert('Saved offline successfully! It will sync automatically when online.');
@@ -506,7 +512,6 @@ export default function PatientProfile() {
       setMedicineGroups([{ power: '', dosage: 'BD', meds: [] }]);
       setActiveGroupIndex(0);
       setVisitNotes('');
-      setAddingVisit(false);
       
       await fetchPatientData();
       alert('Visit saved successfully');
@@ -521,7 +526,6 @@ export default function PatientProfile() {
         setMedicineGroups([{ power: '', dosage: 'BD', meds: [] }]);
         setActiveGroupIndex(0);
         setVisitNotes('');
-        setAddingVisit(false);
         
         await fetchPatientData();
         alert('Saved offline successfully (will sync when connection is stable)!');
@@ -529,9 +533,11 @@ export default function PatientProfile() {
       } catch (localErr: any) {
         console.error('[VISIT SAVE] Offline fallback failed:', localErr);
         alert('FAILED TO SAVE VISIT: ' + (localErr.message || 'Check logs'));
-        setAddingVisit(false);
         return;
       }
+    } finally {
+      isSavingRef.current = false;
+      setAddingVisit(false);
     }
   }
 

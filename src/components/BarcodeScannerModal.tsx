@@ -274,12 +274,19 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScannedPatient 
   };
 
   useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
     if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
       // Delay slightly for modal DOM mount
       const timer = setTimeout(() => {
         startScanner();
       }, 150);
       return () => {
+        window.removeEventListener('keydown', handleKeyDown);
         clearTimeout(timer);
         stopScanner();
       };
@@ -291,10 +298,16 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScannedPatient 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
+    <div 
+      className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200 cursor-pointer"
+      onClick={onClose}
+    >
       
       {/* Modal Container */}
-      <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
+      <div 
+        className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] cursor-default"
+        onClick={(e) => e.stopPropagation()}
+      >
         
         {/* Header */}
         <div className="px-5 py-4 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border-b border-slate-800 flex items-center justify-between z-10 shrink-0">
@@ -315,10 +328,10 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScannedPatient 
 
           <button
             onClick={onClose}
-            className="w-9 h-9 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+            className="min-h-[44px] min-w-[44px] w-11 h-11 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors active:scale-95"
             aria-label="Close scanner"
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
 
@@ -436,11 +449,11 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScannedPatient 
             <button
               type="button"
               onClick={toggleTorch}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+              className={`min-h-[44px] flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
                 torchOn ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
               }`}
             >
-              {torchOn ? <ZapOff size={15} /> : <Zap size={15} />}
+              {torchOn ? <ZapOff size={16} /> : <Zap size={16} />}
               <span>{torchOn ? 'Torch Off' : 'Torch On'}</span>
             </button>
           ) : (
@@ -457,7 +470,7 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScannedPatient 
                 type="button"
                 onClick={switchCamera}
                 title="Switch Camera"
-                className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-colors"
+                className="min-h-[44px] min-w-[44px] p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition-colors flex items-center justify-center"
                 aria-label="Switch camera"
               >
                 <FlipHorizontal size={18} />
@@ -468,7 +481,7 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScannedPatient 
               type="button"
               onClick={() => fileInputRef.current?.click()}
               title="Upload Barcode Image"
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 rounded-xl text-xs font-bold border border-slate-700 transition-all"
+              className="min-h-[44px] flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 rounded-xl text-xs font-bold border border-slate-700 transition-all"
             >
               <UploadCloud size={15} className="text-emerald-400" />
               <span>Choose Image</span>
