@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Users, Save, Globe, PlusCircle, Key, Wifi, Cloud, Cpu, RefreshCw, CheckCircle2, AlertCircle, Download, FileSpreadsheet, Database, Smartphone } from 'lucide-react';
+import { Users, Save, Globe, PlusCircle, Key, Wifi, Cloud, Cpu, RefreshCw, CheckCircle2, AlertCircle, Download, FileSpreadsheet, Database, Smartphone, Trash2, Search, AlertTriangle } from 'lucide-react';
 import { fetchAdminUsers, updateAdminUser, createAdminUser, fetchDepartments, getBaseUrl } from '../lib/session';
 import { getServerIp, setServerIp, getNetworkMode, setNetworkMode, checkServerOnline, NetworkMode } from '../lib/db';
 import { QRCodeSVG } from 'qrcode.react';
@@ -490,11 +490,11 @@ export default function Settings() {
                 <div className="flex flex-col sm:flex-row gap-3">
                   <a
                     href={`${getBaseUrl()}/apk/nek-kadam.apk`}
-                    download="nek-kadam-v1.3.1.apk"
+                    download="nek-kadam-v1.4.0.apk"
                     className="flex-1 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-blue-600/15 flex items-center justify-center gap-2 transition-all"
                   >
                     <Download size={16} />
-                    Direct Download APK (v1.3.1)
+                    Direct Download APK (v1.4.0)
                   </a>
                   <a
                     href="https://nek-kadam.onrender.com/apk/nek-kadam.apk"
@@ -553,18 +553,96 @@ export default function Settings() {
                 <div className="p-10 text-center text-slate-500 text-sm font-bold">No users loaded. Sync from server or seed the database.</div>
               ) : (
                 users.map((u: { id?: string }) => (
-                  <UserRow key={u.id ?? String(u)} user={u} departments={departments} onUpdate={() => void loadData()} />
+                  <UserRow key={u.id ?? String(u)} user={u} departments={departments} authUser={session} onUpdate={() => void loadData()} />
                 ))
               )}
             </div>
           </div>
+          <PatientDeleteCard />
         </>
       )}
     </div>
   );
 }
 
-function UserRow({ user, departments, onUpdate }: { user: any, departments: any[], onUpdate: () => void }) {
+function PatientDeleteCard() {
+  const [q, setQ] = useState('');
+  const [patients, setPatients] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    if (!q.trim()) { setPatients([]); return; }
+    const t = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`${getBaseUrl()}/api/patients/search?q=${encodeURIComponent(q)}`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('nek_token') || ''}` }
+        });
+        if (res.ok) {
+          const { data } = await res.json();
+          setPatients(data || []);
+        }
+      } catch (e) {}
+      setLoading(false);
+    }, 500);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  async function handleDelete(p: any) {
+    if (!window.confirm(`Are you sure you want to delete patient ${p.name}? This will also delete their visits.`)) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`${getBaseUrl()}/api/admin/patients/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('nek_token') || ''}` },
+        body: JSON.stringify({ cardNumber: p.card_number })
+      });
+      if (res.ok) {
+        alert('Patient deleted successfully');
+        setQ('');
+        setPatients([]);
+      } else alert('Failed to delete patient');
+    } catch (e) {}
+    setDeleting(false);
+  }
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 shadow-sm border border-rose-200 dark:border-rose-900/50 mt-8">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="p-3 bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-2xl">
+          <AlertTriangle size={24} />
+        </div>
+        <div>
+          <h3 className="text-xl font-black text-rose-600 dark:text-rose-400">Danger Zone: Delete Patient</h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400 font-bold">Search and soft-delete patients and their visits.</p>
+        </div>
+      </div>
+      <div className="relative mb-6">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+        <input type="text" placeholder="Search patient by card number or name..." value={q} onChange={e => setQ(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-2xl py-3 pl-12 pr-4 font-bold text-slate-800 dark:text-slate-100 focus:border-rose-500 outline-none transition-colors" />
+      </div>
+      {loading && <div className="text-center text-slate-400 font-bold p-4">Searching...</div>}
+      {patients.length > 0 && (
+        <div className="space-y-3">
+          {patients.map((p, i) => (
+            <div key={i} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+              <div>
+                <h4 className="font-bold text-slate-800 dark:text-slate-100">{p.name}</h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Card: {p.card_number} • Age: {p.age}</p>
+              </div>
+              <button onClick={() => handleDelete(p)} disabled={deleting} className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl flex items-center gap-2 transition-all active:scale-95 text-sm">
+                <Trash2 size={16} /> Delete Patient
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UserRow({ user, departments, authUser, onUpdate }: { user: any, departments: any[], authUser: any, onUpdate: () => void }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     passcode: '', // Clear passcode for security/editing
@@ -584,6 +662,24 @@ function UserRow({ user, departments, onUpdate }: { user: any, departments: any[
       alert("Failed to update user.");
     }
     setSaving(false);
+  }
+
+  const [deleting, setDeleting] = useState(false);
+  async function handleDelete() {
+    if (!window.confirm(`Are you sure you want to delete user ${user.name}?`)) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`${getBaseUrl()}/api/admin/users/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('nek_token') || ''}` },
+        body: JSON.stringify({ id: user.id })
+      });
+      if (res.ok) onUpdate();
+      else alert("Failed to delete user");
+    } catch (e: any) {
+      alert("Failed to delete user: " + e.message);
+    }
+    setDeleting(false);
   }
 
   if (editing) {
@@ -645,6 +741,11 @@ function UserRow({ user, departments, onUpdate }: { user: any, departments: any[
         <button onClick={() => setEditing(true)} className="min-h-[40px] px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold text-sm rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:scale-95">
           Edit
         </button>
+        {authUser?.userId !== user.id && (
+          <button onClick={handleDelete} disabled={deleting} className="min-h-[40px] px-3 py-2 border border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400 font-bold text-sm rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all active:scale-95 flex items-center justify-center">
+            <Trash2 size={16} />
+          </button>
+        )}
       </div>
     </div>
   );

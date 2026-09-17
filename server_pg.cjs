@@ -124,7 +124,7 @@ app.use((req, res, next) => {
 app.use('/static', express.static('dist'));
 app.use('/apk', express.static(path.join(__dirname, 'apk')));
 app.use(express.static(path.join(__dirname, 'dist')));
-app.get('/api/version', (_req, res) => res.json({ version: '1.3.1', apkUrl: '/apk/nek-kadam.apk' }));
+app.get('/api/version', (_req, res) => res.json({ version: '1.4.0', apkUrl: '/apk/nek-kadam.apk' }));
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -173,9 +173,12 @@ async function initDb() {
     'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS "personCard" TEXT;',
     'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS "currentDepartmentId" TEXT;',
     'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS "sourceDepartmentId" TEXT;',
-    'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS priority INTEGER DEFAULT 0;',
+    'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT \'NORMAL\';',
+    'ALTER TABLE tokens ALTER COLUMN priority TYPE TEXT USING CASE WHEN priority::text IN (\'1\', \'URGENT\') THEN \'URGENT\' ELSE \'NORMAL\' END;',
     'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS "sequenceIndex" INTEGER DEFAULT 0;',
-    'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS "isDeleted" BOOLEAN DEFAULT false;'
+    'ALTER TABLE tokens ADD COLUMN IF NOT EXISTS "isDeleted" BOOLEAN DEFAULT false;',
+    'ALTER TABLE patients ADD COLUMN IF NOT EXISTS "isDeleted" BOOLEAN DEFAULT false;',
+    'ALTER TABLE visits ADD COLUMN IF NOT EXISTS "isDeleted" BOOLEAN DEFAULT false;'
   ];
 
   for (const stmt of autoHealStatements) {
@@ -787,7 +790,7 @@ app.get('/api/tokens/dashboard', async (_req, res) => {
       SELECT DISTINCT ON (t."currentDepartmentId") t.*, d.code AS "departmentCode"
       FROM tokens t JOIN departments d ON t."currentDepartmentId" = d.id
       WHERE t."dateKey" = $1 AND t.status = 'WAITING' AND COALESCE(t."isDeleted"::text, '0') NOT IN ('1', 'true', 't')
-      ORDER BY t."currentDepartmentId", t.priority DESC, t."sequenceIndex" ASC
+      ORDER BY t."currentDepartmentId", CASE WHEN UPPER(COALESCE(t.priority::text, 'NORMAL')) = 'URGENT' THEN 1 ELSE 0 END DESC, t."sequenceIndex" ASC
       `,
       [dateKey]
     );
@@ -912,8 +915,8 @@ app.post('/api/tokens/create', async (req, res) => {
     );
     if (exists) return res.json({ error: `Token #${exists.tokennumber || exists.tokenNumber} already exists today (Status: ${exists.status})` });
 
-    let receptionRow = await qr1("SELECT id FROM departments WHERE code = $1 LIMIT 1", ['RECEPTION']);
-    if (!receptionRow?.id) receptionRow = await qr1('SELECT id FROM departments ORDER BY code LIMIT 1', []);
+    let receptionRow = await qr1("SELECT id FROM departments WHERE code IN ('REC', 'RECEPTION') OR LOWER(name) = 'reception' LIMIT 1", []);
+    if (!receptionRow?.id) receptionRow = await qr1("SELECT id FROM departments WHERE COALESCE(\"isActive\"::text, '1') IN ('1', 'true', 't') ORDER BY code LIMIT 1", []);
     const receptionId = receptionRow?.id;
     if (!receptionId) return res.status(503).json({ error: 'No departments configured' });
     const maxNumRow = await qr1('SELECT MAX("tokenNumber") AS m FROM tokens WHERE "dateKey" = $1', [dateKey]);
@@ -1222,12 +1225,40 @@ app.get('/api/patients/search', async (req, res) => {
     const data = await qr(
       `
       SELECT * FROM patients
-      WHERE UPPER(card_number) LIKE UPPER($1) OR UPPER(name) LIKE UPPER($1)
+      WHERE (UPPER(card_number) LIKE UPPER($1) OR UPPER(name) LIKE UPPER($1))
+        AND COALESCE("isDeleted"::text, '0') NOT IN ('1', 'true', 't')
       LIMIT 10
       `,
       [qPat]
     );
     res.json({ data });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/admin/users/delete', async (req, res) => {
+  try {
+    const { id } = req.body || {};
+    if (!id) return res.status(400).json({ error: 'User ID required' });
+    const sessionUserId = req.user?.userId || req.headers['x-user-id'];
+    if (id === sessionUserId) return res.status(400).json({ error: 'Cannot delete yourself' });
+    await q('UPDATE users SET "isActive" = false WHERE id = $1', [id]);
+    res.json({ ok: true });
+    if (req.io) req.io.emit('db_changed', { table: 'users', action: 'soft_delete' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/admin/patients/delete', async (req, res) => {
+  try {
+    const { cardNumber } = req.body || {};
+    if (!cardNumber) return res.status(400).json({ error: 'Patient card number required' });
+    await q('UPDATE patients SET "isDeleted" = true WHERE card_number = $1', [cardNumber]);
+    await q('UPDATE visits SET "isDeleted" = true WHERE patient_id = $1', [cardNumber]);
+    res.json({ ok: true });
+    if (req.io) req.io.emit('db_changed', { table: 'patients', action: 'soft_delete' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
-  FilePlus, Activity, Clock, RefreshCw,
+  FilePlus, Clock, RefreshCw,
   Search, ShieldCheck, Users
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -251,15 +251,15 @@ export default function Dashboard() {
             </button>
 
             <button 
-              onClick={() => navigate('/medicines')} 
-              className="bg-white dark:bg-slate-900 hover:bg-purple-50/50 dark:hover:bg-slate-850 text-slate-800 dark:text-slate-100 p-3 sm:p-4 rounded-2xl border-2 border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center justify-start gap-2.5 sm:gap-3 border-b-4 border-slate-300 dark:border-slate-750 active:translate-y-0.5 transition-all group min-h-[56px]"
+              onClick={() => navigate('/patients')} 
+              className="bg-white dark:bg-slate-900 hover:bg-slate-50/50 dark:hover:bg-slate-850 text-slate-800 dark:text-slate-100 p-3 sm:p-4 rounded-2xl border-2 border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center justify-start gap-2.5 sm:gap-3 border-b-4 border-slate-300 dark:border-slate-750 active:translate-y-0.5 transition-all group min-h-[56px]"
             >
-              <div className="p-2 sm:p-2.5 bg-purple-50 dark:bg-purple-950/40 rounded-xl text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform shrink-0">
-                <Activity size={20} />
+              <div className="p-2 sm:p-2.5 bg-blue-50 dark:bg-blue-950/40 rounded-xl text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform shrink-0">
+                <Users size={20} />
               </div>
               <div className="text-left min-w-0 flex-1">
-                <span className="font-black text-xs sm:text-sm block leading-tight truncate">{t('medicines')}</span>
-                <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold uppercase tracking-wider block truncate mt-0.5">Pharmacy Queue</span>
+                <span className="font-black text-xs sm:text-sm block leading-tight truncate">{t('patients')}</span>
+                <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold uppercase tracking-wider block truncate mt-0.5">View All</span>
               </div>
             </button>
           </div>

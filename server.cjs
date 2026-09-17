@@ -90,7 +90,7 @@ app.use((req, res, next) => {
 // AUDIT FIX: Serve only the dist folder, not the entire project root (was exposing nekkadam.db, source code, .env)
 app.use('/static', express.static('dist'));
 app.use('/apk', express.static(__dirname + '/apk'));
-app.get('/api/version', (req, res) => res.json({ version: '1.3.1', apkUrl: '/apk/nek-kadam.apk' }));
+app.get('/api/version', (req, res) => res.json({ version: '1.4.0', apkUrl: '/apk/nek-kadam.apk' }));
 
 // ─────────────────────────────────────
 //  ECOSYSTEM: Request Logger
@@ -118,10 +118,18 @@ try {
     db.prepare('ALTER TABLE activity_logs RENAME COLUMN userId TO user_id').run();
   }
   
-  // Migration for patients: adhar_no
+  // Migration for patients: adhar_no, isDeleted
   const patientInfo = db.prepare('PRAGMA table_info(patients)').all();
   if (!patientInfo.find(c => c.name === 'adhar_no')) {
     db.prepare('ALTER TABLE patients ADD COLUMN adhar_no TEXT').run();
+  }
+  if (!patientInfo.find(c => c.name === 'isDeleted')) {
+    db.prepare('ALTER TABLE patients ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0').run();
+  }
+  
+  const visitInfo = db.prepare('PRAGMA table_info(visits)').all();
+  if (!visitInfo.find(c => c.name === 'isDeleted')) {
+    db.prepare('ALTER TABLE visits ADD COLUMN isDeleted INTEGER NOT NULL DEFAULT 0').run();
   }
   
   // Migration for users: department, deviceId, updatedAt
@@ -846,7 +854,7 @@ app.get('/api/tokens/dashboard', (req, res) => {
 
     const nextTokens = db.prepare(`
       SELECT * FROM (
-        SELECT *, ROW_NUMBER() OVER(PARTITION BY currentDepartmentId ORDER BY priority DESC, sequenceIndex ASC) as rn
+        SELECT *, ROW_NUMBER() OVER(PARTITION BY currentDepartmentId ORDER BY CASE WHEN UPPER(priority) = 'URGENT' THEN 1 ELSE 0 END DESC, sequenceIndex ASC) as rn
         FROM tokens
         WHERE dateKey = ? AND status = 'WAITING' AND isDeleted = 0
       ) WHERE rn = 1
@@ -933,7 +941,7 @@ app.post('/api/tokens/create', (req, res) => {
       const exists = db.prepare('SELECT id, tokenNumber, status FROM tokens WHERE personId = ? AND dateKey = ? AND isDeleted = 0').get(personId, dateKey);
       if (exists) return { error: `Token #${exists.tokenNumber} already exists today (Status: ${exists.status})` };
 
-      const reception = db.prepare("SELECT id FROM departments WHERE code = 'RECEPTION'").get() || db.prepare('SELECT id FROM departments LIMIT 1').get();
+      const reception = db.prepare("SELECT id FROM departments WHERE code IN ('REC', 'RECEPTION') OR LOWER(name) = 'reception'").get() || db.prepare('SELECT id FROM departments WHERE isActive = 1 ORDER BY code ASC LIMIT 1').get();
       const nextNum = (db.prepare('SELECT MAX(tokenNumber) as m FROM tokens WHERE dateKey = ?').get(dateKey).m || 0) + 1;
       const nextSeq = (db.prepare('SELECT MAX(sequenceIndex) as m FROM tokens WHERE currentDepartmentId = ? AND dateKey = ?').get(reception.id, dateKey).m || 0) + 1;
       
@@ -1244,9 +1252,36 @@ app.post('/api/education/students/:studentId/remove', (req, res) => {
 app.get('/api/patients/search', (req, res) => {
   try {
     const q = (req.query.q || '').toUpperCase();
-    const data = db.prepare(`SELECT * FROM patients WHERE card_number LIKE ? OR name LIKE ? LIMIT 10`).all(`%${q}%`, `%${q}%`);
+    const data = db.prepare(`SELECT * FROM patients WHERE (card_number LIKE ? OR name LIKE ?) AND isDeleted = 0 LIMIT 10`).all(`%${q}%`, `%${q}%`);
     res.json({ data });
   } catch (e) { res.json({ error: e.message }); }
+});
+
+app.post('/api/admin/users/delete', (req, res) => {
+  try {
+    const { id } = req.body || {};
+    if (!id) return res.status(400).json({ error: 'User ID required' });
+    const sessionUserId = req.user?.userId || req.headers['x-user-id'];
+    if (id === sessionUserId) return res.status(400).json({ error: 'Cannot delete yourself' });
+    db.prepare('UPDATE users SET isActive = 0 WHERE id = ?').run(id);
+    res.json({ ok: true });
+    if (req.io) req.io.emit('db_changed', { table: 'users', action: 'soft_delete' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/admin/patients/delete', (req, res) => {
+  try {
+    const { cardNumber } = req.body || {};
+    if (!cardNumber) return res.status(400).json({ error: 'Patient card number required' });
+    db.prepare('UPDATE patients SET isDeleted = 1 WHERE card_number = ?').run(cardNumber);
+    db.prepare('UPDATE visits SET isDeleted = 1 WHERE patient_id = ?').run(cardNumber);
+    res.json({ ok: true });
+    if (req.io) req.io.emit('db_changed', { table: 'patients', action: 'soft_delete' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ─────────────────────────────────────

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { db, checkServerOnline, saveVisitOffline, getPendingVisitsForPatient, cleanPatientId } from '../lib/db';
 import { getBaseUrl } from '../lib/session';
 import { Phone, CreditCard, Plus, Clock, Trash2, X, Printer, FileText, Calendar, Stethoscope, RefreshCw, QrCode, ScanFace } from 'lucide-react';
@@ -78,6 +79,7 @@ async function loadVisitsFromIndexedDB(cardNumber: string, patientUUID?: string)
 export default function PatientProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { session } = useAuth();
   
   const [patient, setPatient] = useState<any>(null);
   const [visits, setVisits] = useState<any[]>([]);
@@ -87,6 +89,15 @@ export default function PatientProfile() {
   const [showOpdSlip, setShowOpdSlip] = useState(false);
   const [isFaceEnrollOpen, setIsFaceEnrollOpen] = useState(false);
   const [hasFaceEnrolled, setHasFaceEnrolled] = useState(false);
+
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('success');
+
+  const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToastMessage(msg);
+    setToastType(type);
+    setTimeout(() => setToastMessage(null), 2500);
+  };
 
   // New Visit State
   const [doctorName, setDoctorName] = useState('');
@@ -106,6 +117,28 @@ export default function PatientProfile() {
   const [showResults, setShowResults] = useState(false);
   const [addingVisit, setAddingVisit] = useState(false);
   const isSavingRef = useRef(false);
+
+  const [deletingPatient, setDeletingPatient] = useState(false);
+  async function handleDeletePatient() {
+    if (!window.confirm(`Are you sure you want to delete patient ${patient?.name}? This will also delete all their visits.`)) return;
+    setDeletingPatient(true);
+    try {
+      const res = await fetch(`${getBaseUrl()}/api/admin/patients/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('nek_token') || ''}` },
+        body: JSON.stringify({ cardNumber: patient.card_number })
+      });
+      if (res.ok) {
+        showToast('Patient deleted successfully', 'success');
+        setTimeout(() => navigate('/patients'), 1000);
+      } else {
+        showToast('Failed to delete patient', 'error');
+      }
+    } catch (e: any) {
+      showToast('Failed to delete patient', 'error');
+    }
+    setDeletingPatient(false);
+  }
 
   // Visit Details Modal State
   const [selectedVisit, setSelectedVisit] = useState<any>(null);
@@ -487,7 +520,7 @@ export default function PatientProfile() {
         setVisitNotes('');
         
         await fetchPatientData();
-        alert('Saved offline successfully! It will sync automatically when online.');
+        showToast('Saved offline! Will sync when online.', 'info');
         return;
       }
 
@@ -514,7 +547,7 @@ export default function PatientProfile() {
       setVisitNotes('');
       
       await fetchPatientData();
-      alert('Visit saved successfully');
+      showToast('Visit saved successfully!', 'success');
     } catch (err: any) {
       console.error('[VISIT SAVE] API failed, attempting offline fallback:', err);
       
@@ -528,11 +561,11 @@ export default function PatientProfile() {
         setVisitNotes('');
         
         await fetchPatientData();
-        alert('Saved offline successfully (will sync when connection is stable)!');
+        showToast('Saved offline! Will sync when stable.', 'info');
         return;
       } catch (localErr: any) {
         console.error('[VISIT SAVE] Offline fallback failed:', localErr);
-        alert('FAILED TO SAVE VISIT: ' + (localErr.message || 'Check logs'));
+        showToast('Failed to save: ' + (localErr.message || 'Check logs'), 'error');
         return;
       }
     } finally {
@@ -683,6 +716,19 @@ export default function PatientProfile() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-5 space-y-5">
+      {/* Slide-down Toast */}
+      {toastMessage && (
+        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[9999] px-6 py-3 rounded-2xl shadow-2xl text-white font-black text-sm flex items-center gap-2 animate-slide-down ${
+          toastType === 'success' ? 'bg-emerald-600' :
+          toastType === 'error' ? 'bg-red-600' :
+          'bg-blue-600'
+        }`}>
+          {toastType === 'success' && '✅'}
+          {toastType === 'error' && '❌'}
+          {toastType === 'info' && 'ℹ️'}
+          {toastMessage}
+        </div>
+      )}
       
       {/* Profile Header */}
       <div className="glass-card pt-6 pb-5 px-4 sm:px-6 sm:pt-8 rounded-2xl relative overflow-hidden shadow-xl shadow-emerald-900/5 dark:border-slate-800">
@@ -727,6 +773,11 @@ export default function PatientProfile() {
                 <button onClick={startEditingProfile} className="min-h-[32px] px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 rounded-lg text-xs font-black transition-all">
                   Edit Profile
                 </button>
+                {session?.role?.toLowerCase() === 'admin' && (
+                  <button onClick={handleDeletePatient} disabled={deletingPatient} className="min-h-[32px] px-3 py-1 bg-rose-100 dark:bg-rose-900/30 hover:bg-rose-200 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 rounded-lg text-xs font-black transition-all flex items-center gap-1">
+                    <Trash2 size={14} /> Delete
+                  </button>
+                )}
               </div>
               <div className="flex flex-wrap justify-center md:justify-start gap-1.5 sm:gap-2">
                 <span className="bg-slate-100 dark:bg-slate-900/50 text-slate-600 dark:text-slate-300 px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 border border-slate-200 dark:border-slate-800">
@@ -817,26 +868,26 @@ export default function PatientProfile() {
             </div>
           )}
 
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-center md:justify-end shrink-0">
-            <div className="bg-white/80 dark:bg-slate-900/80 p-2.5 sm:p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm text-center min-w-[65px] sm:min-w-[70px]">
-              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">Visits</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 w-full md:w-auto">
+            <div className="bg-white/80 dark:bg-slate-900/80 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-row items-center gap-3 px-4 py-3">
+              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Visits</p>
               <p className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">{visits.length}</p>
             </div>
-            <div className="bg-white/80 dark:bg-slate-900/80 p-2.5 sm:p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm text-center min-w-[65px] sm:min-w-[70px] flex flex-col items-center justify-center">
-              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">Age</p>
+            <div className="bg-white/80 dark:bg-slate-900/80 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-row items-center gap-3 px-4 py-3">
+              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Age</p>
               <p className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">{patient.age || '—'}</p>
             </div>
 
             {/* Patient OPD QR Token Card */}
             <div 
               onClick={() => setShowOpdSlip(true)}
-              className="bg-white dark:bg-slate-900 p-2 sm:p-2.5 rounded-2xl border border-emerald-500/30 dark:border-emerald-500/20 shadow-sm hover:shadow-md cursor-pointer group transition-all flex flex-col items-center gap-1"
+              className="bg-white dark:bg-slate-900 rounded-2xl border border-emerald-500/30 dark:border-emerald-500/20 shadow-sm hover:shadow-md cursor-pointer group transition-all flex flex-row items-center gap-3 px-3 py-2.5"
               title="Click to print OPD QR Slip"
             >
-              <div className="bg-white p-1 rounded-xl shadow-inner border border-slate-100">
+              <div className="bg-white p-1 rounded-xl shadow-inner border border-slate-100 shrink-0">
                 <QRCodeSVG 
                   value={String(patient.card_number || patient.id || '')} 
-                  size={42} 
+                  size={32} 
                   level="M" 
                   bgColor="#ffffff"
                   fgColor="#0f172a"
@@ -850,19 +901,19 @@ export default function PatientProfile() {
             {/* Patient Face ID Biometric Card */}
             <div 
               onClick={() => setIsFaceEnrollOpen(true)}
-              className={`p-2 sm:p-2.5 rounded-2xl border shadow-sm hover:shadow-md cursor-pointer group transition-all flex flex-col items-center gap-1 min-w-[75px] ${
+              className={`rounded-2xl border shadow-sm hover:shadow-md cursor-pointer group transition-all flex flex-row items-center gap-3 px-3 py-2.5 ${
                 hasFaceEnrolled 
                   ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-500/40' 
                   : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
               }`}
               title={hasFaceEnrolled ? "Face ID Active! Click to re-scan or update face" : "Click to Enroll Face ID for 1-second reception check-in"}
             >
-              <div className={`p-2 rounded-xl flex items-center justify-center transition-all ${
+              <div className={`p-2 rounded-xl flex items-center justify-center transition-all shrink-0 ${
                 hasFaceEnrolled 
                   ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' 
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 group-hover:bg-emerald-50 dark:group-hover:bg-emerald-950 group-hover:text-emerald-600'
               }`}>
-                <ScanFace size={26} />
+                <ScanFace size={20} />
               </div>
               <span className={`text-[9px] font-black flex items-center gap-0.5 uppercase tracking-wider ${
                 hasFaceEnrolled ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'
