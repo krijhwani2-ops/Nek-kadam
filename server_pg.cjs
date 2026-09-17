@@ -427,7 +427,7 @@ app.get('/api/chat/history', async (req, res) => {
     if (recipientId && recipientId !== 'null' && recipientId !== 'undefined' && recipientId !== '') {
       const currentUserId = req.user?.userId || 'admin';
       messages = await qr(
-        `SELECT id, "senderId", "senderName", "senderDepartment", "recipientId", message, timestamp, "fileName", CASE WHEN "fileData" IS NOT NULL AND "fileData" != '' THEN 1 ELSE 0 END as "hasFile"
+        `SELECT id, "senderId", "senderName", "senderDepartment", "recipientId", message, timestamp, "fileName", CASE WHEN "fileData" IS NOT NULL THEN 1 ELSE 0 END as "hasFile"
          FROM chat_messages
          WHERE ("senderId" = $1 AND "recipientId" = $2) OR ("senderId" = $2 AND "recipientId" = $1)
          ORDER BY timestamp ASC LIMIT 200`,
@@ -435,7 +435,7 @@ app.get('/api/chat/history', async (req, res) => {
       );
     } else {
       messages = await qr(
-        `SELECT id, "senderId", "senderName", "senderDepartment", "recipientId", message, timestamp, "fileName", CASE WHEN "fileData" IS NOT NULL AND "fileData" != '' THEN 1 ELSE 0 END as "hasFile"
+        `SELECT id, "senderId", "senderName", "senderDepartment", "recipientId", message, timestamp, "fileName", CASE WHEN "fileData" IS NOT NULL THEN 1 ELSE 0 END as "hasFile"
          FROM chat_messages
          WHERE "recipientId" IS NULL OR "recipientId" = ''
          ORDER BY timestamp ASC LIMIT 200`,

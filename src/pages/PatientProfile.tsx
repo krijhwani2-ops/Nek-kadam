@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { db, checkServerOnline, saveVisitOffline, getPendingVisitsForPatient, cleanPatientId } from '../lib/db';
 import { getBaseUrl } from '../lib/session';
 import { Phone, CreditCard, Plus, Clock, Trash2, X, Printer, FileText, Calendar, Stethoscope, RefreshCw } from 'lucide-react';
-import { Spinner } from '../components/ui';
+import { Loader2 as Spinner } from 'lucide-react';
 
 interface PrescribedMed {
   code: string;
