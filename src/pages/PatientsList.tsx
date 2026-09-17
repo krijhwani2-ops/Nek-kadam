@@ -79,144 +79,120 @@ export default function PatientsList() {
   );
 
   return (
-    <div className="max-w-5xl mx-auto space-y-4 pb-6 px-4">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <p className="text-emerald-500 font-bold text-xs uppercase tracking-widest mb-1">All Records</p>
-          <h2 className="text-2xl font-extrabold text-emerald-900 dark:text-emerald-400 flex items-center gap-2">
-            <span className="p-2 bg-gradient-primary rounded-xl text-white shadow-md shadow-emerald-200 dark:shadow-emerald-900/30">
-              <Users size={18} />
-            </span>
-            {t('patients')}
-          </h2>
+    <div className="max-w-5xl mx-auto space-y-3 pb-6 px-3.5 pt-1">
+      {/* 1. STITCH DIRECTORY HEADING */}
+      <section className="pt-1 flex items-center justify-between" data-purpose="directory-heading">
+        <div className="flex items-center space-x-2.5">
+          <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-100 dark:border-emerald-800">
+            <Users size={16} />
+          </div>
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 block leading-none">All Records</span>
+            <h1 className="text-xl font-black text-slate-900 dark:text-slate-100 tracking-tight leading-tight">{t('patients')}</h1>
+          </div>
         </div>
-        <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
-          <button
-            type="button"
-            onClick={() => setIsScannerOpen(true)}
-            className="min-h-[44px] px-3.5 py-2.5 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95"
-            title="Scan Barcode or QR Code on OPD Card"
-          >
-            <QrCode size={16} className="text-emerald-400" />
-            <span>Scan OPD Card</span>
-          </button>
-          <Link to="/patients/new" className="min-h-[44px] btn-primary text-xs flex items-center justify-center gap-1.5 w-full sm:w-fit px-4 py-2.5 rounded-xl">
-            + {t('registerPatient')}
-          </Link>
-        </div>
-      </div>
+      </section>
 
-      {/* Search */}
-      <div className="glass-card rounded-xl px-3 sm:px-4 py-2 flex items-center gap-2 sm:gap-3 group focus-within:border-emerald-300 dark:border-slate-800 min-h-[48px]"
-           style={{ border: '2px solid rgba(167,243,208,0.4)' }}>
-        <Search
-          size={18}
-          className="text-slate-400 group-focus-within:text-emerald-500 transition-colors flex-shrink-0"
-        />
-        <input
-          type="text"
-          className="flex-1 bg-transparent outline-none text-slate-700 dark:text-slate-200 font-medium placeholder-slate-400 text-sm min-w-0"
-          placeholder={t('searchPatientPlaceholder')}
-          value={localQuery}
-          onChange={(e) => setLocalQuery(e.target.value)}
-        />
-        {localQuery && (
-          <button
-            onClick={() => { setLocalQuery(''); setSearchQuery(''); }}
-            className="min-w-[44px] min-h-[44px] flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl leading-none font-bold"
-            aria-label="Clear search"
-          >
-            ×
-          </button>
-        )}
-        <button
+      {/* 2. STITCH ACTION BUTTONS (BALANCED 50/50 ROW) */}
+      <section className="grid grid-cols-2 gap-2.5" data-purpose="quick-actions">
+        <button 
           type="button"
           onClick={() => setIsScannerOpen(true)}
-          className="min-h-[44px] min-w-[44px] flex items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-black border border-emerald-500/20 transition-all shrink-0 active:scale-95"
-          title="Scan OPD Card QR or Barcode"
+          className="flex items-center justify-center space-x-2 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 active:scale-[0.98] text-white py-2.5 px-3 rounded-xl font-semibold text-xs shadow-sm transition-all"
         >
-          <QrCode size={16} />
-          <span className="hidden sm:inline">Scan</span>
+          <QrCode size={16} className="text-emerald-400 shrink-0" />
+          <span className="truncate">Scan OPD Card</span>
         </button>
-      </div>
+        <Link 
+          to="/patients/new" 
+          className="flex items-center justify-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white py-2.5 px-3 rounded-xl font-semibold text-xs shadow-sm transition-all"
+        >
+          <span className="text-base leading-none font-bold">+</span>
+          <span className="truncate">{t('registerPatient')}</span>
+        </Link>
+      </section>
 
-      {/* Count */}
-      {!loading && (
-        <p className="text-xs text-slate-400 dark:text-slate-500 font-medium px-1">
-          Showing <span className="font-bold text-emerald-600">{filteredPatients.length}</span> patient{filteredPatients.length !== 1 ? 's' : ''}
-          {searchQuery && ` for "${searchQuery}"`}
-        </p>
-      )}
+      {/* 3. STITCH SEARCH & STATUS ROW */}
+      <section className="space-y-1.5" data-purpose="search-and-counts">
+        <div className="relative flex items-center">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+            <Search size={16} />
+          </div>
+          <input 
+            type="text"
+            className="w-full pl-9 pr-10 py-2.5 text-xs bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 shadow-sm transition-all outline-none"
+            placeholder={t('searchPatientPlaceholder')}
+            value={localQuery}
+            onChange={(e) => setLocalQuery(e.target.value)}
+          />
+          {localQuery && (
+            <button
+              onClick={() => { setLocalQuery(''); setSearchQuery(''); }}
+              className="absolute right-9 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm font-bold"
+              aria-label="Clear search"
+            >
+              ×
+            </button>
+          )}
+          <button 
+            type="button"
+            onClick={() => setIsScannerOpen(true)}
+            aria-label="Scan QR Code into search" 
+            className="absolute right-1 p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900 transition-colors"
+          >
+            <QrCode size={16} />
+          </button>
+        </div>
 
-      {/* List */}
+        {/* Count Indicator and Sort */}
+        <div className="flex items-center justify-between px-1 text-xs text-slate-500 dark:text-slate-400 font-medium">
+          <span className="text-xs">
+            Showing <strong className="text-emerald-600 dark:text-emerald-400 font-bold">{filteredPatients.length}</strong> patient{filteredPatients.length !== 1 ? 's' : ''}
+          </span>
+          <div className="flex items-center space-x-1 text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
+            <span>SORTED BY LATEST</span>
+          </div>
+        </div>
+      </section>
+
+      {/* 4. STITCH COMPACT PATIENT CARDS LIST */}
       {loading ? (
         <div className="flex items-center justify-center py-20 gap-3 text-emerald-600 font-semibold">
           <div className="spinner" />
           Loading patient records…
         </div>
       ) : (
-        <div className="space-y-2.5 stagger">
-          {filteredPatients.slice(0, visibleCount).map((p) => (
-            <Link
-              key={p.id}
-              to={`/patients/${p.card_number}`}
-              className="flex flex-col md:flex-row justify-between items-start md:items-center p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800/80 hover:border-emerald-300 dark:hover:border-slate-700 hover:-translate-y-0.5 group gap-3 transition-all shadow-sm w-full min-w-0 overflow-hidden"
-            >
-              <div className="flex items-center gap-3 min-w-0 flex-1 w-full md:w-auto">
-                {/* Avatar */}
-                <div className="w-11 h-11 rounded-xl bg-gradient-primary flex items-center justify-center text-white font-extrabold text-lg shadow-md shadow-emerald-200 dark:shadow-emerald-950 group-hover:scale-105 transition-transform duration-300 flex-shrink-0">
-                  {(p.name || 'P').charAt(0).toUpperCase()}
+        <div className="space-y-2">
+          <section className="space-y-2" data-purpose="patient-directory-list">
+            {filteredPatients.slice(0, visibleCount).map((p) => (
+              <Link
+                key={p.id}
+                to={`/patients/${p.card_number}`}
+                className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-slate-100 dark:border-slate-800/80 shadow-sm flex items-center justify-between active:bg-slate-50 dark:active:bg-slate-800/60 hover:border-emerald-300 dark:hover:border-slate-700 transition-colors cursor-pointer group"
+              >
+                <div className="flex items-center space-x-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white font-bold text-base flex items-center justify-center shrink-0 shadow-sm">
+                    {(p.name || 'P').charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="font-bold text-slate-900 dark:text-slate-100 text-sm leading-tight truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                      {p.name || 'Unnamed Patient'}
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium tracking-wide mt-0.5 truncate">
+                      {p.phone || <span className="italic text-slate-400">No phone</span>}
+                    </p>
+                  </div>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <h3 className="font-extrabold text-slate-800 dark:text-slate-100 text-base group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors truncate">
-                    {p.name || 'Unnamed Patient'}
-                  </h3>
-                  <p className="text-xs text-slate-400 dark:text-slate-500 font-medium mt-0.5 truncate">
-                    {p.phone || 'No phone'}
-                  </p>
+                <div className="flex items-center space-x-2 shrink-0 pl-2">
+                  <span className="bg-amber-500 text-white font-bold text-xs px-2.5 py-0.5 rounded-full shadow-sm leading-normal">
+                    {p.card_number && p.card_number.toString().startsWith('TEMP-') ? 'No ID' : `#${p.card_number}`}
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all shrink-0" />
                 </div>
-              </div>
+              </Link>
+            ))}
+          </section>
 
-              {/* Visit Date Column */}
-              <div className="hidden md:flex flex-col items-center shrink-0">
-                {p.last_visit_date ? (
-                  <>
-                    <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Last Visit</p>
-                    <span className="flex items-center gap-1.5 text-sm font-bold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/50 px-3 py-1 rounded-xl border border-slate-100 dark:border-slate-800 truncate">
-                      <Calendar size={14} className="text-orange-500 shrink-0" /> {safeFormatDate(p.last_visit_date, { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-xs font-bold text-slate-300 dark:text-slate-600 italic">No visits</span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3 sm:gap-6 w-full md:w-auto justify-between md:justify-end min-w-0 shrink-0">
-                {/* Mobile Visit Date */}
-                <div className="md:hidden min-w-0 shrink">
-                  {p.last_visit_date && (
-                    <span className="flex items-center gap-1 text-[10px] font-bold text-orange-500 bg-orange-50 dark:bg-orange-950 px-2 py-0.5 rounded-lg border border-orange-100 dark:border-orange-900 truncate">
-                      <Calendar size={10} className="shrink-0" /> {safeFormatDate(p.last_visit_date)}
-                    </span>
-                  )}
-                </div>
-                
-                <span
-                  className="px-4 py-2 rounded-xl font-bold text-sm truncate max-w-[140px] sm:max-w-none shrink-0"
-                  style={{
-                    background: 'linear-gradient(135deg,#fb923c,#f97316)',
-                    color: 'white',
-                    boxShadow: '0 2px 8px rgba(251,146,60,0.3)',
-                  }}
-                >
-                  {p.card_number && p.card_number.toString().startsWith('TEMP-') ? 'No ID' : `#${p.card_number}`}
-                </span>
-                <ChevronRight size={18} className="text-slate-300 dark:text-slate-600 group-hover:text-emerald-500 group-hover:translate-x-1 transition-all duration-250 shrink-0" />
-              </div>
-            </Link>
-          ))}
-          
           {visibleCount < filteredPatients.length && (
             <div ref={observerTarget} className="h-10 flex items-center justify-center opacity-50">
               <div className="spinner w-6 h-6 border-emerald-500" />

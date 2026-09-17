@@ -730,11 +730,10 @@ export default function PatientProfile() {
         </div>
       )}
       
-      {/* Profile Header */}
-      <div className="glass-card pt-6 pb-5 px-4 sm:px-6 sm:pt-8 rounded-2xl relative overflow-hidden shadow-xl shadow-emerald-900/5 dark:border-slate-800">
-        
-        {/* Prominent OPD Card Number Banner */}
-        <div className="flex items-center justify-between flex-wrap gap-2 mb-4 pb-3 border-b border-slate-200/60 dark:border-slate-800">
+      {/* 1. STITCH STREAMLINED PATIENT PROFILE CARD */}
+      <section className="bg-white dark:bg-slate-900 rounded-2xl p-3.5 sm:p-5 shadow-sm border border-emerald-100/70 dark:border-slate-800 relative overflow-hidden" data-purpose="patient-summary-card">
+        {/* Top Pass Badges Row (Horizontal Layout) */}
+        <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-emerald-50 dark:border-slate-800">
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-400 bg-emerald-100/70 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-500/20">
               OPD SMART PASS
@@ -748,74 +747,91 @@ export default function PatientProfile() {
                 alert(`Card #${patient.card_number} copied to clipboard!`);
               }
             }}
-            className="flex items-center gap-2 px-3.5 py-1.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl shadow-md shadow-orange-500/20 cursor-pointer active:scale-95 transition-all"
+            className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 text-white font-black text-[11px] tracking-wide flex items-center space-x-1.5 shadow-sm cursor-pointer active:scale-95 transition-all"
             title="Click to copy Card Number"
           >
-            <CreditCard size={17} className="text-white shrink-0" />
-            <span className="text-[11px] font-black uppercase tracking-wider text-orange-100">CARD NO:</span>
-            <span className="text-base sm:text-lg font-black tracking-tight font-mono">
-              {patient.card_number?.startsWith('TEMP-') ? 'NO ID' : `#${patient.card_number}`}
-            </span>
+            <CreditCard size={14} className="text-white shrink-0" />
+            <span>CARD NO: {patient.card_number?.startsWith('TEMP-') ? 'NO ID' : `#${patient.card_number}`}</span>
           </div>
         </div>
 
-        <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-100 dark:bg-emerald-950/20 rounded-full blur-[100px] opacity-40 -mr-40 -mt-40 pointer-events-none"></div>
-        
-        <div className="relative z-10 flex flex-col md:flex-row gap-5 sm:gap-6 items-center">
-          <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-black text-2xl sm:text-3xl shadow-xl shadow-emerald-200 dark:shadow-emerald-950 border-4 border-white dark:border-slate-800 shrink-0">
-            {(patient?.name?.charAt(0) || '?')}
-          </div>
-          
+        {/* Identity Section: Avatar & Name */}
+        <div className="pt-3 flex flex-col items-center text-center">
           {!isEditingProfile ? (
-            <div className="flex-grow text-center md:text-left min-w-0 w-full">
-              <div className="flex items-center gap-3 justify-center md:justify-start flex-wrap mb-2">
-                <h2 className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100 tracking-tight">{patient.name}</h2>
-                <button onClick={startEditingProfile} className="min-h-[32px] px-3 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 rounded-lg text-xs font-black transition-all">
+            <>
+              {/* Name & Primary Actions Arranged Horizontally */}
+              <div className="flex flex-wrap items-center justify-center gap-1.5 mb-1.5">
+                <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-slate-100">{patient.name}</h1>
+                <button 
+                  onClick={startEditingProfile} 
+                  className="px-2.5 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-bold rounded-md transition-colors inline-flex items-center shadow-xs"
+                  type="button"
+                >
                   Edit Profile
                 </button>
                 {session?.role?.toLowerCase() === 'admin' && (
-                  <button onClick={handleDeletePatient} disabled={deletingPatient} className="min-h-[32px] px-3 py-1 bg-rose-100 dark:bg-rose-900/30 hover:bg-rose-200 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 rounded-lg text-xs font-black transition-all flex items-center gap-1">
-                    <Trash2 size={14} /> Delete
+                  <button 
+                    onClick={handleDeletePatient} 
+                    disabled={deletingPatient} 
+                    className="px-2 py-0.5 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/40 text-[11px] font-bold rounded-md transition-colors inline-flex items-center space-x-1 shadow-xs"
+                    type="button"
+                  >
+                    <Trash2 size={12} className="text-rose-500" />
+                    <span>Delete</span>
                   </button>
                 )}
               </div>
-              <div className="flex flex-wrap justify-center md:justify-start gap-1.5 sm:gap-2">
-                <span className="bg-slate-100 dark:bg-slate-900/50 text-slate-600 dark:text-slate-300 px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 border border-slate-200 dark:border-slate-800">
-                  <Phone size={14} className="text-emerald-500 shrink-0" /> {patient.phone || 'No Phone'}
+
+              {/* Contact & Demographics Pill Chips (Row Layout) */}
+              <div className="flex flex-wrap items-center justify-center gap-1 mt-0.5">
+                {/* Phone Chip */}
+                <span className="inline-flex items-center px-2.5 py-0.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 font-semibold text-[11px] rounded-full border border-emerald-100/80 dark:border-emerald-800 shadow-xs">
+                  <Phone size={12} className="mr-1 text-emerald-600 dark:text-emerald-400" />
+                  {patient.phone || 'No phone'}
                 </span>
-                {patient.address && (
-                  <span className="bg-slate-100 dark:bg-slate-900/50 text-slate-600 dark:text-slate-300 px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 border border-slate-200 dark:border-slate-800">
-                    <span className="text-emerald-500">📍</span> {patient.address}
-                  </span>
-                )}
-                {patient.blood_group && (
-                  <span className="bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 border border-red-100 dark:border-red-900/30">
-                    <span className="text-red-500">🩸</span> {patient.blood_group}
-                  </span>
-                )}
+
+                {/* Gender Chip */}
                 {patient.gender && (
-                  <span className="bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 border border-blue-100 dark:border-blue-900/30">
-                    <span>👤</span> {patient.gender}
+                  <span className="inline-flex items-center px-2.5 py-0.5 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-semibold text-[11px] rounded-full border border-blue-100 dark:border-blue-900 shadow-xs">
+                    <span className="mr-1">👤</span>
+                    {patient.gender}
                   </span>
                 )}
+
+                {/* Doctor Assignment Chip */}
                 {visits.length > 0 && (
-                  <span className="bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 px-3 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 border border-emerald-100 dark:border-emerald-900/30">
-                    <Stethoscope size={14} className="text-emerald-500 shrink-0" /> {
-                      (() => {
-                         const counts: any = {};
-                         visits.forEach((v: any) => {
-                           const name = v.doctor_name || 'NGO Doctor';
-                           counts[name] = (counts[name] || 0) + 1;
-                         });
-                         return Object.entries(counts).sort((a: any, b: any) => b[1] - a[1])[0][0];
-                       })()
-                    }
+                  <span className="inline-flex items-center px-2.5 py-0.5 bg-emerald-50/80 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-200 font-bold text-[11px] rounded-full border border-emerald-200 dark:border-emerald-800 shadow-xs">
+                    <Stethoscope size={12} className="mr-1 text-emerald-600 dark:text-emerald-400" />
+                    {(() => {
+                      const counts: any = {};
+                      visits.forEach((v: any) => {
+                        const name = v.doctor_name || 'NGO Doctor';
+                        counts[name] = (counts[name] || 0) + 1;
+                      });
+                      return Object.entries(counts).sort((a: any, b: any) => b[1] - a[1])[0][0];
+                    })()}
+                  </span>
+                )}
+
+                {/* Blood Group Chip */}
+                {patient.blood_group && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 font-semibold text-[11px] rounded-full border border-rose-100 dark:border-rose-900/40 shadow-xs">
+                    <span className="mr-1">🩸</span>
+                    {patient.blood_group}
+                  </span>
+                )}
+
+                {/* Address Chip */}
+                {patient.address && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-[11px] rounded-full border border-slate-200 dark:border-slate-700 shadow-xs">
+                    <span className="mr-1">📍</span>
+                    {patient.address}
                   </span>
                 )}
               </div>
-            </div>
+            </>
           ) : (
-            <div className="flex-1 w-full space-y-3">
+            <div className="flex-1 w-full space-y-3 text-left">
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                 <div className="space-y-1">
                   <label htmlFor="edit-name" className="block text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
@@ -867,89 +883,82 @@ export default function PatientProfile() {
               </div>
             </div>
           )}
+        </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 w-full md:w-auto">
-            <div className="bg-white/80 dark:bg-slate-900/80 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-row items-center gap-3 px-4 py-3">
-              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Visits</p>
-              <p className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">{visits.length}</p>
-            </div>
-            <div className="bg-white/80 dark:bg-slate-900/80 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-row items-center gap-3 px-4 py-3">
-              <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Age</p>
-              <p className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400">{patient.age || '—'}</p>
-            </div>
-
-            {/* Patient OPD QR Token Card */}
-            <div 
-              onClick={() => setShowOpdSlip(true)}
-              className="bg-white dark:bg-slate-900 rounded-2xl border border-emerald-500/30 dark:border-emerald-500/20 shadow-sm hover:shadow-md cursor-pointer group transition-all flex flex-row items-center gap-3 px-3 py-2.5"
-              title="Click to print OPD QR Slip"
-            >
-              <div className="bg-white p-1 rounded-xl shadow-inner border border-slate-100 shrink-0">
-                <QRCodeSVG 
-                  value={String(patient.card_number || patient.id || '')} 
-                  size={32} 
-                  level="M" 
-                  bgColor="#ffffff"
-                  fgColor="#0f172a"
-                />
+        {/* Key Metrics Row: Balanced Visits & Age Dual Stat Box */}
+        <div className="grid grid-cols-2 gap-2.5 mt-3" data-purpose="metrics-row">
+          {/* Metric: Visits */}
+          <div className="bg-white dark:bg-slate-900 border border-emerald-100/80 dark:border-slate-800 rounded-xl p-3 flex items-center justify-between shadow-xs">
+            <div className="flex items-center space-x-2">
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                <Clock size={16} />
               </div>
-              <span className="text-[9px] font-black text-emerald-700 dark:text-emerald-400 flex items-center gap-1 uppercase tracking-wider group-hover:underline">
-                <Printer size={10} /> Print Slip
-              </span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Visits</span>
             </div>
-
-            {/* Patient Face ID Biometric Card */}
-            <div 
-              onClick={() => setIsFaceEnrollOpen(true)}
-              className={`rounded-2xl border shadow-sm hover:shadow-md cursor-pointer group transition-all flex flex-row items-center gap-3 px-3 py-2.5 ${
-                hasFaceEnrolled 
-                  ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-500/40' 
-                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
-              }`}
-              title={hasFaceEnrolled ? "Face ID Active! Click to re-scan or update face" : "Click to Enroll Face ID for 1-second reception check-in"}
-            >
-              <div className={`p-2 rounded-xl flex items-center justify-center transition-all shrink-0 ${
-                hasFaceEnrolled 
-                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30' 
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 group-hover:bg-emerald-50 dark:group-hover:bg-emerald-950 group-hover:text-emerald-600'
-              }`}>
-                <ScanFace size={20} />
+            <span className="text-xl font-black text-emerald-700 dark:text-emerald-400">{visits.length}</span>
+          </div>
+          {/* Metric: Age */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 flex items-center justify-between shadow-xs">
+            <div className="flex items-center space-x-2">
+              <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center">
+                <span className="text-xs">👤</span>
               </div>
-              <span className={`text-[9px] font-black flex items-center gap-0.5 uppercase tracking-wider ${
-                hasFaceEnrolled ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'
-              } group-hover:underline`}>
-                {hasFaceEnrolled ? '✓ Face ID' : '+ Face ID'}
-              </span>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Age</span>
             </div>
+            <span className="text-xl font-black text-slate-800 dark:text-slate-100">{patient.age || '—'}</span>
           </div>
         </div>
-      </div>
- 
-      {/* Mobile Tab Selector */}
-      <div className="flex lg:hidden bg-slate-200/70 dark:bg-slate-800/80 p-1 rounded-2xl gap-1 shadow-inner">
+
+        {/* Action Buttons: Print Slip & Face ID (Horizontal side-by-side) */}
+        <div className="grid grid-cols-2 gap-2.5 mt-2.5" data-purpose="quick-card-actions">
+          {/* Print Slip Action Button */}
+          <button 
+            onClick={() => setShowOpdSlip(true)} 
+            className="border-2 border-emerald-200/80 dark:border-emerald-800/80 hover:border-emerald-500 bg-white dark:bg-slate-900 active:bg-emerald-50 dark:active:bg-slate-800 rounded-xl py-2 px-3 flex items-center justify-center space-x-1.5 transition-all group" 
+            type="button"
+          >
+            <Printer size={16} className="text-slate-800 dark:text-slate-200 group-hover:text-emerald-700 dark:group-hover:text-emerald-400" />
+            <span className="text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider group-hover:text-emerald-700 dark:group-hover:text-emerald-400">PRINT SLIP</span>
+          </button>
+          {/* Face ID Action Button */}
+          <button 
+            onClick={() => setIsFaceEnrollOpen(true)} 
+            className={`border-2 ${hasFaceEnrolled ? 'border-emerald-500/80 bg-emerald-50/50 dark:bg-emerald-950/30' : 'border-slate-200/80 dark:border-slate-800 hover:border-emerald-500 bg-white dark:bg-slate-900'} active:bg-emerald-50 dark:active:bg-slate-800 rounded-xl py-2 px-3 flex items-center justify-center space-x-1.5 transition-all group`} 
+            type="button"
+          >
+            <ScanFace size={16} className={`${hasFaceEnrolled ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-300'} group-hover:text-emerald-700 dark:group-hover:text-emerald-400`} />
+            <span className={`text-[11px] font-black uppercase tracking-wider ${hasFaceEnrolled ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-700 dark:text-slate-300'} group-hover:text-emerald-700 dark:group-hover:text-emerald-400`}>
+              {hasFaceEnrolled ? '✓ FACE ID' : '+ FACE ID'}
+            </span>
+          </button>
+        </div>
+      </section>
+
+      {/* 2. STITCH MOBILE NAVIGATION TOGGLE (HISTORY / NEW RX) */}
+      <div className="flex lg:hidden bg-slate-200/80 dark:bg-slate-800 p-1 rounded-xl items-center" data-purpose="section-tabs">
         <button
           type="button"
           onClick={() => setMobileActiveTab('history')}
-          className={`flex-1 py-2.5 px-3 min-h-[44px] rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+          className={`flex-1 py-2 rounded-lg font-extrabold text-xs flex items-center justify-center space-x-1.5 transition-all ${
             mobileActiveTab === 'history'
-              ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-sm'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-800'
+              ? 'bg-white dark:bg-slate-900 shadow-xs text-emerald-800 dark:text-emerald-300'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
           }`}
         >
-          <Clock size={15} className="shrink-0" />
-          <span className="truncate">History ({visits.length})</span>
+          <Clock size={14} className={mobileActiveTab === 'history' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'} />
+          <span>HISTORY ({visits.length})</span>
         </button>
         <button
           type="button"
           onClick={() => setMobileActiveTab('prescription')}
-          className={`flex-1 py-2.5 px-3 min-h-[44px] rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+          className={`flex-1 py-2 rounded-lg font-extrabold text-xs flex items-center justify-center space-x-1.5 transition-all ${
             mobileActiveTab === 'prescription'
-              ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-800'
+              ? 'bg-emerald-600 text-white shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
           }`}
         >
-          <Plus size={15} className="shrink-0" />
-          <span className="truncate">New Rx</span>
+          <Plus size={14} className={mobileActiveTab === 'prescription' ? 'text-white' : 'text-slate-500 dark:text-slate-400'} />
+          <span>NEW RX</span>
         </button>
       </div>
 

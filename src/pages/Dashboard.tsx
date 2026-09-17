@@ -163,190 +163,174 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex flex-col min-h-full bg-slate-50 dark:bg-slate-950 pb-10">
+    <div className="flex flex-col min-h-full bg-[#F4F7F6] dark:bg-slate-950 pb-10">
       
       {loading && (
-        <div className="mx-4 mt-2 shrink-0">
-          <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-2 flex items-center justify-center gap-2 text-emerald-800 text-xs font-black uppercase tracking-wide">
+        <div className="mx-3.5 mt-2 shrink-0">
+          <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-4 py-2 flex items-center justify-center gap-2 text-emerald-800 dark:text-emerald-300 text-xs font-black uppercase tracking-wide">
             <RefreshCw size={14} className="animate-spin" />
             Refreshing dashboard…
           </div>
         </div>
       )}
-      
-      {/* 1. TOP HEADER & SEARCH BANNER */}
-      <div className="bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 p-4 sm:p-6 shrink-0 text-white shadow-lg rounded-b-2xl mb-5">
-        <div className="max-w-7xl mx-auto w-full space-y-4">
-          <div className="flex flex-row justify-between items-start sm:items-center gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="font-extrabold text-xl sm:text-3xl text-white tracking-tight truncate">{session.userName}</h1>
-                <span className="bg-white/20 backdrop-blur-md text-white text-[10px] px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider border border-white/20 shrink-0">
-                  {session.role}
-                </span>
+
+      <div className="max-w-5xl mx-auto w-full px-3.5 pt-2.5 space-y-3">
+        {/* 1. STITCH PROFILE HEADER CARD WITH INTEGRATED SEARCH */}
+        <section className="bg-gradient-to-br from-emerald-800 via-emerald-700 to-teal-900 rounded-2xl p-3 text-white shadow-sm" data-purpose="user-profile-card">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+              <h1 className="text-lg font-bold tracking-tight text-white">{session.userName}</h1>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-white/20 text-emerald-50 tracking-wider backdrop-blur-sm border border-white/20">
+                {session.role}
+              </span>
+              <div className="flex items-center space-x-1.5 text-[11px] font-semibold text-emerald-100 tracking-wider ml-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                <span>{session.department} DEPARTMENT</span>
               </div>
-              <p className="text-emerald-200 text-xs font-bold uppercase tracking-widest mt-1 flex items-center gap-1.5 truncate">
-                <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse shrink-0"></span>
-                {session.department} Department
-              </p>
             </div>
-            
             <button 
               onClick={() => window.location.reload()} 
-              className="min-w-[44px] min-h-[44px] p-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl backdrop-blur-md border border-white/20 active:scale-95 transition-all shadow-sm flex items-center justify-center gap-2 shrink-0"
+              aria-label="Sync Profile" 
+              className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all border border-white/15 shrink-0" 
+              type="button"
               title="Refresh Dashboard"
-              aria-label="Refresh Dashboard"
             >
-              <RefreshCw size={18} />
-              <span className="text-xs font-black uppercase tracking-wider hidden sm:inline">Refresh</span>
+              <RefreshCw className="w-4 h-4 text-white" />
             </button>
           </div>
 
-          {/* Quick Search Bar */}
+          <div className="mt-2.5">
+            <div 
+              onClick={() => navigate('/patients')}
+              className="relative flex items-center cursor-pointer group"
+            >
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
+                <Search className="w-4 h-4 text-emerald-700" />
+              </span>
+              <input 
+                readOnly 
+                className="w-full pl-9 pr-3 py-2 bg-white text-gray-800 placeholder-gray-400 text-xs font-medium rounded-xl border-0 shadow-inner focus:ring-2 focus:ring-emerald-300 focus:outline-none cursor-pointer" 
+                placeholder={t('searchPatientPlaceholder')} 
+                type="search" 
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* 2. STITCH METRICS SUMMARY (3-COL DIVIDED) */}
+        <section className="bg-white dark:bg-slate-900 rounded-2xl py-2.5 px-3 shadow-sm border border-gray-100 dark:border-slate-800" data-purpose="metrics-summary">
+          <div className="grid grid-cols-3 divide-x divide-gray-100 dark:divide-slate-800 text-center">
+            <div className="flex flex-col justify-center px-1">
+              <span className="text-2xl font-black text-gray-900 dark:text-slate-100 leading-tight">{data?.stats?.patientsToday || 0}</span>
+              <span className="text-[10px] font-extrabold uppercase text-emerald-600 dark:text-emerald-400 tracking-wider mt-0.5">Today Reg.</span>
+            </div>
+            <div className="flex flex-col justify-center px-1">
+              <span className="text-2xl font-black text-purple-600 dark:text-purple-400 leading-tight">{data?.stats?.totalVisits || 0}</span>
+              <span className="text-[10px] font-bold uppercase text-gray-500 dark:text-slate-400 tracking-wider mt-0.5 truncate">{t('activeVisits')}</span>
+            </div>
+            <div className="flex flex-col justify-center px-1">
+              <span className="text-2xl font-black text-blue-600 dark:text-blue-400 leading-tight">{data?.stats?.totalPatients || 0}</span>
+              <span className="text-[10px] font-bold uppercase text-gray-500 dark:text-slate-400 tracking-wider mt-0.5 truncate">{t('totalPatients')}</span>
+            </div>
+          </div>
+        </section>
+
+        {/* 3. STITCH QUICK ACTIONS (50/50 BALANCED GRID) */}
+        <section className="grid grid-cols-2 gap-2.5" data-purpose="quick-actions">
           <button 
-            onClick={() => navigate('/patients')}
-            className="w-full bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 flex items-center p-3.5 sm:p-4 rounded-2xl shadow-xl gap-3 text-left border-2 border-emerald-500/30 dark:border-slate-800 hover:border-emerald-400 transition-all group"
+            onClick={() => navigate('/patients/new')} 
+            className="flex items-center space-x-2.5 p-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm active:scale-[0.98] transition-transform text-left" 
+            type="button"
           >
-            <Search size={20} className="text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform shrink-0" />
-            <span className="font-bold text-sm sm:text-base text-slate-500 dark:text-slate-400 flex-1 truncate">{t('searchPatientPlaceholder')}</span>
-            <kbd className="hidden sm:inline-block px-2.5 py-1 text-xs font-black text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">⌘K</kbd>
+            <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+              <FilePlus className="w-5 h-5 text-white" />
+            </div>
+            <div className="overflow-hidden flex-1">
+              <div className="text-xs font-bold leading-tight text-white whitespace-nowrap truncate">{t('registerPatient')}</div>
+              <div className="text-[10px] font-medium text-emerald-100 uppercase tracking-wider mt-0.5 truncate">New Record</div>
+            </div>
           </button>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto w-full px-3 sm:px-6 space-y-5 sm:space-y-6">
-        
-        {/* 2. STATS & QUICK ACTIONS ROW */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-5">
-          
-          {/* STATS BAR (7 COLS) */}
-          <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-200/80 dark:border-slate-800 p-3 sm:p-5 grid grid-cols-3 gap-1 sm:gap-2 items-center shadow-sm">
-            <div className="text-center px-1">
-              <p className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-slate-100 tracking-tight">{data?.stats?.patientsToday || 0}</p>
-              <p className="text-[9px] sm:text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-tight sm:tracking-widest mt-1">Today Reg.</p>
+          <button 
+            onClick={() => navigate('/patients')} 
+            className="flex items-center space-x-2.5 p-3 rounded-2xl bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-800 dark:text-slate-100 border border-gray-100 dark:border-slate-800 shadow-sm active:scale-[0.98] transition-transform text-left" 
+            type="button"
+          >
+            <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center shrink-0">
+              <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             </div>
-            <div className="text-center px-1 border-x border-slate-200 dark:border-slate-800">
-              <p className="text-2xl sm:text-3xl font-black text-purple-600 dark:text-purple-400 tracking-tight">{data?.stats?.totalVisits || 0}</p>
-              <p className="text-[9px] sm:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-tight sm:tracking-widest mt-1 truncate">{t('activeVisits')}</p>
+            <div className="overflow-hidden flex-1">
+              <div className="text-xs font-bold text-gray-900 dark:text-slate-100 leading-tight truncate">{t('patients')}</div>
+              <div className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mt-0.5 truncate">View All</div>
             </div>
-            <div className="text-center px-1">
-              <p className="text-2xl sm:text-3xl font-black text-blue-600 dark:text-blue-400 tracking-tight">{data?.stats?.totalPatients || 0}</p>
-              <p className="text-[9px] sm:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-tight sm:tracking-widest mt-1 truncate">{t('totalPatients')}</p>
-            </div>
-          </div>
+          </button>
+        </section>
 
-          {/* QUICK ACTIONS BAR (5 COLS - HORIZONTALLY ALIGNED BUTTONS) */}
-          <div className="lg:col-span-5 grid grid-cols-2 gap-2 sm:gap-3">
-            <button 
-              onClick={() => navigate('/patients/new')} 
-              className="bg-emerald-600 hover:bg-emerald-700 text-white p-3 sm:p-4 rounded-2xl shadow-md flex items-center justify-start gap-2.5 sm:gap-3 border-b-4 border-emerald-800 active:translate-y-0.5 transition-all group min-h-[56px]"
-            >
-              <div className="p-2 sm:p-2.5 bg-emerald-500/40 rounded-xl group-hover:scale-110 transition-transform shrink-0">
-                <FilePlus size={20} />
-              </div>
-              <div className="text-left min-w-0 flex-1">
-                <span className="font-black text-xs sm:text-sm block leading-tight truncate">{t('registerPatient')}</span>
-                <span className="text-[9px] sm:text-[10px] text-emerald-200 font-bold uppercase tracking-wider block truncate mt-0.5">New Record</span>
-              </div>
-            </button>
-
-            <button 
-              onClick={() => navigate('/patients')} 
-              className="bg-white dark:bg-slate-900 hover:bg-slate-50/50 dark:hover:bg-slate-850 text-slate-800 dark:text-slate-100 p-3 sm:p-4 rounded-2xl border-2 border-slate-200/80 dark:border-slate-800 shadow-sm flex items-center justify-start gap-2.5 sm:gap-3 border-b-4 border-slate-300 dark:border-slate-750 active:translate-y-0.5 transition-all group min-h-[56px]"
-            >
-              <div className="p-2 sm:p-2.5 bg-blue-50 dark:bg-blue-950/40 rounded-xl text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform shrink-0">
-                <Users size={20} />
-              </div>
-              <div className="text-left min-w-0 flex-1">
-                <span className="font-black text-xs sm:text-sm block leading-tight truncate">{t('patients')}</span>
-                <span className="text-[9px] sm:text-[10px] text-slate-400 font-bold uppercase tracking-wider block truncate mt-0.5">View All</span>
-              </div>
-            </button>
-          </div>
-        </div>
-
-        {/* 3. LIVE OPERATIONS WIDGET (HORIZONTALLY ALIGNED CARD GRID) */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden p-5">
-          <div className="flex items-center justify-between pb-4 mb-4 border-b-2 border-slate-100 dark:border-slate-850">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 rounded-xl">
-                <Users size={20} />
+        {/* 4. STITCH LIVE OPERATIONS DESK (COMPACT HORIZONTAL CARDS) */}
+        <section className="bg-white dark:bg-slate-900 rounded-2xl p-3 shadow-sm border border-gray-100 dark:border-slate-800 space-y-2.5" data-purpose="live-operations">
+          <div className="flex items-center justify-between pb-0.5">
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center shrink-0 border border-emerald-100 dark:border-emerald-800">
+                <Users className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               </div>
               <div>
-                <h2 className="font-black text-slate-800 dark:text-slate-100 text-base uppercase tracking-wider">Live Operations Desk</h2>
-                <p className="text-xs font-bold text-slate-400 dark:text-slate-500">Real-time team presence & active workbench monitoring</p>
+                <h2 className="text-xs font-extrabold tracking-tight text-gray-900 dark:text-slate-100 uppercase leading-none">Live Operations Desk</h2>
+                <p className="text-[10px] text-gray-400 dark:text-slate-500 font-medium mt-0.5">Real-time team presence &amp; workbench</p>
               </div>
             </div>
-            
-            <span className="bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-xs px-3 py-1 rounded-full font-black border border-emerald-200/80 dark:border-emerald-800 flex items-center gap-1.5 shadow-sm">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-              {presenceList.filter(p => p.isOnline).length} Active Operators
-            </span>
+            <div className="inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold tracking-tight shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse"></span>
+              {presenceList.filter(p => p.isOnline).length} Active
+            </div>
           </div>
-
-          {/* HORIZONTAL MULTI-COLUMN CARD GRID */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="space-y-1.5 pt-1">
             {presenceList.map(presence => {
               const statusInfo = getPresenceStatusInfo(presence.currentStatus, presence.isOnline);
               const initials = presence.userName ? presence.userName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() : 'OP';
 
               return (
-                <div 
-                  key={presence.userId} 
+                <article 
+                  key={presence.userId}
                   onClick={() => navigate(`/profile/${presence.userId}`)}
-                  className="bg-slate-50/70 dark:bg-slate-850/60 hover:bg-white dark:hover:bg-slate-800 rounded-xl p-4 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-300 dark:hover:border-emerald-700 cursor-pointer transition-all hover:shadow-md group flex flex-col justify-between space-y-3"
+                  className="bg-gray-50/70 dark:bg-slate-850/60 hover:bg-gray-50 dark:hover:bg-slate-800 border border-gray-100 dark:border-slate-800 rounded-xl p-2.5 flex items-center justify-between transition-colors cursor-pointer" 
+                  data-purpose="operator-card"
                 >
-                  {/* Top row: Avatar + Name + Department */}
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center space-x-2.5 min-w-0 flex-1 mr-2">
                     <div className="relative shrink-0">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 text-white font-black flex items-center justify-center text-xs shadow-sm">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-600 text-white font-bold text-xs flex items-center justify-center shadow-sm">
                         {initials}
                       </div>
-                      <span className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-slate-900 ${statusInfo.dot}`}></span>
+                      <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 border-2 border-white dark:border-slate-900 rounded-full ${statusInfo.dot}`}></span>
                     </div>
-
                     <div className="min-w-0 flex-1">
-                      <p className="font-black text-slate-800 dark:text-slate-100 text-sm truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                        {presence.userName}
-                      </p>
-                      <p className="text-[10px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-0.5 truncate">
-                        {presence.department}
+                      <div className="flex items-center space-x-1.5">
+                        <h3 className="text-xs font-bold text-gray-900 dark:text-slate-100 leading-tight truncate">{presence.userName}</h3>
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-white dark:bg-slate-800 text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-700 uppercase tracking-wider shrink-0">{presence.department || 'GEN'}</span>
+                      </div>
+                      <p className="text-[10px] text-gray-400 dark:text-slate-500 font-medium leading-none mt-0.5">
+                        {presence.isOnline ? 'Active now' : formatLastActive(presence.lastActivityAt)}
                       </p>
                     </div>
                   </div>
-
-                  {/* Bottom row: Status badge + Active location */}
-                  <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between gap-2">
-                    <span className={`text-[9px] font-black px-2 py-0.5 rounded border uppercase tracking-wider shrink-0 ${statusInfo.bg}`}>
-                      {statusInfo.label}
+                  <div className="flex items-center space-x-1.5 shrink-0">
+                    <span className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold bg-white dark:bg-slate-800 px-2 py-0.5 rounded-md border border-gray-100 dark:border-slate-700 max-w-[100px] truncate">
+                      {presence.currentScreen || 'Dashboard'}
                     </span>
-
-                    <span className="text-[11px] text-slate-600 dark:text-slate-300 font-bold truncate text-right">
-                      {presence.isOnline ? (
-                        <>
-                          {presence.currentScreen || 'Dashboard'}
-                          {presence.currentPatientName && (
-                            <span className="text-emerald-600 dark:text-emerald-400 font-black"> ({presence.currentPatientName})</span>
-                          )}
-                        </>
-                      ) : (
-                        <span className="text-slate-400 dark:text-slate-500 font-medium">
-                          {formatLastActive(presence.lastActivityAt)}
-                        </span>
-                      )}
+                    <span className={`inline-flex items-center space-x-1 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide uppercase ${statusInfo.bg}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot} ${presence.isOnline ? 'animate-pulse' : ''}`}></span>
+                      <span>{statusInfo.label}</span>
                     </span>
                   </div>
-                </div>
+                </article>
               );
             })}
 
             {presenceList.length === 0 && (
-              <div className="col-span-full p-8 text-center text-sm font-bold text-slate-400 italic bg-slate-50/50 dark:bg-slate-950/30 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+              <div className="p-6 text-center text-xs font-bold text-slate-400 italic bg-slate-50/50 dark:bg-slate-950/30 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
                 No active operators currently tracked.
               </div>
             )}
           </div>
-        </div>
+        </section>
 
         {/* 4. RECENT ACTIONS & SYSTEM HEALTH ROW */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">

@@ -126,9 +126,9 @@ app.use('/apk', express.static(path.join(__dirname, 'apk')));
 app.get('/bundle.zip', (_req, res) => res.sendFile(path.join(__dirname, 'dist', 'bundle.zip')));
 app.use(express.static(path.join(__dirname, 'dist')));
 app.get('/api/version', (_req, res) => res.json({ 
-  version: '1.4.2', 
+  version: '1.4.3', 
   bundleUrl: '/bundle.zip',
-  bundleId: '1.4.2',
+  bundleId: '1.4.3',
   apkUrl: '/apk/nek-kadam.apk' 
 }));
 
