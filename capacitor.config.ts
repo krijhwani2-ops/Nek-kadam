@@ -7,6 +7,12 @@ const config: CapacitorConfig = {
   server: {
     cleartext: true,
     androidScheme: 'http'
+  },
+  plugins: {
+    LiveUpdate: {
+      readyTimeout: 10000,
+      autoDeleteBundles: true
+    }
   }
 };
 

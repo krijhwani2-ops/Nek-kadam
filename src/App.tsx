@@ -9,7 +9,7 @@ import {
   UserPlus, HeartPulse, FileDown,
   LayoutDashboard, ChevronLeft, ListChecks,
   ClipboardList, Monitor, Menu, X, MessageSquare,
-  Smartphone, QrCode, Download, ScanFace, Ticket
+  Smartphone, QrCode, Download, ScanFace, Ticket, Sparkles
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { useApp } from './contexts/AppContext';
@@ -93,12 +93,20 @@ function BackButtonHandler() {
   return null;
 }
 
-const APP_VERSION = "1.4.0"; // Current release version
+const APP_VERSION = "1.4.1"; // Current release version
+
+interface UpdateInfo {
+  version: string;
+  bundleUrl?: string;
+  bundleId?: string;
+  apkUrl?: string;
+}
 
 function OTAUpdater() {
-  const [updateAvailable, setUpdateAvailable] = useState<{version: string, apkUrl: string} | null>(null);
+  const [updateAvailable, setUpdateAvailable] = useState<UpdateInfo | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [statusText, setStatusText] = useState<string>('');
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -118,19 +126,9 @@ function OTAUpdater() {
     return () => clearInterval(interval);
   }, []);
 
-  const startDownload = async (apkUrl: string) => {
-    const cap = (window as any)?.Capacitor;
-    const isNative = cap && (cap.isNativePlatform === true || cap.getPlatform?.() === 'android' || cap.getPlatform?.() === 'ios');
-    if (!isNative) {
-      window.open(`${getBaseUrl()}${apkUrl}`, '_blank');
-      setUpdateAvailable(null);
-      return;
-    }
-
-    setIsDownloading(true);
+  const downloadAndInstallApk = async (apkUrl: string) => {
+    setStatusText('Downloading APK package...');
     setProgress(0);
-    setDownloadError(null);
-    
     try {
       const { Filesystem, Directory } = await import('@capacitor/filesystem');
       const { FileOpener } = await import('@capacitor-community/file-opener');
@@ -195,16 +193,98 @@ function OTAUpdater() {
       setProgress(null);
       setUpdateAvailable(null);
     } catch (err: any) {
-      console.error("Download failed:", err);
+      console.error("APK Download failed:", err);
       setDownloadError(err.message || "Failed to download update. Redirecting to browser download...");
       setIsDownloading(false);
       setProgress(null);
       
-      // Safe fallback: open in browser after showing the error
       setTimeout(() => {
         window.open(`${getBaseUrl()}${apkUrl}`, '_blank');
         setUpdateAvailable(null);
       }, 2000);
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!updateAvailable) return;
+
+    const cap = (window as any)?.Capacitor;
+    const isNative = cap && (cap.isNativePlatform === true || cap.getPlatform?.() === 'android' || cap.getPlatform?.() === 'ios');
+
+    // On browser / web: instant page reload
+    if (!isNative) {
+      if (updateAvailable.apkUrl) {
+        window.open(`${getBaseUrl()}${updateAvailable.apkUrl}`, '_blank');
+      } else {
+        window.location.reload();
+      }
+      setUpdateAvailable(null);
+      return;
+    }
+
+    // On native mobile app (Android / iOS):
+    setIsDownloading(true);
+    setProgress(10);
+    setStatusText('Downloading update...');
+    setDownloadError(null);
+
+    // 1. Try LiveUpdate for instant in-app update with zero package installer
+    let progressHandle: any = null;
+    let liveUpdateDone = false;
+
+    try {
+      const { LiveUpdate } = await import('@capawesome/capacitor-live-update');
+
+      try {
+        progressHandle = await LiveUpdate.addListener('downloadBundleProgress', (event: any) => {
+          if (typeof event?.progress === 'number') {
+            setProgress(Math.max(10, Math.min(95, Math.round(event.progress * 100))));
+          }
+        });
+      } catch (_listenerErr) {
+        // Continue if listener unsupported
+      }
+
+      const bundleUrl = `${getBaseUrl()}${updateAvailable.bundleUrl || '/bundle.zip'}`;
+      const bundleId = updateAvailable.bundleId || updateAvailable.version;
+
+      console.log('[LIVE UPDATE] Downloading bundle from:', bundleUrl, 'bundleId:', bundleId);
+      await LiveUpdate.downloadBundle({
+        url: bundleUrl,
+        bundleId: bundleId,
+        artifactType: 'zip'
+      });
+
+      setStatusText('Applying update...');
+      setProgress(100);
+
+      await LiveUpdate.setNextBundle({
+        bundleId: bundleId
+      });
+
+      liveUpdateDone = true;
+      setStatusText('Restarting app...');
+
+      setTimeout(async () => {
+        try {
+          await LiveUpdate.reload();
+        } catch (reloadErr) {
+          console.warn('[LIVE UPDATE] LiveUpdate.reload() failed, falling back to location reload:', reloadErr);
+          window.location.reload();
+        }
+      }, 400);
+      return;
+    } catch (liveErr: any) {
+      console.warn('[LIVE UPDATE] Live update not supported or failed, trying APK installer fallback:', liveErr);
+    } finally {
+      if (progressHandle) {
+        try { await progressHandle.remove(); } catch (_e) {}
+      }
+    }
+
+    // 2. Fallback to package installer if LiveUpdate fails
+    if (!liveUpdateDone && updateAvailable.apkUrl) {
+      await downloadAndInstallApk(updateAvailable.apkUrl);
     }
   };
 
@@ -218,7 +298,7 @@ function OTAUpdater() {
         </div>
         <h2 className="text-xl font-black text-slate-800 dark:text-white mb-2">Update Available!</h2>
         <p className="text-sm text-slate-500 mb-6 font-medium">
-          {isDownloading ? 'Downloading update package...' : `A new version (${updateAvailable.version}) is available. Please update to continue.`}
+          {isDownloading ? (statusText || 'Downloading update...') : `Version ${updateAvailable.version} is available. Instant 1-tap update inside the app.`}
         </p>
 
         {isDownloading ? (
@@ -230,7 +310,7 @@ function OTAUpdater() {
               ></div>
             </div>
             <div className="text-xs font-bold text-slate-400">
-              {progress !== null ? `${progress}% Completed` : 'Connecting...'}
+              {progress !== null ? `${progress}% Completed` : 'Preparing update...'}
             </div>
           </div>
         ) : (
@@ -246,9 +326,10 @@ function OTAUpdater() {
                 Later
               </button>
               <button 
-                onClick={() => startDownload(updateAvailable.apkUrl)}
-                className="flex-1 px-4 py-3 rounded-xl font-black text-white bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 transition-all"
+                onClick={handleUpdate}
+                className="flex-1 px-4 py-3 rounded-xl font-black text-white bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
               >
+                <Sparkles size={16} />
                 Update Now
               </button>
             </div>
@@ -592,6 +673,23 @@ function AppLayout() {
   const [isGlobalScannerOpen, setIsGlobalScannerOpen] = useState(false);
   const [isFaceScannerOpen, setIsFaceScannerOpen] = useState(false);
   const location = useLocation();
+
+  // Mark LiveUpdate bundle ready on native app startup to prevent rollback
+  useEffect(() => {
+    const notifyLiveUpdateReady = async () => {
+      try {
+        const cap = (window as any)?.Capacitor;
+        if (cap && (cap.isNativePlatform === true || cap.getPlatform?.() === 'android' || cap.getPlatform?.() === 'ios')) {
+          const { LiveUpdate } = await import('@capawesome/capacitor-live-update');
+          const res = await LiveUpdate.ready();
+          console.log('[LIVE UPDATE] ready():', res);
+        }
+      } catch (e) {
+        console.warn('[LIVE UPDATE] ready() ignored:', e);
+      }
+    };
+    notifyLiveUpdateReady();
+  }, []);
 
   // Screen/module transition tracking
   useEffect(() => {

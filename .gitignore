@@ -21,8 +21,9 @@ server_errors.log
 # Environment
 .env
 
-# APK files (large binaries)
+# APK and archive files (large binaries)
 *.apk
+*.zip
 
 # IDE
 .vscode/

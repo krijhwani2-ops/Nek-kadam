@@ -490,11 +490,11 @@ export default function Settings() {
                 <div className="flex flex-col sm:flex-row gap-3">
                   <a
                     href={`${getBaseUrl()}/apk/nek-kadam.apk`}
-                    download="nek-kadam-v1.4.0.apk"
+                    download="nek-kadam-v1.4.1.apk"
                     className="flex-1 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-blue-600/15 flex items-center justify-center gap-2 transition-all"
                   >
                     <Download size={16} />
-                    Direct Download APK (v1.4.0)
+                    Direct Download APK (v1.4.1)
                   </a>
                   <a
                     href="https://nek-kadam.onrender.com/apk/nek-kadam.apk"

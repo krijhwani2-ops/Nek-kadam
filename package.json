@@ -6,7 +6,7 @@
   "scripts": {
     "test": "vitest run",
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && node scripts/create_bundle.cjs",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "server:sqlite": "node server.cjs",
@@ -26,6 +26,7 @@
     "@capacitor-community/file-opener": "^8.0.1",
     "@capacitor/app": "^8.1.0",
     "@capacitor/filesystem": "^8.1.2",
+    "@capawesome/capacitor-live-update": "^8.4.2",
     "@types/papaparse": "^5.5.2",
     "@vladmandic/face-api": "^1.7.15",
     "better-sqlite3": "^12.9.0",
@@ -51,7 +52,8 @@
     "socket.io-client": "^4.8.3",
     "tailwind-merge": "^2.2.0",
     "xlsx": "^0.18.5",
-    "zustand": "^4.4.7"
+    "zustand": "^4.4.7",
+    "archiver": "^8.0.0"
   },
   "devDependencies": {
     "@capacitor/android": "^8.3.1",
