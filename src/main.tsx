@@ -3,6 +3,15 @@ import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import { AppProvider } from './contexts/AppContext.tsx'
 import './index.css'
+import { Capacitor } from '@capacitor/core'
+import { LiveUpdate } from '@capawesome/capacitor-live-update'
+
+// Immediately confirm healthy startup to LiveUpdate plugin on native platforms to prevent 10s rollback
+if (Capacitor.isNativePlatform()) {
+  LiveUpdate.ready()
+    .then((result) => console.log('[LIVE UPDATE] Native bundle startup verified ready:', result))
+    .catch((err) => console.warn('[LIVE UPDATE] ready() startup notice:', err));
+}
 
 // Error Boundary to prevent white/blank screen crashes
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: any }> {

@@ -92,9 +92,9 @@ app.use('/static', express.static('dist'));
 app.use('/apk', express.static(__dirname + '/apk'));
 app.get('/bundle.zip', (_req, res) => res.sendFile(path.join(__dirname, 'dist', 'bundle.zip')));
 app.get('/api/version', (_req, res) => res.json({ 
-  version: '1.4.1', 
+  version: '1.4.2', 
   bundleUrl: '/bundle.zip',
-  bundleId: '1.4.1',
+  bundleId: '1.4.2',
   apkUrl: '/apk/nek-kadam.apk' 
 }));
 
@@ -148,6 +148,9 @@ try {
   }
   if (!userInfo.find(c => c.name === 'updatedAt')) {
     db.prepare('ALTER TABLE users ADD COLUMN updatedAt TEXT').run();
+  }
+  if (!userInfo.find(c => c.name === 'isActive')) {
+    db.prepare('ALTER TABLE users ADD COLUMN isActive INTEGER DEFAULT 1').run();
   }
 
   // ─── DELTA SYNC SCHEMA MIGRATIONS & TRIGGERS ───
@@ -750,7 +753,7 @@ app.get('/api/admin/users', (req, res) => {
   console.log(`[ADMIN] Fetching users list... (User: ${req.user?.userName})`);
   try {
     const users = db.prepare(`
-      SELECT u.id, u.name, u.role, u.departmentId, u.isActive, d.name as department 
+      SELECT u.id, u.name, u.role, u.departmentId, COALESCE(u.isActive, 1) as isActive, d.name as department 
       FROM users u 
       LEFT JOIN departments d ON u.departmentId = d.id 
       ORDER BY u.name
@@ -1265,13 +1268,27 @@ app.get('/api/patients/search', (req, res) => {
 
 app.post('/api/admin/users/delete', (req, res) => {
   try {
-    const { id } = req.body || {};
+    const { id, hard } = req.body || {};
     if (!id) return res.status(400).json({ error: 'User ID required' });
     const sessionUserId = req.user?.userId || req.headers['x-user-id'];
     if (id === sessionUserId) return res.status(400).json({ error: 'Cannot delete yourself' });
-    db.prepare('UPDATE users SET isActive = 0 WHERE id = ?').run(id);
-    res.json({ ok: true });
-    if (req.io) req.io.emit('db_changed', { table: 'users', action: 'soft_delete' });
+
+    if (hard !== false) {
+      try {
+        db.prepare('DELETE FROM users WHERE id = ?').run(id);
+        if (req.io) req.io.emit('db_changed', { table: 'users', action: 'delete', id });
+        return res.json({ ok: true, success: true, hard: true });
+      } catch (fkErr) {
+        console.warn(`[USER DELETE] Cannot hard delete user ${id}, falling back to soft delete:`, fkErr.message);
+        db.prepare('UPDATE users SET isActive = 0 WHERE id = ?').run(id);
+        if (req.io) req.io.emit('db_changed', { table: 'users', action: 'soft_delete', id });
+        return res.json({ ok: true, success: true, hard: false, message: 'User deactivated (cannot be permanently deleted due to linked records)' });
+      }
+    } else {
+      db.prepare('UPDATE users SET isActive = 0 WHERE id = ?').run(id);
+      if (req.io) req.io.emit('db_changed', { table: 'users', action: 'soft_delete', id });
+      return res.json({ ok: true, success: true, hard: false });
+    }
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

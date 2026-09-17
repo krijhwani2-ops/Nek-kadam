@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Users, Save, Globe, PlusCircle, Key, Wifi, Cloud, Cpu, RefreshCw, CheckCircle2, AlertCircle, Download, FileSpreadsheet, Database, Smartphone, Trash2, Search, AlertTriangle } from 'lucide-react';
-import { fetchAdminUsers, updateAdminUser, createAdminUser, fetchDepartments, getBaseUrl } from '../lib/session';
+import { fetchAdminUsers, updateAdminUser, createAdminUser, deleteAdminUser, fetchDepartments, getBaseUrl, apiFetch } from '../lib/session';
 import { getServerIp, setServerIp, getNetworkMode, setNetworkMode, checkServerOnline, NetworkMode } from '../lib/db';
 import { QRCodeSVG } from 'qrcode.react';
 import { generateDonorReport } from '../lib/donorReport';
@@ -576,9 +576,7 @@ function PatientDeleteCard() {
     const t = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await fetch(`${getBaseUrl()}/api/patients/search?q=${encodeURIComponent(q)}`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('nek_token') || ''}` }
-        });
+        const res = await apiFetch(`/api/admin/patients/search?q=${encodeURIComponent(q)}`);
         if (res.ok) {
           const { data } = await res.json();
           setPatients(data || []);
@@ -593,17 +591,21 @@ function PatientDeleteCard() {
     if (!window.confirm(`Are you sure you want to delete patient ${p.name}? This will also delete their visits.`)) return;
     setDeleting(true);
     try {
-      const res = await fetch(`${getBaseUrl()}/api/admin/patients/delete`, {
+      const res = await apiFetch('/api/admin/patients/delete', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('nek_token') || ''}` },
         body: JSON.stringify({ cardNumber: p.card_number })
       });
       if (res.ok) {
         alert('Patient deleted successfully');
         setQ('');
         setPatients([]);
-      } else alert('Failed to delete patient');
-    } catch (e) {}
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert('Failed to delete patient: ' + (data.error || 'Server error'));
+      }
+    } catch (e: any) {
+      alert('Failed to delete patient: ' + e.message);
+    }
     setDeleting(false);
   }
 
@@ -644,13 +646,26 @@ function PatientDeleteCard() {
 
 function UserRow({ user, departments, authUser, onUpdate }: { user: any, departments: any[], authUser: any, onUpdate: () => void }) {
   const [editing, setEditing] = useState(false);
+  const isActive = user.isActive !== undefined 
+    ? (typeof user.isActive === 'boolean' ? user.isActive : Number(user.isActive) === 1) 
+    : (user.is_active !== undefined ? Boolean(user.is_active) : true);
+
   const [form, setForm] = useState({
     passcode: '', // Clear passcode for security/editing
     department: user.departmentId || '',
-    role: user.role,
-    is_active: user.isActive === 1
+    role: user.role || 'volunteer',
+    is_active: isActive
   });
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setForm({
+      passcode: '',
+      department: user.departmentId || '',
+      role: user.role || 'volunteer',
+      is_active: isActive
+    });
+  }, [user, isActive]);
 
   async function handleSave() {
     setSaving(true);
@@ -666,16 +681,16 @@ function UserRow({ user, departments, authUser, onUpdate }: { user: any, departm
 
   const [deleting, setDeleting] = useState(false);
   async function handleDelete() {
-    if (!window.confirm(`Are you sure you want to delete user ${user.name}?`)) return;
+    if (!window.confirm(`Are you sure you want to delete user "${user.name}"?`)) return;
     setDeleting(true);
     try {
-      const res = await fetch(`${getBaseUrl()}/api/admin/users/delete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('nek_token') || ''}` },
-        body: JSON.stringify({ id: user.id })
-      });
-      if (res.ok) onUpdate();
-      else alert("Failed to delete user");
+      const res = await deleteAdminUser(user.id, { hard: true });
+      if (res.success) {
+        if (res.message) alert(res.message);
+        onUpdate();
+      } else {
+        alert("Failed to delete user: " + (res.error || "Unknown error"));
+      }
     } catch (e: any) {
       alert("Failed to delete user: " + e.message);
     }
@@ -724,14 +739,23 @@ function UserRow({ user, departments, authUser, onUpdate }: { user: any, departm
   }
 
   return (
-    <div className={`p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${user.is_active ? '' : 'opacity-50'}`}>
+    <div className={`p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${isActive ? '' : 'opacity-70 bg-rose-50/20 dark:bg-rose-950/10'}`}>
       <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-        <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold shrink-0">
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold shrink-0 ${isActive ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}`}>
           {user.name.charAt(0)}
         </div>
         <div className="min-w-0">
-          <h4 className="font-bold text-slate-800 dark:text-slate-100 truncate">{user.name} {user.is_active === 0 && '(Inactive)'}</h4>
-          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.department} • <span className="uppercase text-[10px] font-black tracking-widest bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded">{user.role}</span></p>
+          <h4 className="font-bold text-slate-800 dark:text-slate-100 truncate flex items-center gap-2">
+            {user.name}
+            {!isActive && (
+              <span className="text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400 px-2 py-0.5 rounded-full">
+                Inactive
+              </span>
+            )}
+          </h4>
+          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+            {user.department || 'No Dept'} • <span className="uppercase text-[10px] font-black tracking-widest bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded">{user.role}</span>
+          </p>
         </div>
       </div>
       <div className="flex items-center gap-2 sm:gap-4 shrink-0">
@@ -742,8 +766,14 @@ function UserRow({ user, departments, authUser, onUpdate }: { user: any, departm
           Edit
         </button>
         {authUser?.userId !== user.id && (
-          <button onClick={handleDelete} disabled={deleting} className="min-h-[40px] px-3 py-2 border border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400 font-bold text-sm rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all active:scale-95 flex items-center justify-center">
+          <button 
+            onClick={handleDelete} 
+            disabled={deleting} 
+            title="Delete user"
+            className="min-h-[40px] px-3 py-2 border border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400 font-bold text-sm rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all active:scale-95 flex items-center justify-center gap-1.5"
+          >
             <Trash2 size={16} />
+            <span className="hidden sm:inline">Delete</span>
           </button>
         )}
       </div>

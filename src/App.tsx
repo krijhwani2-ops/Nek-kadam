@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { getBaseUrl } from './lib/session';
 import { App as CapApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { io } from 'socket.io-client';
 import { 
   Users, Settings, LogOut,
@@ -93,7 +94,7 @@ function BackButtonHandler() {
   return null;
 }
 
-const APP_VERSION = "1.4.1"; // Current release version
+const APP_VERSION = "1.4.2"; // Current release version
 
 interface UpdateInfo {
   version: string;
@@ -106,114 +107,113 @@ function OTAUpdater() {
   const [updateAvailable, setUpdateAvailable] = useState<UpdateInfo | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isDownloaded, setIsDownloaded] = useState(false);
   const [statusText, setStatusText] = useState<string>('');
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [isDismissed, setIsDismissed] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+
     const checkUpdate = async () => {
       try {
         const res = await fetch(`${getBaseUrl()}/api/version`);
-        const data = await res.json();
+        if (!res.ok) return;
+        const data: UpdateInfo = await res.json();
+        if (!isMounted) return;
+
         if (data && data.version && data.version !== APP_VERSION) {
           setUpdateAvailable(data);
-        }
-      } catch (e) {
-        // Silent fail if server offline
-      }
-    };
-    checkUpdate();
-    const interval = setInterval(checkUpdate, 10 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
 
-  const downloadAndInstallApk = async (apkUrl: string) => {
-    setStatusText('Downloading APK package...');
-    setProgress(0);
-    try {
-      const { Filesystem, Directory } = await import('@capacitor/filesystem');
-      const { FileOpener } = await import('@capacitor-community/file-opener');
-      
-      const url = `${getBaseUrl()}${apkUrl}`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error("Server returned " + response.status);
-      
-      const contentLength = response.headers.get('content-length');
-      const total = contentLength ? parseInt(contentLength, 10) : 0;
-      
-      if (!response.body) throw new Error("ReadableStream not supported");
-      
-      const reader = response.body.getReader();
-      let loaded = 0;
-      const chunks: Uint8Array[] = [];
-      
-      // eslint-disable-next-line no-constant-condition
-      while(true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (value) {
-          chunks.push(value);
-          loaded += value.length;
-          if (total > 0) {
-            setProgress(Math.round((loaded / total) * 100));
+          // If on Native mobile platform (Android/iOS): silently preload bundle in background
+          if (Capacitor.isNativePlatform()) {
+            try {
+              const { LiveUpdate } = await import('@capawesome/capacitor-live-update');
+              const bundleId = (data.bundleId || data.version || '').replace(/[^a-zA-Z0-9._-]/g, '_');
+
+              // Check if bundle is already downloaded on disk
+              const downloaded = await LiveUpdate.getDownloadedBundles().catch(() => ({ bundleIds: [] }));
+              if (downloaded.bundleIds && downloaded.bundleIds.includes(bundleId)) {
+                console.log('[LIVE UPDATE] Bundle already downloaded on device:', bundleId);
+                await LiveUpdate.setNextBundle({ bundleId }).catch(() => {});
+                if (isMounted) {
+                  setIsDownloaded(true);
+                  setProgress(100);
+                  setStatusText('Update ready to apply');
+                }
+                return;
+              }
+
+              // Silently download the new bundle in the background without blocking the user
+              console.log('[LIVE UPDATE] Silently downloading update in background:', bundleId);
+              const rawBundleUrl = data.bundleUrl || '/bundle.zip';
+              const bundleUrl = rawBundleUrl.startsWith('http://') || rawBundleUrl.startsWith('https://')
+                ? rawBundleUrl
+                : `${getBaseUrl()}${rawBundleUrl.startsWith('/') ? '' : '/'}${rawBundleUrl}`;
+
+              await LiveUpdate.downloadBundle({
+                url: bundleUrl,
+                bundleId: bundleId,
+                artifactType: 'zip'
+              });
+
+              // Prime bundle for instant application
+              await LiveUpdate.setNextBundle({ bundleId });
+              if (isMounted) {
+                setIsDownloaded(true);
+                setProgress(100);
+                setStatusText('Update ready to apply');
+              }
+              console.log('[LIVE UPDATE] Background update ready and primed:', bundleId);
+            } catch (err: any) {
+              const msg = err?.message || String(err);
+              if (msg.includes('already exists') || msg.includes('BUNDLE_EXISTS')) {
+                const bundleId = (data.bundleId || data.version || '').replace(/[^a-zA-Z0-9._-]/g, '_');
+                try {
+                  const { LiveUpdate } = await import('@capawesome/capacitor-live-update');
+                  await LiveUpdate.setNextBundle({ bundleId });
+                  if (isMounted) {
+                    setIsDownloaded(true);
+                    setProgress(100);
+                    setStatusText('Update ready to apply');
+                  }
+                } catch (_e) {}
+              } else {
+                console.warn('[LIVE UPDATE] Background download notice:', msg);
+              }
+            }
           }
         }
+      } catch (_e) {
+        // Silent fail if offline
       }
-      
-      const allChunks = new Uint8Array(loaded);
-      let position = 0;
-      for (const chunk of chunks) {
-        allChunks.set(chunk, position);
-        position += chunk.length;
-      }
-      
-      const base64Data = await new Promise<string>((resolve, reject) => {
-        const blob = new Blob([allChunks], { type: 'application/vnd.android.package-archive' });
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const base64 = (reader.result as string).split(',')[1];
-          resolve(base64);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-      
-      const fileName = 'nek-kadam-update.apk';
-      const writeResult = await Filesystem.writeFile({
-        path: fileName,
-        data: base64Data,
-        directory: Directory.External
-      });
-      
-      await FileOpener.open({
-        filePath: writeResult.uri,
-        contentType: 'application/vnd.android.package-archive'
-      });
-      
-      setIsDownloading(false);
-      setProgress(null);
-      setUpdateAvailable(null);
-    } catch (err: any) {
-      console.error("APK Download failed:", err);
-      setDownloadError(err.message || "Failed to download update. Redirecting to browser download...");
-      setIsDownloading(false);
-      setProgress(null);
-      
-      setTimeout(() => {
-        window.open(`${getBaseUrl()}${apkUrl}`, '_blank');
-        setUpdateAvailable(null);
-      }, 2000);
-    }
-  };
+    };
 
-  const handleUpdate = async () => {
+    checkUpdate();
+    const interval = setInterval(checkUpdate, 5 * 60 * 1000);
+
+    let appStateListener: any = null;
+    if (Capacitor.isNativePlatform()) {
+      CapApp.addListener('appStateChange', (state) => {
+        if (state.isActive) {
+          checkUpdate();
+        }
+      }).then(h => { appStateListener = h; }).catch(() => {});
+    }
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+      if (appStateListener) appStateListener.remove();
+    };
+  }, []);
+
+  const handleApplyUpdate = async () => {
     if (!updateAvailable) return;
 
-    const cap = (window as any)?.Capacitor;
-    const isNative = cap && (cap.isNativePlatform === true || cap.getPlatform?.() === 'android' || cap.getPlatform?.() === 'ios');
-
-    // On browser / web: instant page reload
-    if (!isNative) {
-      if (updateAvailable.apkUrl) {
+    // Web browser: reload page
+    if (!Capacitor.isNativePlatform()) {
+      if (updateAvailable.apkUrl && window.location.protocol === 'file:') {
         window.open(`${getBaseUrl()}${updateAvailable.apkUrl}`, '_blank');
       } else {
         window.location.reload();
@@ -222,83 +222,119 @@ function OTAUpdater() {
       return;
     }
 
-    // On native mobile app (Android / iOS):
+    // Native mobile app:
     setIsDownloading(true);
-    setProgress(10);
-    setStatusText('Downloading update...');
     setDownloadError(null);
-
-    // 1. Try LiveUpdate for instant in-app update with zero package installer
-    let progressHandle: any = null;
-    let liveUpdateDone = false;
 
     try {
       const { LiveUpdate } = await import('@capawesome/capacitor-live-update');
+      const bundleId = (updateAvailable.bundleId || updateAvailable.version || '').replace(/[^a-zA-Z0-9._-]/g, '_');
 
+      // 1. If already downloaded, apply instantly in ~250ms with zero delay!
+      if (isDownloaded) {
+        setStatusText('Applying update...');
+        setProgress(100);
+        await LiveUpdate.setNextBundle({ bundleId });
+        setTimeout(async () => {
+          try {
+            await LiveUpdate.reload();
+          } catch (reloadErr) {
+            console.warn('[LIVE UPDATE] reload() fallback:', reloadErr);
+            window.location.reload();
+          }
+        }, 250);
+        return;
+      }
+
+      // 2. If not yet downloaded, download now with visible progress bar
+      setStatusText('Downloading update...');
+      setProgress(15);
+
+      let progressHandle: any = null;
       try {
         progressHandle = await LiveUpdate.addListener('downloadBundleProgress', (event: any) => {
           if (typeof event?.progress === 'number') {
-            setProgress(Math.max(10, Math.min(95, Math.round(event.progress * 100))));
+            setProgress(Math.max(15, Math.min(95, Math.round(event.progress * 100))));
           }
         });
-      } catch (_listenerErr) {
-        // Continue if listener unsupported
+      } catch (_e) {}
+
+      const rawBundleUrl = updateAvailable.bundleUrl || '/bundle.zip';
+      const bundleUrl = rawBundleUrl.startsWith('http://') || rawBundleUrl.startsWith('https://')
+        ? rawBundleUrl
+        : `${getBaseUrl()}${rawBundleUrl.startsWith('/') ? '' : '/'}${rawBundleUrl}`;
+
+      try {
+        await LiveUpdate.downloadBundle({
+          url: bundleUrl,
+          bundleId: bundleId,
+          artifactType: 'zip'
+        });
+      } catch (dlErr: any) {
+        const msg = dlErr?.message || String(dlErr);
+        if (!msg.includes('already exists') && !msg.includes('BUNDLE_EXISTS')) {
+          throw dlErr;
+        }
+      } finally {
+        if (progressHandle) {
+          try { await progressHandle.remove(); } catch (_e) {}
+        }
       }
-
-      const bundleUrl = `${getBaseUrl()}${updateAvailable.bundleUrl || '/bundle.zip'}`;
-      const bundleId = updateAvailable.bundleId || updateAvailable.version;
-
-      console.log('[LIVE UPDATE] Downloading bundle from:', bundleUrl, 'bundleId:', bundleId);
-      await LiveUpdate.downloadBundle({
-        url: bundleUrl,
-        bundleId: bundleId,
-        artifactType: 'zip'
-      });
 
       setStatusText('Applying update...');
       setProgress(100);
 
-      await LiveUpdate.setNextBundle({
-        bundleId: bundleId
-      });
-
-      liveUpdateDone = true;
+      await LiveUpdate.setNextBundle({ bundleId });
       setStatusText('Restarting app...');
 
       setTimeout(async () => {
         try {
           await LiveUpdate.reload();
         } catch (reloadErr) {
-          console.warn('[LIVE UPDATE] LiveUpdate.reload() failed, falling back to location reload:', reloadErr);
+          console.warn('[LIVE UPDATE] reload() fallback:', reloadErr);
           window.location.reload();
         }
-      }, 400);
-      return;
-    } catch (liveErr: any) {
-      console.warn('[LIVE UPDATE] Live update not supported or failed, trying APK installer fallback:', liveErr);
-    } finally {
-      if (progressHandle) {
-        try { await progressHandle.remove(); } catch (_e) {}
-      }
-    }
-
-    // 2. Fallback to package installer if LiveUpdate fails
-    if (!liveUpdateDone && updateAvailable.apkUrl) {
-      await downloadAndInstallApk(updateAvailable.apkUrl);
+      }, 300);
+    } catch (err: any) {
+      console.error('[LIVE UPDATE] In-app update failed:', err);
+      setIsDownloading(false);
+      setProgress(null);
+      setDownloadError(err?.message || 'Update failed to download. Will retry automatically.');
     }
   };
 
   if (!updateAvailable) return null;
 
+  // Floating pill if dismissed by user
+  if (isDismissed) {
+    return (
+      <div className="fixed bottom-20 right-4 z-[9999] animate-in slide-in-from-bottom duration-300">
+        <button
+          onClick={() => setIsDismissed(false)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full font-bold shadow-xl border border-emerald-400/40 text-xs transition-all active:scale-95"
+        >
+          <Sparkles size={14} className="animate-spin text-emerald-200" />
+          <span>Update v{updateAvailable.version} Ready</span>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-[9999] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 text-center animate-in zoom-in-95 duration-300">
         <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-4">
-          <FileDown size={32} />
+          <Sparkles size={32} />
         </div>
-        <h2 className="text-xl font-black text-slate-800 dark:text-white mb-2">Update Available!</h2>
-        <p className="text-sm text-slate-500 mb-6 font-medium">
-          {isDownloading ? (statusText || 'Downloading update...') : `Version ${updateAvailable.version} is available. Instant 1-tap update inside the app.`}
+        <h2 className="text-xl font-black text-slate-800 dark:text-white mb-2">
+          {isDownloaded ? 'Update Ready!' : 'Update Available!'}
+        </h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 font-medium">
+          {isDownloading
+            ? (statusText || 'Downloading update...')
+            : isDownloaded
+            ? `Version ${updateAvailable.version} is ready! Tap below to update instantly inside the app.`
+            : `Version ${updateAvailable.version} is available. Instant 1-tap in-app update.`}
         </p>
 
         {isDownloading ? (
@@ -306,31 +342,31 @@ function OTAUpdater() {
             <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3 overflow-hidden">
               <div 
                 className="bg-emerald-500 h-full transition-all duration-300 rounded-full" 
-                style={{ width: `${progress || 0}%` }}
+                style={{ width: `${progress || 10}%` }}
               ></div>
             </div>
             <div className="text-xs font-bold text-slate-400">
-              {progress !== null ? `${progress}% Completed` : 'Preparing update...'}
+              {statusText || (progress !== null ? `${progress}% Completed` : 'Preparing update...')}
             </div>
           </div>
         ) : (
           <div className="space-y-3">
             {downloadError && (
-              <p className="text-xs font-black text-red-500 mb-2">Error: {downloadError}</p>
+              <p className="text-xs font-semibold text-red-500 mb-2">{downloadError}</p>
             )}
             <div className="flex gap-3">
               <button 
-                onClick={() => setUpdateAvailable(null)}
-                className="flex-1 px-4 py-3 rounded-xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors"
+                onClick={() => setIsDismissed(true)}
+                className="flex-1 px-4 py-3 rounded-xl font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-sm"
               >
                 Later
               </button>
               <button 
-                onClick={handleUpdate}
-                className="flex-1 px-4 py-3 rounded-xl font-black text-white bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
+                onClick={handleApplyUpdate}
+                className="flex-1 px-4 py-3 rounded-xl font-black text-white bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 text-sm"
               >
                 <Sparkles size={16} />
-                Update Now
+                {isDownloaded ? 'Restart Now' : 'Update Now'}
               </button>
             </div>
           </div>
@@ -678,11 +714,10 @@ function AppLayout() {
   useEffect(() => {
     const notifyLiveUpdateReady = async () => {
       try {
-        const cap = (window as any)?.Capacitor;
-        if (cap && (cap.isNativePlatform === true || cap.getPlatform?.() === 'android' || cap.getPlatform?.() === 'ios')) {
+        if (Capacitor.isNativePlatform()) {
           const { LiveUpdate } = await import('@capawesome/capacitor-live-update');
           const res = await LiveUpdate.ready();
-          console.log('[LIVE UPDATE] ready():', res);
+          console.log('[LIVE UPDATE] AppContent ready():', res);
         }
       } catch (e) {
         console.warn('[LIVE UPDATE] ready() ignored:', e);

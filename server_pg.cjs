@@ -126,9 +126,9 @@ app.use('/apk', express.static(path.join(__dirname, 'apk')));
 app.get('/bundle.zip', (_req, res) => res.sendFile(path.join(__dirname, 'dist', 'bundle.zip')));
 app.use(express.static(path.join(__dirname, 'dist')));
 app.get('/api/version', (_req, res) => res.json({ 
-  version: '1.4.1', 
+  version: '1.4.2', 
   bundleUrl: '/bundle.zip',
-  bundleId: '1.4.1',
+  bundleId: '1.4.2',
   apkUrl: '/apk/nek-kadam.apk' 
 }));
 
@@ -355,6 +355,7 @@ app.get('/api/users', async (_req, res) => {
       `SELECT DISTINCT ON (LOWER(TRIM(u.name))) u.id, u.name, d.name AS department, d.code AS deptcode, u.role
        FROM users u
        LEFT JOIN departments d ON u."departmentId" = d.id
+       WHERE (u."isActive" IS NULL OR u."isActive" = true)
        ORDER BY LOWER(TRIM(u.name)), u.created_at DESC`,
       []
     );
@@ -646,7 +647,7 @@ app.get('/api/patients/:identifier/visits', async (req, res) => {
 app.get('/api/admin/users', async (_req, res) => {
   try {
     const users = await qr(`
-      SELECT u.id, u.name, u.role, u."departmentId", u."isActive", u.passcode, d.name AS department
+      SELECT u.id, u.name, u.role, u."departmentId", COALESCE(u."isActive", true) AS "isActive", u.passcode, d.name AS department
       FROM users u
       LEFT JOIN departments d ON u."departmentId" = d.id
       ORDER BY u.name
@@ -1245,13 +1246,27 @@ app.get('/api/patients/search', async (req, res) => {
 
 app.post('/api/admin/users/delete', async (req, res) => {
   try {
-    const { id } = req.body || {};
+    const { id, hard } = req.body || {};
     if (!id) return res.status(400).json({ error: 'User ID required' });
     const sessionUserId = req.user?.userId || req.headers['x-user-id'];
     if (id === sessionUserId) return res.status(400).json({ error: 'Cannot delete yourself' });
-    await q('UPDATE users SET "isActive" = false WHERE id = $1', [id]);
-    res.json({ ok: true });
-    if (req.io) req.io.emit('db_changed', { table: 'users', action: 'soft_delete' });
+
+    if (hard !== false) {
+      try {
+        await q('DELETE FROM users WHERE id = $1', [id]);
+        if (req.io) req.io.emit('db_changed', { table: 'users', action: 'delete', id });
+        return res.json({ ok: true, success: true, hard: true });
+      } catch (fkErr) {
+        console.warn(`[USER DELETE] Cannot hard delete user ${id}, falling back to soft delete:`, fkErr.message);
+        await q('UPDATE users SET "isActive" = false WHERE id = $1', [id]);
+        if (req.io) req.io.emit('db_changed', { table: 'users', action: 'soft_delete', id });
+        return res.json({ ok: true, success: true, hard: false, message: 'User deactivated (cannot be permanently deleted due to linked records)' });
+      }
+    } else {
+      await q('UPDATE users SET "isActive" = false WHERE id = $1', [id]);
+      if (req.io) req.io.emit('db_changed', { table: 'users', action: 'soft_delete', id });
+      return res.json({ ok: true, success: true, hard: false });
+    }
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db, checkServerOnline, saveVisitOffline, getPendingVisitsForPatient, cleanPatientId } from '../lib/db';
-import { getBaseUrl } from '../lib/session';
+import { getBaseUrl, apiFetch } from '../lib/session';
 import { Phone, CreditCard, Plus, Clock, Trash2, X, Printer, FileText, Calendar, Stethoscope, RefreshCw, QrCode, ScanFace } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Spinner } from '../components/ui';
@@ -123,19 +123,19 @@ export default function PatientProfile() {
     if (!window.confirm(`Are you sure you want to delete patient ${patient?.name}? This will also delete all their visits.`)) return;
     setDeletingPatient(true);
     try {
-      const res = await fetch(`${getBaseUrl()}/api/admin/patients/delete`, {
+      const res = await apiFetch('/api/admin/patients/delete', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('nek_token') || ''}` },
         body: JSON.stringify({ cardNumber: patient.card_number })
       });
       if (res.ok) {
         showToast('Patient deleted successfully', 'success');
         setTimeout(() => navigate('/patients'), 1000);
       } else {
-        showToast('Failed to delete patient', 'error');
+        const data = await res.json().catch(() => ({}));
+        showToast(data.error || 'Failed to delete patient', 'error');
       }
     } catch (e: any) {
-      showToast('Failed to delete patient', 'error');
+      showToast('Failed to delete patient: ' + e.message, 'error');
     }
     setDeletingPatient(false);
   }

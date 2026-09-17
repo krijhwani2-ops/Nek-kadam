@@ -295,9 +295,15 @@ export async function logout(): Promise<void> {
 // ─── User Management (Admin) ───
 export async function fetchAdminUsers(): Promise<any[]> {
   try {
-    const res = await apiFetch('/api/users');
+    const res = await apiFetch('/api/admin/users');
     if (res.ok) {
       const data = await res.json();
+      return data.users || data.data || [];
+    }
+    // Fallback if /api/admin/users fails
+    const fallback = await apiFetch('/api/users');
+    if (fallback.ok) {
+      const data = await fallback.json();
       return data.users || data.data || [];
     }
     return [];
@@ -309,9 +315,16 @@ export async function fetchAdminUsers(): Promise<any[]> {
 export async function updateAdminUser(user: any): Promise<boolean> {
   try {
     const userId = user.id || user.userId;
-    const res = await apiFetch(`/api/users/${userId}`, {
-      method: 'PATCH',
-      body: JSON.stringify(user),
+    const res = await apiFetch('/api/admin/users/update', {
+      method: 'POST',
+      body: JSON.stringify({
+        id: userId,
+        name: user.name,
+        passcode: user.passcode,
+        department: user.department || user.departmentId,
+        role: user.role,
+        is_active: user.is_active !== undefined ? user.is_active : (user.isActive !== undefined ? Boolean(user.isActive) : true),
+      }),
     });
     return res.ok;
   } catch {
@@ -321,12 +334,36 @@ export async function updateAdminUser(user: any): Promise<boolean> {
 
 export async function createAdminUser(user: any): Promise<{ success: boolean; user?: any; error?: string }> {
   try {
-    const res = await apiFetch('/api/users', {
+    const res = await apiFetch('/api/admin/users/create', {
       method: 'POST',
-      body: JSON.stringify(user),
+      body: JSON.stringify({
+        name: user.name,
+        passcode: user.passcode,
+        department: user.department || user.departmentId,
+        role: user.role,
+      }),
     });
-    const data = await res.json();
-    return { success: res.ok, user: data.user, error: data.error };
+    const data = await res.json().catch(() => ({}));
+    return { success: res.ok && (data.ok || data.success), user: data.user, error: data.error };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+export async function deleteAdminUser(id: string, options?: { hard?: boolean }): Promise<{ success: boolean; error?: string; message?: string }> {
+  try {
+    const res = await apiFetch('/api/admin/users/delete', {
+      method: 'POST',
+      body: JSON.stringify({
+        id,
+        hard: options?.hard ?? true,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && (data.ok || data.success)) {
+      return { success: true, message: data.message };
+    }
+    return { success: false, error: data.error || 'Failed to delete user' };
   } catch (e: any) {
     return { success: false, error: e.message };
   }
