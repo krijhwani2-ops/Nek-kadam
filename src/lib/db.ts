@@ -1025,9 +1025,9 @@ export const db = {
 // ─── Background Auto-Sync Loop ───
 if (typeof window !== 'undefined') {
   const runAutoSync = async () => {
+    // AUDIT FIX: Skip sync entirely if browser knows it's offline (saves failed fetch timeouts)
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
     try {
-      // AUDIT FIX: Skip sync entirely if browser knows it's offline (saves failed fetch timeouts)
-      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
 
       const ops = await getPendingOps();
       if (ops.length > 0) {
