@@ -1,6 +1,7 @@
 // ─── Nek Kadam: Offline Biometric Store & Sync Integration ───
 
 import { dbPromise, getPendingOps } from '../db';
+import { createToken } from '../tokenService';
 import { EMBEDDING_DIMENSION, normalizeVector } from './vectorMath';
 
 export interface PatientBiometricRecord {
@@ -51,17 +52,68 @@ export async function loadEnrolledBiometrics(forceRefresh = false): Promise<Pati
     const db = await dbPromise;
     const { useDedicatedStore } = await getBiometricsStore();
 
-    let records: PatientBiometricRecord[] = [];
+    let rawRecords: any[] = [];
     if (useDedicatedStore) {
-      records = await db.getAll('patient_biometrics');
+      rawRecords = await db.getAll('patient_biometrics');
     } else {
-      records = (await db.get('keyval', 'nk_patient_biometrics')) || [];
+      rawRecords = (await db.get('keyval', 'nk_patient_biometrics')) || [];
     }
 
-    inMemoryBiometricCache = records;
+    const cleanedRecords: PatientBiometricRecord[] = (rawRecords || []).map((r: any) => {
+      let emb = r.embedding;
+      if (!emb && r.embedding_vector) {
+        try {
+          emb = typeof r.embedding_vector === 'string' ? JSON.parse(r.embedding_vector) : r.embedding_vector;
+        } catch {}
+      } else if (typeof emb === 'string') {
+        try {
+          emb = JSON.parse(emb);
+        } catch {}
+      }
+
+      const normalizedEmb = emb ? Array.from(normalizeVector(emb)) : [];
+
+      const cardNum = String(r.cardNumber || r.card_number || r.patientId || r.patient_id || '').trim();
+      const patId = String(r.patientId || r.patient_id || r.cardNumber || r.card_number || '').trim();
+      const patName = r.patientName || r.patient_name || 'Patient';
+
+      return {
+        id: r.id || `BIO-${cardNum}-${Date.now()}`,
+        patientId: patId,
+        cardNumber: cardNum,
+        patientName: patName,
+        gender: r.gender,
+        age: r.age,
+        phone: r.phone,
+        embedding: normalizedEmb,
+        version: r.version || 'facenet-128-v1',
+        qualityScore: typeof r.qualityScore === 'number' ? r.qualityScore : 0.95,
+        createdAt: r.createdAt || r.created_at || new Date().toISOString(),
+        updatedAt: r.updatedAt || r.updated_at || new Date().toISOString()
+      };
+    }).filter(r => r.embedding.length > 0 && r.embedding.some(v => v !== 0));
+
+    // Deduplicate by cardNumber or patientId, retaining the latest enrollment
+    const dedupedMap = new Map<string, PatientBiometricRecord>();
+    for (const r of cleanedRecords) {
+      const key = r.cardNumber || r.patientId;
+      const existing = dedupedMap.get(key);
+      if (!existing) {
+        dedupedMap.set(key, r);
+      } else {
+        const existingTime = new Date(existing.updatedAt || existing.createdAt).getTime();
+        const currentTime = new Date(r.updatedAt || r.createdAt).getTime();
+        if (currentTime >= existingTime) {
+          dedupedMap.set(key, r);
+        }
+      }
+    }
+    const finalRecords = Array.from(dedupedMap.values());
+
+    inMemoryBiometricCache = finalRecords;
     cacheTimestamp = now;
-    console.log(`[BIOMETRICS] Loaded ${records.length} biometric records into in-memory vector index.`);
-    return records;
+    console.log(`[BIOMETRICS] Loaded ${finalRecords.length} biometric records into in-memory vector index.`);
+    return finalRecords;
   } catch (e) {
     console.error('[BIOMETRICS] Failed to load enrolled biometrics:', e);
     return inMemoryBiometricCache || [];
@@ -93,11 +145,13 @@ export async function deletePatientBiometric(patientIdOrCard: string | number): 
           await db.delete('patient_biometrics', r.id);
         }
       }
-    } else {
+    }
+
+    try {
       const existing: PatientBiometricRecord[] = (await db.get('keyval', 'nk_patient_biometrics')) || [];
       const filtered = existing.filter(r => String(r.cardNumber).trim() !== clean && String(r.patientId).trim() !== clean);
       await db.put('keyval', filtered, 'nk_patient_biometrics');
-    }
+    } catch {}
 
     if (inMemoryBiometricCache) {
       inMemoryBiometricCache = inMemoryBiometricCache.filter(r => String(r.cardNumber).trim() !== clean && String(r.patientId).trim() !== clean);
@@ -143,17 +197,19 @@ export async function savePatientBiometric(
     age?: number;
     phone?: string;
   },
-  embeddingVector: Float32Array | number[],
+  embeddingVector: Float32Array | number[] | string,
   qualityScore = 0.95
 ): Promise<PatientBiometricRecord> {
   const db = await dbPromise;
   const normalized = Array.from(normalizeVector(embeddingVector));
+  const cardNum = String(patient.cardNumber || patient.id || '').trim();
+  const patId = String(patient.id || patient.cardNumber || '').trim();
 
   const record: PatientBiometricRecord = {
-    id: `BIO-${patient.cardNumber || patient.id}-${Date.now()}`,
-    patientId: patient.id || patient.cardNumber,
-    cardNumber: patient.cardNumber,
-    patientName: patient.name,
+    id: `BIO-${cardNum}-${Date.now()}`,
+    patientId: patId,
+    cardNumber: cardNum,
+    patientName: patient.name || 'Unknown Patient',
     gender: patient.gender,
     age: patient.age,
     phone: patient.phone,
@@ -167,21 +223,35 @@ export async function savePatientBiometric(
   const { useDedicatedStore } = await getBiometricsStore();
 
   if (useDedicatedStore) {
-    await db.put('patient_biometrics', record);
-  } else {
+    try {
+      const records: PatientBiometricRecord[] = await db.getAll('patient_biometrics');
+      for (const r of records) {
+        if (String(r.cardNumber).trim() === cardNum || String(r.patientId).trim() === patId) {
+          await db.delete('patient_biometrics', r.id);
+        }
+      }
+      await db.put('patient_biometrics', record);
+    } catch (_e) {}
+  }
+
+  // Always keep keyval fallback store in parity
+  try {
     const existing: PatientBiometricRecord[] = (await db.get('keyval', 'nk_patient_biometrics')) || [];
-    const filtered = existing.filter(r => r.cardNumber !== patient.cardNumber && r.patientId !== patient.id);
+    const filtered = existing.filter(r => String(r.cardNumber).trim() !== cardNum && String(r.patientId).trim() !== patId);
     filtered.push(record);
     await db.put('keyval', filtered, 'nk_patient_biometrics');
-  }
+  } catch (_e) {}
 
   // Update in-memory vector cache
   if (inMemoryBiometricCache) {
     inMemoryBiometricCache = inMemoryBiometricCache.filter(
-      r => r.cardNumber !== patient.cardNumber && r.patientId !== patient.id
+      r => String(r.cardNumber).trim() !== cardNum && String(r.patientId).trim() !== patId
     );
     inMemoryBiometricCache.push(record);
+  } else {
+    inMemoryBiometricCache = [record];
   }
+  cacheTimestamp = Date.now();
 
   // Queue operation for server sync
   try {
@@ -227,31 +297,24 @@ export async function issueOfflineToken(params: {
   const priority = params.priority || 'NORMAL';
   const todayKey = new Date().toISOString().split('T')[0];
 
-  // 1. Try online server first
+  // 1. Try server via authenticated createToken first
   try {
-    const res = await fetch('/api/tokens/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        personId: params.cardNumber || params.patientId,
-        personName: params.patientName,
-        personCard: params.cardNumber,
-        priority,
-        userId: params.userId
-      }),
-      signal: AbortSignal.timeout(2000)
+    const tokenRes = await createToken({
+      personId: params.cardNumber || params.patientId,
+      personName: params.patientName,
+      personCard: params.cardNumber,
+      priority,
+      userId: params.userId,
+      departmentId: 'reception'
     });
 
-    if (res.ok) {
-      const data = await res.json();
-      if (data.data) {
-        return {
-          success: true,
-          tokenNumber: data.data.tokenNumber,
-          tokenId: data.data.id,
-          isOffline: false
-        };
-      }
+    if (tokenRes && tokenRes.data) {
+      return {
+        success: true,
+        tokenNumber: tokenRes.data.tokenNumber,
+        tokenId: tokenRes.data.id,
+        isOffline: false
+      };
     }
   } catch (_netErr) {
     console.log('[TOKEN] Server unreachable, switching to OFFLINE token creation...');

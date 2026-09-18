@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { 
   analyzeVideoFrame, 
+  loadFaceModels,
   playBiometricMatchSound, 
   playAmbiguityAlertSound, 
   triggerBiometricHaptic 
@@ -75,6 +76,15 @@ export default function FaceScannerModal({
 
   // Recognition state
   const [scanStatus, setScanStatus] = useState<'IDLE' | 'SCANNING' | 'ANALYZING' | 'MATCHED' | 'AMBIGUOUS' | 'NO_MATCH'>('IDLE');
+  const scanStatusRef = useRef<'IDLE' | 'SCANNING' | 'ANALYZING' | 'MATCHED' | 'AMBIGUOUS' | 'NO_MATCH'>('IDLE');
+  const showEnrollSearchRef = useRef(false);
+  useEffect(() => {
+    scanStatusRef.current = scanStatus;
+  }, [scanStatus]);
+  useEffect(() => {
+    showEnrollSearchRef.current = showEnrollSearch;
+  }, [showEnrollSearch]);
+
   const [matchResult, setMatchResult] = useState<MatchEvaluationResult<PatientBiometricRecord> | null>(null);
   const [statusMessage, setStatusMessage] = useState('Position face inside the biometric oval');
 
@@ -87,12 +97,14 @@ export default function FaceScannerModal({
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const lastInferenceTime = useRef<number>(0);
+  const isAnalyzingRef = useRef<boolean>(false);
+  const isCameraActiveRef = useRef<boolean>(false);
 
   // Initialize camera and load enrolled vector profiles
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (showEnrollSearch) {
+        if (showEnrollSearchRef.current) {
           setShowEnrollSearch(false);
         } else {
           onClose();
@@ -103,6 +115,7 @@ export default function FaceScannerModal({
     if (isOpen) {
       window.addEventListener('keydown', handleKeyDown);
       loadBiometrics();
+      loadFaceModels().catch(err => console.warn('[FACE SCANNER] Failed to load models:', err));
       startCamera();
     } else {
       stopCamera();
@@ -112,7 +125,7 @@ export default function FaceScannerModal({
       window.removeEventListener('keydown', handleKeyDown);
       stopCamera();
     };
-  }, [isOpen, facingMode, showEnrollSearch]);
+  }, [isOpen, facingMode]);
 
   async function loadBiometrics() {
     const list = await loadEnrolledBiometrics(true);
@@ -121,11 +134,17 @@ export default function FaceScannerModal({
   }
 
   function resetState() {
-    setScanStatus('IDLE');
+    setScanStatus('SCANNING');
+    scanStatusRef.current = 'SCANNING';
     setMatchResult(null);
     setStatusMessage('Position face inside the biometric oval');
     setIssuedTokenInfo(null);
     setIsIssuingToken(false);
+    isAnalyzingRef.current = false;
+    lastInferenceTime.current = 0;
+    if (!animationFrameRef.current && cameraActive) {
+      startContinuousRecognitionLoop();
+    }
   }
 
   async function startCamera() {
@@ -151,6 +170,7 @@ export default function FaceScannerModal({
           if (videoRef.current) {
             videoRef.current.play().catch(e => console.warn('[FACE SCANNER] play error:', e));
             setCameraActive(true);
+            isCameraActiveRef.current = true;
             setScanStatus('SCANNING');
             startContinuousRecognitionLoop();
           }
@@ -160,10 +180,12 @@ export default function FaceScannerModal({
       console.error('[FACE SCANNER] Camera error:', err);
       setCameraError('Unable to access camera. Please verify camera permissions.');
       setCameraActive(false);
+      isCameraActiveRef.current = false;
     }
   }
 
   function stopCamera() {
+    isCameraActiveRef.current = false;
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
@@ -172,6 +194,7 @@ export default function FaceScannerModal({
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
+    isAnalyzingRef.current = false;
     setCameraActive(false);
   }
 
@@ -181,57 +204,96 @@ export default function FaceScannerModal({
 
   // Main high-speed offline recognition loop
   function startContinuousRecognitionLoop() {
-    const loop = () => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    const loop = async () => {
+      if (!isCameraActiveRef.current) return;
       const now = Date.now();
+
+      // Pause inference if already matched or if linking search overlay is visible
+      if (scanStatusRef.current === 'MATCHED' || showEnrollSearchRef.current) {
+        if (isCameraActiveRef.current) {
+          animationFrameRef.current = requestAnimationFrame(loop);
+        }
+        return;
+      }
+
       // Throttle inference to every 200ms (~5 inferences/second) to conserve mobile battery
-      if (now - lastInferenceTime.current > 200 && videoRef.current && canvasRef.current && scanStatus !== 'MATCHED') {
-        lastInferenceTime.current = now;
-
-        const currentEnrolled = enrolledListRef.current;
-        const analysis = analyzeVideoFrame(videoRef.current, canvasRef.current);
-
-        if (analysis.detected && analysis.embedding) {
-          if (!currentEnrolled || currentEnrolled.length === 0) {
-            setStatusMessage('No enrolled patient faces found. Use Link Face below to register.');
-          } else {
-            setScanStatus('ANALYZING');
-            setStatusMessage('Face detected. Matching biometric embedding...');
-
-            // Evaluate query embedding against in-memory enrolled biometrics
-            const result = evaluateBiometricMatch(analysis.embedding, currentEnrolled);
-
-            if (result.status === 'MATCH_CONFIRMED') {
-              setMatchResult(result);
-              setScanStatus('MATCHED');
-              setStatusMessage(`✓ ${result.bestMatch!.item.patientName} Identified!`);
-              playBiometricMatchSound();
-              triggerBiometricHaptic();
-
-              if (autoOpenProfileRef.current) {
-                setStatusMessage(`✓ ${result.bestMatch!.item.patientName} Identified! Opening profile...`);
-                setTimeout(() => {
-                  handleOpenPatient(result.bestMatch!.item);
-                }, 400);
-              }
-              return; // Pause loop on confirmed match
-            } else if (result.status === 'AMBIGUOUS_MATCH') {
-              setMatchResult(result);
-              setScanStatus('AMBIGUOUS');
-              setStatusMessage(result.reason);
-              // Do NOT return; continue scanning next frame smoothly
-            } else {
-              setMatchResult(null);
-              setScanStatus('SCANNING');
-              setStatusMessage(analysis.box?.isRealFace ? 'Face Locked • Matching registered patients...' : 'Scanning... Align face with good lighting');
-            }
+      if (now - lastInferenceTime.current > 200 && videoRef.current && canvasRef.current) {
+        if (isAnalyzingRef.current) {
+          if (isCameraActiveRef.current) {
+            animationFrameRef.current = requestAnimationFrame(loop);
           }
-        } else {
-          setMatchResult(null);
-          setStatusMessage(analysis.reason || 'Align face inside oval frame');
+          return;
+        }
+
+        lastInferenceTime.current = now;
+        isAnalyzingRef.current = true;
+
+        try {
+          const currentEnrolled = enrolledListRef.current;
+          const analysis = await analyzeVideoFrame(videoRef.current, canvasRef.current);
+
+          // Guard against camera stopped while analysis was in flight
+          if (!isCameraActiveRef.current) return;
+
+          if (analysis.detected && analysis.embedding) {
+            if (!currentEnrolled || currentEnrolled.length === 0) {
+              setStatusMessage('No enrolled patient faces found. Use Link Face below to register.');
+            } else {
+              setScanStatus('ANALYZING');
+              scanStatusRef.current = 'ANALYZING';
+              setStatusMessage('Face detected. Matching biometric embedding...');
+
+              // Evaluate query embedding against in-memory enrolled biometrics
+              const result = evaluateBiometricMatch(analysis.embedding, currentEnrolled);
+
+              if (result.status === 'MATCH_CONFIRMED') {
+                setMatchResult(result);
+                setScanStatus('MATCHED');
+                scanStatusRef.current = 'MATCHED';
+                setStatusMessage(`✓ ${result.bestMatch!.item.patientName} Identified!`);
+                playBiometricMatchSound();
+                triggerBiometricHaptic();
+
+                if (autoOpenProfileRef.current) {
+                  setStatusMessage(`✓ ${result.bestMatch!.item.patientName} Identified! Opening profile...`);
+                  setTimeout(() => {
+                    if (isCameraActiveRef.current) {
+                      handleOpenPatient(result.bestMatch!.item);
+                    }
+                  }, 400);
+                }
+              } else if (result.status === 'AMBIGUOUS_MATCH') {
+                setMatchResult(result);
+                setScanStatus('AMBIGUOUS');
+                scanStatusRef.current = 'AMBIGUOUS';
+                setStatusMessage(result.reason);
+                // Continue scanning next frame smoothly
+              } else {
+                setMatchResult(null);
+                setScanStatus('SCANNING');
+                scanStatusRef.current = 'SCANNING';
+                setStatusMessage(analysis.box?.isRealFace ? 'Face Locked • Matching registered patients...' : 'Scanning... Align face with good lighting');
+              }
+            }
+          } else {
+            setMatchResult(null);
+            setStatusMessage(analysis.reason || 'Align face inside oval frame');
+          }
+        } catch (err) {
+          console.error('[FACE SCANNER] Analysis error:', err);
+        } finally {
+          isAnalyzingRef.current = false;
         }
       }
 
-      animationFrameRef.current = requestAnimationFrame(loop);
+      if (isCameraActiveRef.current) {
+        animationFrameRef.current = requestAnimationFrame(loop);
+      }
     };
 
     animationFrameRef.current = requestAnimationFrame(loop);
@@ -268,17 +330,20 @@ export default function FaceScannerModal({
     }
     setIsLinkingFace(true);
     try {
-      const analysis = analyzeVideoFrame(videoRef.current, canvasRef.current);
+      const analysis = await analyzeVideoFrame(videoRef.current, canvasRef.current);
       if (!analysis.detected || !analysis.embedding) {
         alert('Please align face inside the oval frame before linking.');
         setIsLinkingFace(false);
         return;
       }
 
+      const cardNum = String(patient.card_number || patient.cardNumber || patient.id || '').trim();
+      const patId = String(patient.id || patient.card_number || patient.cardNumber || '').trim();
+
       await savePatientBiometric({
-        id: patient.id,
-        cardNumber: String(patient.card_number || patient.id),
-        name: patient.name,
+        id: patId,
+        cardNumber: cardNum,
+        name: patient.name || 'Patient',
         gender: patient.gender,
         age: patient.age,
         phone: patient.phone
@@ -290,13 +355,16 @@ export default function FaceScannerModal({
       playBiometricMatchSound();
       triggerBiometricHaptic();
       setShowEnrollSearch(false);
-      alert(`✓ Face ID linked to ${patient.name} (#${patient.card_number})! Opening profile now...`);
+      alert(`✓ Face ID linked to ${patient.name} (#${cardNum})! Opening profile now...`);
       
       handleOpenPatient({
-        id: `BIO-${patient.card_number || patient.id}`,
-        patientId: patient.id,
-        cardNumber: String(patient.card_number || patient.id),
-        patientName: patient.name,
+        id: `BIO-${cardNum}-${Date.now()}`,
+        patientId: patId,
+        cardNumber: cardNum,
+        patientName: patient.name || 'Patient',
+        gender: patient.gender,
+        age: patient.age,
+        phone: patient.phone,
         embedding: Array.from(analysis.embedding),
         version: 'facenet-128-v1',
         qualityScore: 0.98,
@@ -308,6 +376,27 @@ export default function FaceScannerModal({
     } finally {
       setIsLinkingFace(false);
     }
+  }
+
+  // Select ambiguous candidate manually to inspect profile or issue token
+  function handleSelectAmbiguousCandidate(candidate: PatientBiometricRecord) {
+    setScanStatus('MATCHED');
+    scanStatusRef.current = 'MATCHED';
+    setMatchResult({
+      status: 'MATCH_CONFIRMED',
+      bestMatch: {
+        item: candidate,
+        similarity: 1.0,
+        distance: 0,
+        confidencePercent: 99
+      },
+      secondBestMatch: null,
+      marginGap: 1.0,
+      reason: `Manually confirmed ${candidate.patientName}`
+    });
+    setStatusMessage(`✓ ${candidate.patientName} Selected`);
+    playBiometricMatchSound();
+    triggerBiometricHaptic();
   }
 
   // Handle Confirmed Token Creation
@@ -323,11 +412,26 @@ export default function FaceScannerModal({
       });
 
       if (tokenResult.success) {
+        setScanStatus('MATCHED');
+        scanStatusRef.current = 'MATCHED';
+        setMatchResult(prev => ({
+          status: 'MATCH_CONFIRMED',
+          bestMatch: {
+            item: patient,
+            similarity: prev?.bestMatch?.item?.cardNumber === patient.cardNumber ? prev.bestMatch.similarity : 1.0,
+            distance: 0,
+            confidencePercent: prev?.bestMatch?.item?.cardNumber === patient.cardNumber ? prev.bestMatch.confidencePercent : 99
+          },
+          secondBestMatch: null,
+          marginGap: 1.0,
+          reason: `Confirmed ${patient.patientName}`
+        }));
         setIssuedTokenInfo({
           tokenNumber: tokenResult.tokenNumber,
           isOffline: tokenResult.isOffline
         });
         playBiometricMatchSound();
+        triggerBiometricHaptic();
       }
     } catch (e) {
       console.error('[FACE SCANNER] Failed to issue token:', e);
@@ -664,30 +768,66 @@ export default function FaceScannerModal({
               </div>
 
               {/* Choice A */}
-              <button
-                type="button"
-                onClick={() => handleConfirmAndIssueToken(matchResult.bestMatch!.item)}
-                className="w-full p-2.5 bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-xl flex items-center justify-between text-left active:scale-[0.99] transition-all"
-              >
-                <div>
+              <div className="p-2.5 bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-xl flex items-center justify-between gap-2">
+                <div 
+                  onClick={() => handleSelectAmbiguousCandidate(matchResult.bestMatch!.item)}
+                  className="cursor-pointer flex-1 min-w-0"
+                >
                   <span className="text-[10px] font-bold text-amber-400">#{matchResult.bestMatch.item.cardNumber}</span>
-                  <p className="text-sm font-bold text-white">{matchResult.bestMatch.item.patientName}</p>
+                  <p className="text-sm font-bold text-white truncate">{matchResult.bestMatch.item.patientName}</p>
+                  <p className="text-[10px] text-slate-400">
+                    {matchResult.bestMatch.item.age ? `${matchResult.bestMatch.item.age} yrs • ` : ''}{matchResult.bestMatch.item.gender || 'Patient'}
+                  </p>
                 </div>
-                <span className="text-xs text-slate-400 font-bold">Select Candidate 1</span>
-              </button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectAmbiguousCandidate(matchResult.bestMatch!.item)}
+                    className="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-650 text-white rounded-lg text-xs font-bold active:scale-95"
+                  >
+                    Select
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isIssuingToken}
+                    onClick={() => handleConfirmAndIssueToken(matchResult.bestMatch!.item)}
+                    className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 active:scale-95"
+                  >
+                    <Ticket size={12} /> + Token
+                  </button>
+                </div>
+              </div>
 
               {/* Choice B */}
-              <button
-                type="button"
-                onClick={() => handleConfirmAndIssueToken(matchResult.secondBestMatch!.item)}
-                className="w-full p-2.5 bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-xl flex items-center justify-between text-left active:scale-[0.99] transition-all"
-              >
-                <div>
+              <div className="p-2.5 bg-slate-800 hover:bg-slate-750 border border-slate-700 rounded-xl flex items-center justify-between gap-2">
+                <div 
+                  onClick={() => handleSelectAmbiguousCandidate(matchResult.secondBestMatch!.item)}
+                  className="cursor-pointer flex-1 min-w-0"
+                >
                   <span className="text-[10px] font-bold text-slate-400">#{matchResult.secondBestMatch.item.cardNumber}</span>
-                  <p className="text-sm font-bold text-white">{matchResult.secondBestMatch.item.patientName}</p>
+                  <p className="text-sm font-bold text-white truncate">{matchResult.secondBestMatch.item.patientName}</p>
+                  <p className="text-[10px] text-slate-400">
+                    {matchResult.secondBestMatch.item.age ? `${matchResult.secondBestMatch.item.age} yrs • ` : ''}{matchResult.secondBestMatch.item.gender || 'Patient'}
+                  </p>
                 </div>
-                <span className="text-xs text-slate-400 font-bold">Select Candidate 2</span>
-              </button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectAmbiguousCandidate(matchResult.secondBestMatch!.item)}
+                    className="px-2.5 py-1.5 bg-slate-700 hover:bg-slate-650 text-white rounded-lg text-xs font-bold active:scale-95"
+                  >
+                    Select
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isIssuingToken}
+                    onClick={() => handleConfirmAndIssueToken(matchResult.secondBestMatch!.item)}
+                    className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 active:scale-95"
+                  >
+                    <Ticket size={12} /> + Token
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { 
   analyzeVideoFrame, 
+  loadFaceModels,
   playBiometricMatchSound, 
   triggerBiometricHaptic 
 } from '../../lib/face/faceEngine';
@@ -18,8 +19,6 @@ import { savePatientBiometric } from '../../lib/face/biometricStore';
 import { consolidateBurstEmbeddings } from '../../lib/face/vectorMath';
 
 interface FaceEnrollmentModalProps {
-  isOpen: boolean;
-  onClose: () => void;
   patient: {
     id: string;
     cardNumber: string;
@@ -28,6 +27,8 @@ interface FaceEnrollmentModalProps {
     age?: number;
     phone?: string;
   };
+  isOpen: boolean;
+  onClose: () => void;
   onEnrollmentComplete?: () => void;
 }
 
@@ -50,16 +51,29 @@ export default function FaceEnrollmentModal({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const isCancelledRef = useRef<boolean>(false);
 
   useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
     if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+      isCancelledRef.current = false;
+      loadFaceModels().catch(e => console.warn('[ENROLLMENT] load models error:', e));
       startCamera();
       setEnrollStep(0);
       setCapturedEmbeddings([]);
     } else {
+      isCancelledRef.current = true;
       stopCamera();
     }
     return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      isCancelledRef.current = true;
       stopCamera();
     };
   }, [isOpen, facingMode]);
@@ -102,6 +116,7 @@ export default function FaceEnrollmentModal({
   async function handleStartBurstCapture() {
     if (!videoRef.current || !canvasRef.current || isProcessing) return;
     setIsProcessing(true);
+    isCancelledRef.current = false;
 
     const shots: Float32Array[] = [];
     const stepInstructions = [
@@ -111,22 +126,40 @@ export default function FaceEnrollmentModal({
     ];
 
     for (let i = 0; i < 3; i++) {
+      if (isCancelledRef.current) {
+        setIsProcessing(false);
+        return;
+      }
       setEnrollStep(i + 1);
       setQualityText(stepInstructions[i]);
       triggerBiometricHaptic();
 
       // Wait 600ms between bursts to let user adjust pose
       await new Promise(r => setTimeout(r, 600));
+      if (isCancelledRef.current) {
+        setIsProcessing(false);
+        return;
+      }
 
-      const analysis = analyzeVideoFrame(videoRef.current, canvasRef.current);
+      const analysis = await analyzeVideoFrame(videoRef.current, canvasRef.current);
       if (analysis.detected && analysis.embedding) {
         shots.push(analysis.embedding);
+        setCapturedEmbeddings([...shots]);
         playBiometricMatchSound();
       } else {
         // Fallback retry
-        const retry = analyzeVideoFrame(videoRef.current, canvasRef.current);
-        if (retry.embedding) shots.push(retry.embedding);
+        const retry = await analyzeVideoFrame(videoRef.current, canvasRef.current);
+        if (retry.detected && retry.embedding) {
+          shots.push(retry.embedding);
+          setCapturedEmbeddings([...shots]);
+          playBiometricMatchSound();
+        }
       }
+    }
+
+    if (isCancelledRef.current) {
+      setIsProcessing(false);
+      return;
     }
 
     if (shots.length >= 2) {
@@ -135,7 +168,19 @@ export default function FaceEnrollmentModal({
       const masterVector = consolidateBurstEmbeddings(shots);
 
       // Save locally to IndexedDB & queue sync
-      await savePatientBiometric(patient, masterVector, 0.98);
+      const cardNum = String(patient.cardNumber || (patient as any).card_number || patient.id || '').trim();
+      const patId = String(patient.id || (patient as any).card_number || patient.cardNumber || '').trim();
+
+      await savePatientBiometric({
+        ...patient,
+        id: patId,
+        cardNumber: cardNum
+      }, masterVector, 0.98);
+
+      if (isCancelledRef.current) {
+        setIsProcessing(false);
+        return;
+      }
 
       setEnrollStep(4);
       setQualityText('Biometric Face ID successfully enrolled!');
@@ -143,9 +188,11 @@ export default function FaceEnrollmentModal({
       triggerBiometricHaptic();
 
       setTimeout(() => {
-        if (onEnrollmentComplete) onEnrollmentComplete();
-        stopCamera();
-        onClose();
+        if (!isCancelledRef.current) {
+          if (onEnrollmentComplete) onEnrollmentComplete();
+          stopCamera();
+          onClose();
+        }
       }, 1500);
     } else {
       setQualityText('Capture failed due to poor lighting or motion. Please retry.');
@@ -158,8 +205,14 @@ export default function FaceEnrollmentModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200 cursor-pointer"
+      onClick={onClose}
+    >
+      <div 
+        className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col cursor-default"
+        onClick={e => e.stopPropagation()}
+      >
         
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-slate-900/90">
@@ -172,13 +225,25 @@ export default function FaceEnrollmentModal({
               #{patient.cardNumber} • {patient.name}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setFacingMode(prev => prev === 'user' ? 'environment' : 'user')}
+              className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white flex items-center justify-center active:scale-95 transition-all"
+              title="Flip Camera"
+              aria-label="Flip Camera"
+            >
+              <FlipHorizontal size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white flex items-center justify-center active:scale-95 transition-all"
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Viewfinder */}

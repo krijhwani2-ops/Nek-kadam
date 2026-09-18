@@ -15,8 +15,15 @@ import {
 } from 'lucide-react';
 import FaceScannerModal from '../components/face/FaceScannerModal';
 import FaceEnrollmentModal from '../components/face/FaceEnrollmentModal';
+import { loadFaceModels } from '../lib/face/faceEngine';
 import { loadEnrolledBiometrics, clearAllBiometrics, PatientBiometricRecord } from '../lib/face/biometricStore';
-import { evaluateBiometricMatch, cosineSimilarity, normalizeVector } from '../lib/face/vectorMath';
+import { 
+  evaluateBiometricMatch, 
+  cosineSimilarity, 
+  normalizeVector,
+  DEFAULT_CONFIDENCE_THRESHOLD,
+  DEFAULT_MARGIN_GAP
+} from '../lib/face/vectorMath';
 
 export default function FaceRecognitionDemo() {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -38,6 +45,7 @@ export default function FaceRecognitionDemo() {
 
   useEffect(() => {
     loadProfiles();
+    loadFaceModels().catch(e => console.warn('[DEMO] Failed to preload face models:', e));
   }, []);
 
   async function loadProfiles() {
@@ -54,7 +62,7 @@ export default function FaceRecognitionDemo() {
 
   // Calculate live margin guard status
   const gap = simulatedScore - simulatedSecondScore;
-  const isAmbiguous = simulatedScore >= 0.86 && gap < 0.08;
+  const isAmbiguous = simulatedScore >= DEFAULT_CONFIDENCE_THRESHOLD && gap < DEFAULT_MARGIN_GAP;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
@@ -178,7 +186,7 @@ export default function FaceRecognitionDemo() {
         <div className={`p-4 rounded-2xl border transition-all ${
           isAmbiguous
             ? 'bg-amber-950/40 border-amber-500/40 text-amber-300'
-            : simulatedScore >= 0.86
+            : simulatedScore >= DEFAULT_CONFIDENCE_THRESHOLD
             ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
             : 'bg-red-950/40 border-red-500/40 text-red-300'
         }`}>
@@ -187,22 +195,22 @@ export default function FaceRecognitionDemo() {
               {isAmbiguous ? (
                 <>
                   <AlertTriangle size={18} className="text-amber-400" />
-                  GUARD ACTIVATED: Ambiguous Match (Gap: {(gap * 100).toFixed(1)}% &lt; 8%)
+                  GUARD ACTIVATED: Ambiguous Match (Gap: {(gap * 100).toFixed(1)}% &lt; {(DEFAULT_MARGIN_GAP * 100).toFixed(0)}%)
                 </>
-              ) : simulatedScore >= 0.86 ? (
+              ) : simulatedScore >= DEFAULT_CONFIDENCE_THRESHOLD ? (
                 <>
                   <ShieldCheck size={18} className="text-emerald-400" />
-                  SAFE TO PROCEED: Clear Match Confirmed (Gap: {(gap * 100).toFixed(1)}% &gt; 8%)
+                  SAFE TO PROCEED: Clear Match Confirmed (Gap: {(gap * 100).toFixed(1)}% &gt;= {(DEFAULT_MARGIN_GAP * 100).toFixed(0)}%)
                 </>
               ) : (
                 <>
                   <AlertTriangle size={18} className="text-red-400" />
-                  NO MATCH: Below 86% Confidence Threshold
+                  NO MATCH: Below {(DEFAULT_CONFIDENCE_THRESHOLD * 100).toFixed(0)}% Confidence Threshold
                 </>
               )}
             </span>
             <span className="text-xs font-mono uppercase">
-              {isAmbiguous ? 'Forces Manual Selection' : simulatedScore >= 0.86 ? 'Show Confirm Button' : 'Fallback to QR/Card'}
+              {isAmbiguous ? 'Forces Manual Selection' : simulatedScore >= DEFAULT_CONFIDENCE_THRESHOLD ? 'Show Confirm Button' : 'Fallback to QR/Card'}
             </span>
           </div>
         </div>

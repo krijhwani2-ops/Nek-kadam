@@ -1,7 +1,7 @@
 // ─── Nek Kadam: Offline Biometric Vector Math & Safeguards ───
 
 export const EMBEDDING_DIMENSION = 128;
-export const DEFAULT_CONFIDENCE_THRESHOLD = 0.70; // Cosine similarity >= 0.70 (strict zero-mean matching)
+export const DEFAULT_CONFIDENCE_THRESHOLD = 0.80; // Cosine similarity >= 0.80 for FaceNet 128D embeddings
 export const DEFAULT_MARGIN_GAP = 0.08;           // Top match must beat 2nd match by >= 0.08
 
 export interface ScoredMatch<T = any> {
@@ -20,32 +20,50 @@ export interface MatchEvaluationResult<T = any> {
 }
 
 /**
- * Normalizes a vector with zero-mean centering and L2 unit-norm:
- * 1. v_i = v_i - mean(v)
- * 2. v_i = v_i / ||v||_2
- * This guarantees true orthogonality: random/unrelated faces score ~0.0 similarity.
+ * Normalizes a vector with L2 unit-norm:
+ * v_i = v_i / ||v||_2
+ * This guarantees vectors lie on the unit hypersphere for exact cosine similarity and Euclidean distance.
  */
-export function normalizeVector(vec: number[] | Float32Array): Float32Array {
-  const arr = vec instanceof Float32Array ? vec : new Float32Array(vec);
+export function normalizeVector(vec?: number[] | Float32Array | string | null): Float32Array {
+  if (!vec) return new Float32Array(EMBEDDING_DIMENSION);
+
+  let arr: Float32Array;
+  if (vec instanceof Float32Array) {
+    arr = vec;
+  } else if (Array.isArray(vec)) {
+    arr = new Float32Array(vec);
+  } else if (typeof vec === 'string') {
+    try {
+      const parsed = JSON.parse(vec);
+      arr = Array.isArray(parsed) ? new Float32Array(parsed) : new Float32Array(EMBEDDING_DIMENSION);
+    } catch {
+      return new Float32Array(EMBEDDING_DIMENSION);
+    }
+  } else {
+    try {
+      arr = new Float32Array(vec as any);
+    } catch {
+      return new Float32Array(EMBEDDING_DIMENSION);
+    }
+  }
+
   const len = arr.length;
   if (len === 0) return arr;
 
-  let sum = 0;
-  for (let i = 0; i < len; i++) sum += arr[i];
-  const mean = sum / len;
-
   let sumSq = 0;
+  for (let i = 0; i < len; i++) {
+    const val = arr[i];
+    if (Number.isFinite(val)) {
+      sumSq += val * val;
+    }
+  }
+  const norm = Math.sqrt(sumSq);
+  if (norm === 0 || !Number.isFinite(norm)) return new Float32Array(len);
+
   const out = new Float32Array(len);
   for (let i = 0; i < len; i++) {
-    const val = arr[i] - mean;
-    out[i] = val;
-    sumSq += val * val;
-  }
-
-  const norm = Math.sqrt(sumSq);
-  if (norm === 0) return out;
-  for (let i = 0; i < len; i++) {
-    out[i] /= norm;
+    const val = arr[i];
+    out[i] = Number.isFinite(val) ? val / norm : 0;
   }
   return out;
 }
@@ -55,12 +73,20 @@ export function normalizeVector(vec: number[] | Float32Array): Float32Array {
  * Range: -1.0 to 1.0 (identical vectors = 1.0).
  */
 export function cosineSimilarity(a: Float32Array | number[], b: Float32Array | number[]): number {
-  if (a.length !== b.length) return 0;
+  if (a.length !== b.length || a.length === 0) return 0;
   let dot = 0;
   for (let i = 0; i < a.length; i++) {
     dot += a[i] * b[i];
   }
   return Math.max(-1, Math.min(1, dot));
+}
+
+/**
+ * Computes Cosine Distance (1 - cosineSimilarity) between two vectors.
+ * Range: 0.0 (identical) to 2.0 (opposite).
+ */
+export function cosineDistance(a: Float32Array | number[], b: Float32Array | number[]): number {
+  return Math.max(0, 1 - cosineSimilarity(a, b));
 }
 
 /**
@@ -79,21 +105,38 @@ export function euclideanDistance(a: Float32Array | number[], b: Float32Array | 
 /**
  * Averages multiple burst enrollment embeddings into a single consolidated vector.
  */
-export function consolidateBurstEmbeddings(vectors: (Float32Array | number[])[]): Float32Array {
-  if (vectors.length === 0) return new Float32Array(EMBEDDING_DIMENSION);
-  if (vectors.length === 1) return normalizeVector(vectors[0]);
+export function consolidateBurstEmbeddings(vectors: (Float32Array | number[] | string | null | undefined)[]): Float32Array {
+  if (!vectors || vectors.length === 0) return new Float32Array(EMBEDDING_DIMENSION);
 
-  const dim = vectors[0].length;
-  const sum = new Float32Array(dim);
-
+  const validNormalized: Float32Array[] = [];
   for (const v of vectors) {
-    for (let i = 0; i < dim; i++) {
-      sum[i] += v[i];
+    if (!v) continue;
+    const normV = normalizeVector(v);
+    if (normV.length > 0 && normV.some(x => x !== 0)) {
+      validNormalized.push(normV);
     }
   }
 
+  if (validNormalized.length === 0) return new Float32Array(EMBEDDING_DIMENSION);
+  if (validNormalized.length === 1) return validNormalized[0];
+
+  const dim = validNormalized[0].length;
+  const sum = new Float32Array(dim);
+
+  let count = 0;
+  for (const v of validNormalized) {
+    if (v.length === dim) {
+      for (let i = 0; i < dim; i++) {
+        sum[i] += v[i];
+      }
+      count++;
+    }
+  }
+
+  if (count === 0) return new Float32Array(dim);
+
   for (let i = 0; i < dim; i++) {
-    sum[i] /= vectors.length;
+    sum[i] /= count;
   }
 
   return normalizeVector(sum);
@@ -101,11 +144,11 @@ export function consolidateBurstEmbeddings(vectors: (Float32Array | number[])[])
 
 /**
  * Evaluates a query embedding against a list of candidates using two-tier thresholding:
- * 1. Primary confidence threshold (similarity >= 0.86)
+ * 1. Primary confidence threshold (similarity >= 0.80)
  * 2. Margin gap test (top match must exceed second best by >= 0.08)
  */
-export function evaluateBiometricMatch<T extends { embedding: number[] | Float32Array }>(
-  queryEmbedding: Float32Array | number[],
+export function evaluateBiometricMatch<T extends { embedding: number[] | Float32Array | string }>(
+  queryEmbedding: Float32Array | number[] | string | null | undefined,
   candidates: T[],
   threshold = DEFAULT_CONFIDENCE_THRESHOLD,
   marginGap = DEFAULT_MARGIN_GAP
@@ -121,8 +164,28 @@ export function evaluateBiometricMatch<T extends { embedding: number[] | Float32
   }
 
   const normalizedQuery = normalizeVector(queryEmbedding);
+  if (normalizedQuery.length === 0 || !normalizedQuery.some(x => x !== 0)) {
+    return {
+      status: 'NO_MATCH',
+      bestMatch: null,
+      secondBestMatch: null,
+      marginGap: 0,
+      reason: 'Invalid or empty biometric query vector.'
+    };
+  }
 
-  const scored: ScoredMatch<T>[] = candidates.map(candidate => {
+  const validCandidates = candidates.filter(c => c && c.embedding);
+  if (validCandidates.length === 0) {
+    return {
+      status: 'NO_MATCH',
+      bestMatch: null,
+      secondBestMatch: null,
+      marginGap: 0,
+      reason: 'No valid biometric embeddings found in candidate profiles.'
+    };
+  }
+
+  const scored: ScoredMatch<T>[] = validCandidates.map(candidate => {
     const candidateVec = normalizeVector(candidate.embedding);
     const sim = cosineSimilarity(normalizedQuery, candidateVec);
     const dist = euclideanDistance(normalizedQuery, candidateVec);
@@ -138,7 +201,29 @@ export function evaluateBiometricMatch<T extends { embedding: number[] | Float32
   scored.sort((a, b) => b.similarity - a.similarity);
 
   const best = scored[0];
-  const second = scored.length > 1 ? scored[1] : null;
+  // Determine second-best match from a DISTINCT individual (guards against false self-collisions when duplicate vectors exist)
+  let second: ScoredMatch<T> | null = null;
+  for (let i = 1; i < scored.length; i++) {
+    const cand = scored[i].item as any;
+    const bestItem = best.item as any;
+    const candCard = String(cand.cardNumber || cand.card_number || '').trim();
+    const bestCard = String(bestItem.cardNumber || bestItem.card_number || '').trim();
+    const candPat = String(cand.patientId || cand.patient_id || '').trim();
+    const bestPat = String(bestItem.patientId || bestItem.patient_id || '').trim();
+    const candId = String(cand.id || '').trim();
+    const bestId = String(bestItem.id || '').trim();
+
+    const isSamePerson = Boolean(
+      (candCard && bestCard && candCard === bestCard) ||
+      (candPat && bestPat && candPat === bestPat) ||
+      (candId && bestId && candId === bestId)
+    );
+
+    if (!isSamePerson) {
+      second = scored[i];
+      break;
+    }
+  }
 
   if (best.similarity < threshold) {
     return {

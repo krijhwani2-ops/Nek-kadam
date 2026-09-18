@@ -1,6 +1,8 @@
 // ─── Nek Kadam: Offline Face Recognition Engine ───
 // Client-side offline face detection, feature extraction, and audio-haptic feedback.
+// Powered by @vladmandic/face-api with 100% offline self-contained local models.
 
+import * as faceapi from '@vladmandic/face-api';
 import { EMBEDDING_DIMENSION, normalizeVector } from './vectorMath';
 
 export interface FaceDetectionBox {
@@ -83,217 +85,209 @@ export function triggerBiometricHaptic() {
 // Memory cache for smooth bounding box tracking across frames
 let lastBox: FaceDetectionBox | null = null;
 let lastDetectedTime = 0;
+let modelsLoadingPromise: Promise<boolean> | null = null;
 
 /**
- * Intelligent skin-cluster & face-geometry detector for video frames.
- * Operates entirely client-side with 0 external network requests or heavyweight models.
+ * Resolves the offline local models path.
+ * Works seamlessly in desktop browsers, subpath deployments, and Capacitor mobile APK.
+ */
+export function getModelPath(): string {
+  if (typeof window !== 'undefined' && window.location) {
+    try {
+      const href = window.location.href;
+      if (href && !href.startsWith('about:')) {
+        return new URL('models/face', href).href;
+      }
+    } catch (_e) {}
+
+    const origin = window.location.origin;
+    if (origin && origin !== 'null') {
+      const base = (import.meta as any).env?.BASE_URL || '/';
+      const cleanBase = base.endsWith('/') ? base : `${base}/`;
+      return `${origin}${cleanBase}models/face`;
+    }
+  }
+  return '/models/face';
+}
+
+/**
+ * Checks whether all required face detection & recognition models are loaded.
+ */
+export function areModelsLoaded(): boolean {
+  return (
+    faceapi.nets.tinyFaceDetector.isLoaded &&
+    faceapi.nets.faceLandmark68TinyNet.isLoaded &&
+    faceapi.nets.faceRecognitionNet.isLoaded
+  );
+}
+
+/**
+ * Loads model weights and neural network definitions from local project assets (100% offline).
+ * Zero runtime external network requests or cloud API dependencies.
+ */
+export async function loadFaceModels(customPath?: string): Promise<boolean> {
+  if (areModelsLoaded()) return true;
+  if (modelsLoadingPromise) return modelsLoadingPromise;
+
+  modelsLoadingPromise = (async () => {
+    try {
+      const tfAny = faceapi.tf as any;
+      if (tfAny) {
+        try {
+          if (typeof window === 'undefined' || !(window as any).WebGLRenderingContext) {
+            if (typeof tfAny.setBackend === 'function') {
+              await tfAny.setBackend('cpu');
+            }
+          }
+          if (typeof tfAny.ready === 'function') {
+            await tfAny.ready();
+          }
+        } catch (backendErr) {
+          console.warn('[FACE ENGINE] Default backend failed, falling back to CPU:', backendErr);
+          try {
+            if (typeof tfAny.setBackend === 'function') {
+              await tfAny.setBackend('cpu');
+              if (typeof tfAny.ready === 'function') {
+                await tfAny.ready();
+              }
+            }
+          } catch (_e) {}
+        }
+      }
+
+      const rawCandidates = [
+        customPath,
+        getModelPath(),
+        typeof window !== 'undefined' && window.location?.href ? new URL('models/face', window.location.href).href : undefined,
+        '/models/face',
+        'models/face',
+        './models/face',
+        'http://localhost/models/face',
+        'capacitor://localhost/models/face',
+        'https://localhost/models/face'
+      ].filter(Boolean) as string[];
+
+      const candidatePaths = Array.from(new Set(rawCandidates));
+
+      let success = false;
+      for (const path of candidatePaths) {
+        try {
+          if (!faceapi.nets.tinyFaceDetector.isLoaded) {
+            await faceapi.nets.tinyFaceDetector.loadFromUri(path);
+          }
+          if (!faceapi.nets.faceLandmark68TinyNet.isLoaded) {
+            await faceapi.nets.faceLandmark68TinyNet.loadFromUri(path);
+          }
+          if (!faceapi.nets.faceRecognitionNet.isLoaded) {
+            await faceapi.nets.faceRecognitionNet.loadFromUri(path);
+          }
+          if (areModelsLoaded()) {
+            console.log(`[FACE ENGINE] Biometric models loaded successfully from ${path}`);
+            success = true;
+            break;
+          }
+        } catch (_err) {
+          // Try next candidate path
+        }
+      }
+
+      if (!success) {
+        console.warn('[FACE ENGINE] Could not load face models from candidate paths');
+        modelsLoadingPromise = null;
+        return false;
+      }
+      return true;
+    } catch (fatalErr) {
+      console.error('[FACE ENGINE] Unhandled error during model loading:', fatalErr);
+      modelsLoadingPromise = null;
+      return false;
+    }
+  })();
+
+  return modelsLoadingPromise;
+}
+
+/**
+ * Detects a face and extracts 128D facial descriptor using TinyFaceDetector.
+ */
+export async function detectFace(
+  input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement
+): Promise<faceapi.WithFaceDescriptor<faceapi.WithFaceLandmarks<{ detection: faceapi.FaceDetection }, faceapi.FaceLandmarks68>> | undefined> {
+  if (!areModelsLoaded()) {
+    const loaded = await loadFaceModels();
+    if (!loaded) return undefined;
+  }
+
+  try {
+    const options = new faceapi.TinyFaceDetectorOptions({
+      inputSize: 224,
+      scoreThreshold: 0.45
+    });
+
+    const result = await faceapi
+      .detectSingleFace(input, options)
+      .withFaceLandmarks(true)
+      .withFaceDescriptor();
+
+    return result;
+  } catch (err) {
+    console.warn('[FACE ENGINE] Face detection error:', err);
+    return undefined;
+  }
+}
+
+/**
+ * Resets the temporal smoothing bounding box cache.
+ */
+export function resetFaceTrackingCache(): void {
+  lastBox = null;
+  lastDetectedTime = 0;
+}
+
+/**
+ * Backwards-compatibility helper for detecting bounding box from canvas.
  */
 export function detectFaceBox(
   ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number
+  _width: number,
+  _height: number
 ): FaceDetectionBox | null {
-  const sampleW = 160;
-  const sampleH = 120;
-
-  const offscreen = document.createElement('canvas');
-  offscreen.width = sampleW;
-  offscreen.height = sampleH;
-  const offCtx = offscreen.getContext('2d', { willReadFrequently: true });
-  if (!offCtx) return null;
-
-  offCtx.drawImage(ctx.canvas, 0, 0, sampleW, sampleH);
-  const imgData = offCtx.getImageData(0, 0, sampleW, sampleH);
-  const data = imgData.data;
-
-  let minX = sampleW, maxX = 0, minY = sampleH, maxY = 0;
-  let skinCount = 0;
-  let sumX = 0, sumY = 0;
-
-  // Scan with 2-pixel stride
-  for (let y = 8; y < sampleH - 8; y += 2) {
-    for (let x = 8; x < sampleW - 8; x += 2) {
-      const idx = (y * sampleW + x) * 4;
-      const r = data[idx];
-      const g = data[idx + 1];
-      const b = data[idx + 2];
-
-      const Y = 0.299 * r + 0.587 * g + 0.114 * b;
-      const Cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
-      const Cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
-
-      // Peer-reviewed skin locus
-      if (Y >= 25 && Y <= 245 && Cb >= 75 && Cb <= 135 && Cr >= 128 && Cr <= 180) {
-        if (r >= g && (r - b) >= 8) {
-          skinCount++;
-          sumX += x;
-          sumY += y;
-          if (x < minX) minX = x;
-          if (x > maxX) maxX = x;
-          if (y < minY) minY = y;
-          if (y > maxY) maxY = y;
-        }
-      }
-    }
-  }
-
-  const totalPoints = ((sampleW - 16) / 2) * ((sampleH - 16) / 2);
-  const skinRatio = skinCount / totalPoints;
-
-  if (skinCount > 40 && skinRatio > 0.02 && skinRatio < 0.70) {
-    const rawBoxW = maxX - minX;
-    const rawBoxH = maxY - minY;
-    const aspect = rawBoxH / (rawBoxW || 1);
-
-    if (aspect >= 0.75 && aspect <= 2.4 && rawBoxW >= 16 && rawBoxH >= 20) {
-      const centerX = (sumX / skinCount) * (width / sampleW);
-      const centerY = (sumY / skinCount) * (height / sampleH);
-
-      const targetW = Math.round(rawBoxW * (width / sampleW) * 1.18);
-      const targetH = Math.round(targetW * 1.30);
-      const targetX = Math.max(0, Math.min(width - targetW, Math.round(centerX - targetW / 2)));
-      const targetY = Math.max(0, Math.min(height - targetH, Math.round(centerY - targetH / 2)));
-
-      const newBox: FaceDetectionBox = {
-        x: targetX,
-        y: targetY,
-        width: targetW,
-        height: targetH,
-        confidence: Math.min(0.98, 0.75 + skinRatio * 0.4),
-        isRealFace: true
-      };
-
-      if (lastBox && Date.now() - lastDetectedTime < 600) {
-        newBox.x = Math.round(lastBox.x * 0.55 + newBox.x * 0.45);
-        newBox.y = Math.round(lastBox.y * 0.55 + newBox.y * 0.45);
-        newBox.width = Math.round(lastBox.width * 0.55 + newBox.width * 0.45);
-        newBox.height = Math.round(lastBox.height * 0.55 + newBox.height * 0.45);
-      }
-
-      lastBox = newBox;
-      lastDetectedTime = Date.now();
-      return newBox;
-    }
-  }
-
-  if (lastBox && Date.now() - lastDetectedTime < 350) {
+  if (lastBox && Date.now() - lastDetectedTime < 600) {
     return lastBox;
   }
-
   return null;
 }
 
 /**
- * Extracts a discriminative, privacy-preserving 128D mathematical embedding.
- * Uses local contrast normalization + 16-block directional gradients & LBP texture features.
- * Normalizes with zero-mean centering and L2 unit-norm for true orthogonal separation.
+ * Backwards-compatibility helper for extracting embedding from canvas.
  */
 export function extractEmbeddingFromCanvas(
-  ctx: CanvasRenderingContext2D,
-  box: FaceDetectionBox
+  _ctx: CanvasRenderingContext2D,
+  _box: FaceDetectionBox
 ): Float32Array {
-  const embedding = new Float32Array(EMBEDDING_DIMENSION);
-
-  try {
-    const patchSize = 64;
-    const patchCanvas = document.createElement('canvas');
-    patchCanvas.width = patchSize;
-    patchCanvas.height = patchSize;
-    const patchCtx = patchCanvas.getContext('2d', { willReadFrequently: true });
-    if (!patchCtx) return normalizeVector(embedding);
-
-    const startX = Math.max(0, Math.floor(box.x));
-    const startY = Math.max(0, Math.floor(box.y));
-    const sampleWidth = Math.max(20, Math.min(ctx.canvas.width - startX, Math.floor(box.width)));
-    const sampleHeight = Math.max(20, Math.min(ctx.canvas.height - startY, Math.floor(box.height)));
-
-    patchCtx.drawImage(
-      ctx.canvas,
-      startX, startY, sampleWidth, sampleHeight,
-      0, 0, patchSize, patchSize
-    );
-
-    const imgData = patchCtx.getImageData(0, 0, patchSize, patchSize);
-    const data = imgData.data;
-
-    // Convert to grayscale and compute contrast statistics
-    const gray = new Float32Array(patchSize * patchSize);
-    let sum = 0, sumSq = 0;
-    for (let i = 0; i < data.length; i += 4) {
-      const idx = i / 4;
-      const lum = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-      gray[idx] = lum;
-      sum += lum;
-      sumSq += lum * lum;
-    }
-
-    const totalPix = patchSize * patchSize;
-    const mean = sum / totalPix;
-    const variance = (sumSq / totalPix) - (mean * mean);
-    const std = Math.sqrt(Math.max(1, variance));
-
-    // Local contrast normalization (invariant to lighting & room shadows)
-    const normPix = new Float32Array(totalPix);
-    for (let i = 0; i < totalPix; i++) {
-      normPix[i] = (gray[i] - mean) / std;
-    }
-
-    // 16 blocks (4x4 spatial grid)
-    const blockSize = Math.floor(patchSize / 4);
-
-    for (let by = 0; by < 4; by++) {
-      for (let bx = 0; bx < 4; bx++) {
-        const blockIdx = by * 4 + bx;
-        const sX = bx * blockSize;
-        const sY = by * blockSize;
-
-        let g0 = 0, g45 = 0, g90 = 0, g135 = 0;
-        let lbp0 = 0, lbp1 = 0, lbp2 = 0, lbp3 = 0;
-
-        for (let y = sY + 1; y < sY + blockSize - 1; y++) {
-          for (let x = sX + 1; x < sX + blockSize - 1; x++) {
-            const c = normPix[y * patchSize + x];
-            const dx = normPix[y * patchSize + (x + 1)] - normPix[y * patchSize + (x - 1)];
-            const dy = normPix[(y + 1) * patchSize + x] - normPix[(y - 1) * patchSize + x];
-
-            g0 += Math.abs(dx);
-            g90 += Math.abs(dy);
-            g45 += Math.abs(dx + dy) * 0.707;
-            g135 += Math.abs(dx - dy) * 0.707;
-
-            if (normPix[y * patchSize + (x - 1)] >= c) lbp0++;
-            if (normPix[y * patchSize + (x + 1)] >= c) lbp1++;
-            if (normPix[(y - 1) * patchSize + x] >= c) lbp2++;
-            if (normPix[(y + 1) * patchSize + x] >= c) lbp3++;
-          }
-        }
-
-        embedding[blockIdx * 4] = g0;
-        embedding[blockIdx * 4 + 1] = g45;
-        embedding[blockIdx * 4 + 2] = g90;
-        embedding[blockIdx * 4 + 3] = g135;
-
-        embedding[64 + blockIdx * 4] = lbp0;
-        embedding[64 + blockIdx * 4 + 1] = lbp1;
-        embedding[64 + blockIdx * 4 + 2] = lbp2;
-        embedding[64 + blockIdx * 4 + 3] = lbp3;
-      }
-    }
-  } catch (e) {
-    console.warn('[FACE ENGINE] Feature extraction fallback:', e);
-  }
-
-  return normalizeVector(embedding);
+  const fallback = new Float32Array(EMBEDDING_DIMENSION);
+  return normalizeVector(fallback);
 }
 
 /**
- * Analyzes video frame for presence of face, centering, and exposure quality.
+ * Analyzes video frame for presence of face, centering, exposure quality,
+ * and extracts robust 128D deep facial embeddings using open-source face-api.
  */
-export function analyzeVideoFrame(
+export async function analyzeVideoFrame(
   video: HTMLVideoElement,
   canvas: HTMLCanvasElement
-): FaceAnalysisResult {
-  if (!video || video.videoWidth === 0 || video.videoHeight === 0) {
+): Promise<FaceAnalysisResult> {
+  if (!canvas) {
+    return {
+      detected: false,
+      box: null,
+      embedding: null,
+      quality: { brightness: 0, isCentered: false, sizeRatio: 0, overallScore: 0 },
+      reason: 'Inference canvas unavailable'
+    };
+  }
+
+  if (!video || !video.videoWidth || !video.videoHeight || video.videoWidth <= 0 || video.videoHeight <= 0 || (typeof video.readyState === 'number' && video.readyState < 2)) {
     return {
       detected: false,
       box: null,
@@ -306,26 +300,19 @@ export function analyzeVideoFrame(
   const width = canvas.width = 320;
   const height = canvas.height = 240;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) {
-    return {
-      detected: false,
-      box: null,
-      embedding: null,
-      quality: { brightness: 0, isCentered: false, sizeRatio: 0, overallScore: 0 },
-      reason: 'Canvas context unavailable.'
-    };
-  }
 
-  // Draw current video frame downscaled for fast client-side inference
-  ctx.drawImage(video, 0, 0, width, height);
-
-  // Compute average frame brightness
-  const frameSample = ctx.getImageData(0, 0, width, height).data;
-  let totalBrightness = 0;
-  for (let i = 0; i < frameSample.length; i += 16) {
-    totalBrightness += (frameSample[i] + frameSample[i + 1] + frameSample[i + 2]) / 3;
+  let avgBrightness = 0.5;
+  if (ctx) {
+    try {
+      ctx.drawImage(video, 0, 0, width, height);
+      const frameSample = ctx.getImageData(0, 0, width, height).data;
+      let totalBrightness = 0;
+      for (let i = 0; i < frameSample.length; i += 16) {
+        totalBrightness += (frameSample[i] + frameSample[i + 1] + frameSample[i + 2]) / 3;
+      }
+      avgBrightness = (totalBrightness / (frameSample.length / 16)) / 255.0;
+    } catch (_e) {}
   }
-  const avgBrightness = (totalBrightness / (frameSample.length / 16)) / 255.0;
 
   if (avgBrightness < 0.06) {
     return {
@@ -337,45 +324,123 @@ export function analyzeVideoFrame(
     };
   }
 
-  // 1. Dynamic Face Detection (Skin locus & geometry)
-  const detectedBox = detectFaceBox(ctx, width, height);
+  if (!areModelsLoaded()) {
+    const loaded = await loadFaceModels();
+    if (!loaded) {
+      return {
+        detected: false,
+        box: null,
+        embedding: null,
+        quality: { brightness: avgBrightness, isCentered: false, sizeRatio: 0, overallScore: 0.2 },
+        reason: 'Initializing biometric AI models...'
+      };
+    }
+  }
 
-  let box: FaceDetectionBox;
-  let isRealFace = false;
+  try {
+    const input = canvas || video;
+    const detection = await detectFace(input);
 
-  if (detectedBox) {
-    box = detectedBox;
-    isRealFace = true;
-  } else {
-    // Centered fallback guide frame
-    const defaultBoxWidth = Math.round(width * 0.48);
-    const defaultBoxHeight = Math.round(height * 0.65);
-    box = {
-      x: Math.round((width - defaultBoxWidth) / 2),
-      y: Math.round((height - defaultBoxHeight) / 2),
-      width: defaultBoxWidth,
-      height: defaultBoxHeight,
-      confidence: 0.65,
-      isRealFace: false
+    if (detection && detection.descriptor) {
+      // Deep 128D FaceNet biometric descriptor normalized to unit hypersphere
+      const embedding = normalizeVector(detection.descriptor);
+      const hasValidEmbedding = embedding.length === EMBEDDING_DIMENSION && embedding.some(v => v !== 0);
+
+      if (!hasValidEmbedding) {
+        return {
+          detected: false,
+          box: null,
+          embedding: null,
+          quality: { brightness: avgBrightness, isCentered: false, sizeRatio: 0, overallScore: 0.3 },
+          reason: 'Align face clearly inside oval frame'
+        };
+      }
+
+      const rawBox = detection.detection.box;
+      const targetW = Math.round(rawBox.width);
+      const targetH = Math.round(rawBox.height);
+      const targetX = Math.max(0, Math.min(width - targetW, Math.round(rawBox.x)));
+      const targetY = Math.max(0, Math.min(height - targetH, Math.round(rawBox.y)));
+
+      let newBox: FaceDetectionBox = {
+        x: targetX,
+        y: targetY,
+        width: targetW,
+        height: targetH,
+        confidence: detection.detection.score,
+        isRealFace: true
+      };
+
+      // Temporal smoothing across consecutive frames
+      if (lastBox && Date.now() - lastDetectedTime < 600) {
+        newBox.x = Math.round(lastBox.x * 0.4 + newBox.x * 0.6);
+        newBox.y = Math.round(lastBox.y * 0.4 + newBox.y * 0.6);
+        newBox.width = Math.round(lastBox.width * 0.4 + newBox.width * 0.6);
+        newBox.height = Math.round(lastBox.height * 0.4 + newBox.height * 0.6);
+      }
+      lastBox = newBox;
+      lastDetectedTime = Date.now();
+
+      const sizeRatio = (newBox.width * newBox.height) / (width * height);
+      const faceCenterX = newBox.x + newBox.width / 2;
+      const faceCenterY = newBox.y + newBox.height / 2;
+      const isCentered = Math.abs(faceCenterX - width / 2) < width * 0.35 &&
+                         Math.abs(faceCenterY - height / 2) < height * 0.35;
+      const overallScore = Math.min(1.0, newBox.confidence * 0.75 + (isCentered ? 0.15 : 0) + avgBrightness * 0.10);
+
+      let reason = 'Face Locked';
+      if (!isCentered) {
+        reason = 'Center face in oval frame';
+      } else if (sizeRatio < 0.06) {
+        reason = 'Move slightly closer';
+      } else if (sizeRatio > 0.70) {
+        reason = 'Move back slightly';
+      }
+
+      return {
+        detected: true,
+        box: newBox,
+        embedding,
+        quality: {
+          brightness: avgBrightness,
+          isCentered,
+          sizeRatio,
+          overallScore
+        },
+        reason
+      };
+    }
+  } catch (err) {
+    console.warn('[FACE ENGINE] Detection error in frame:', err);
+  }
+
+  // Smooth decay: track last known box if recent without emitting false embeddings
+  if (lastBox && Date.now() - lastDetectedTime < 300) {
+    const sizeRatio = (lastBox.width * lastBox.height) / (width * height);
+    return {
+      detected: false,
+      box: lastBox,
+      embedding: null,
+      quality: {
+        brightness: avgBrightness,
+        isCentered: true,
+        sizeRatio,
+        overallScore: 0.5
+      },
+      reason: 'Tracking face...'
     };
   }
 
-  const sizeRatio = (box.width * box.height) / (width * height);
-  const isCentered = Math.abs((box.x + box.width / 2) - width / 2) < width * 0.25;
-  const overallScore = Math.min(1.0, (isRealFace ? 0.88 : 0.60) + avgBrightness * 0.15);
-
-  const embedding = extractEmbeddingFromCanvas(ctx, box);
-
   return {
-    detected: true,
-    box,
-    embedding,
+    detected: false,
+    box: null,
+    embedding: null,
     quality: {
       brightness: avgBrightness,
-      isCentered,
-      sizeRatio,
-      overallScore
+      isCentered: false,
+      sizeRatio: 0,
+      overallScore: 0
     },
-    reason: isRealFace ? 'Face Locked' : 'Align face inside frame'
+    reason: 'Align face inside oval frame'
   };
 }
