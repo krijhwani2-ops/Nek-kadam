@@ -956,18 +956,26 @@ app.post('/api/education/attendance/bulk', async (req, res) => {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      for (const r of records || []) {
+      const recs = records || [];
+      if (recs.length > 0) {
+        const values = [];
+        const params = [];
+        let i = 1;
+        for (const r of recs) {
+          params.push(uuid(), r.studentId, targetDate, r.status, r.note || null, userId || null);
+          values.push(`($${i++}, $${i++}, $${i++}, $${i++}, $${i++}, $${i++})`);
+        }
         await client.query(
           `
           INSERT INTO attendance (id, "studentId", date, status, note, "markedBy")
-          VALUES ($1, $2, $3, $4, $5, $6)
+          VALUES ${values.join(', ')}
           ON CONFLICT ("studentId", date) DO UPDATE SET
             status = EXCLUDED.status,
             note = EXCLUDED.note,
             "markedBy" = EXCLUDED."markedBy",
             updated_at = CURRENT_TIMESTAMP
           `,
-          [uuid(), r.studentId, targetDate, r.status, r.note || null, userId || null]
+          params
         );
       }
       await client.query('COMMIT');
