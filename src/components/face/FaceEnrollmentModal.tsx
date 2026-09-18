@@ -176,6 +176,7 @@ export default function FaceEnrollmentModal({
             type="button"
             onClick={onClose}
             className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white"
+            aria-label="Close enrollment"
           >
             <X size={18} />
           </button>
