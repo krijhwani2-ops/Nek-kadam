@@ -8,6 +8,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Spinner } from '../components/ui';
 import FaceEnrollmentModal from '../components/face/FaceEnrollmentModal';
 import { getPatientBiometric } from '../lib/face/biometricStore';
+import PatientPhotoGallery from '../components/photos/PatientPhotoGallery';
 
 interface PrescribedMed {
   code: string;
@@ -933,6 +934,12 @@ export default function PatientProfile() {
           </button>
         </div>
       </section>
+
+      {/* 1.5 CLINICAL PHOTO ATTACHMENTS (DEVICE-LOCAL ONLY) */}
+      <PatientPhotoGallery
+        cardNumber={cleanPatientId(patient?.card_number || patient?.id || id)}
+        patientName={patient?.name}
+      />
 
       {/* 2. STITCH MOBILE NAVIGATION TOGGLE (HISTORY / NEW RX) */}
       <div className="flex lg:hidden bg-slate-200/80 dark:bg-slate-800 p-1 rounded-xl items-center" data-purpose="section-tabs">

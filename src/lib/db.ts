@@ -145,7 +145,7 @@ export function createTransaction(): DBTransaction {
 import { openDB } from 'idb';
 
 const DB_NAME = 'nk_store';
-const DB_VERSION = 11; // Incrementing from 1 to 11 to add new tables to existing DB
+const DB_VERSION = 12; // Incrementing to 12 to add patient_photos and patient_photo_blobs
 
 export const dbPromise = openDB(DB_NAME, DB_VERSION, {
   upgrade(db, _oldVersion, _newVersion) {
@@ -168,6 +168,17 @@ export const dbPromise = openDB(DB_NAME, DB_VERSION, {
 
     if (!db.objectStoreNames.contains('sync_queue')) {
       db.createObjectStore('sync_queue', { keyPath: 'id', autoIncrement: true });
+    }
+
+    // NEW in DB_VERSION 12: Device-local Patient Photos (Zero-Sync)
+    if (!db.objectStoreNames.contains('patient_photos')) {
+      const photoStore = db.createObjectStore('patient_photos', { keyPath: 'id' });
+      photoStore.createIndex('by_cardNumber', 'cardNumber', { unique: false });
+      photoStore.createIndex('by_createdAt', 'createdAt', { unique: false });
+    }
+
+    if (!db.objectStoreNames.contains('patient_photo_blobs')) {
+      db.createObjectStore('patient_photo_blobs', { keyPath: 'id' });
     }
   },
 });
