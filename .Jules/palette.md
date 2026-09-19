@@ -1,0 +1,3 @@
+## 2025-01-20 - Global App UI/UX Analysis
+**Learning:** The application mostly lacks semantic HTML tags and comprehensive aria-labels, specifically in elements containing icon-only action buttons (e.g., token queue buttons, attendance list modifiers, medicine queue). Offline sync and indicator patterns look reasonably solid with a top-bar banner, but mobile touch-targets (especially custom bottom sheets, modal close buttons and nav links) could sometimes be a bit small or lacking active feedback.
+**Action:** Add missing `aria-label` attributes to icon-only buttons across main pages (TokenQueue, Medicines, Inventory, App sidebar, etc.), fix color contrast where appropriate, verify touch-target sizing, and maintain native UI interaction cues via Tailwind.
