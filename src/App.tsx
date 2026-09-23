@@ -342,7 +342,7 @@ function Sidebar() {
              <button
                onClick={() => setShowQrModal(true)}
                className="p-2 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950 text-emerald-600 hover:text-emerald-700 border border-slate-200 dark:border-slate-700 shadow-sm rounded-lg transition-all shrink-0 flex items-center justify-center"
-               title="Show Access QR Code"
+               aria-label="Show Access QR Code" title="Show Access QR Code"
              >
                <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">QR</span>
              </button>
@@ -490,7 +490,7 @@ function TopBar({ onSync, syncing, onToggleMenu, onOpenScanner, onOpenFaceScanne
           <button 
             onClick={logout} 
             className="min-h-[44px] min-w-[44px] px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl flex items-center justify-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0 transition-all"
-            title="Switch User"
+            aria-label="Switch User" title="Switch User"
           >
             <LogOut size={16} />
             <span className="hidden sm:inline">{t('switchUser')}</span>
@@ -500,7 +500,7 @@ function TopBar({ onSync, syncing, onToggleMenu, onOpenScanner, onOpenFaceScanne
           <button 
             onClick={onOpenFaceScanner} 
             className="min-h-[44px] min-w-[44px] px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl flex items-center justify-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0 transition-all"
-            title="Scan Patient Face (Offline AI Recognition)"
+            aria-label="Scan Patient Face" title="Scan Patient Face (Offline AI Recognition)"
           >
              <ScanFace size={18} className="text-emerald-200" />
              <span className="hidden sm:inline">Face ID</span>
@@ -509,7 +509,7 @@ function TopBar({ onSync, syncing, onToggleMenu, onOpenScanner, onOpenFaceScanne
         <button 
           onClick={onOpenScanner} 
           className="min-h-[44px] min-w-[44px] px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl flex items-center justify-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0 transition-all"
-          title="Scan OPD Card QR / Barcode"
+          aria-label="Scan OPD Card QR / Barcode" title="Scan OPD Card QR / Barcode"
         >
            <QrCode size={18} className="text-emerald-200" />
            <span className="hidden sm:inline">Scan</span>
@@ -518,7 +518,7 @@ function TopBar({ onSync, syncing, onToggleMenu, onOpenScanner, onOpenFaceScanne
           onClick={onSync} 
           disabled={syncing}
           className="min-h-[44px] min-w-[44px] px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl flex items-center justify-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0 transition-all"
-          title="Sync Records"
+          aria-label="Sync Records" title="Sync Records"
         >
            <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
            <span className="hidden sm:inline">{syncing ? 'Syncing...' : 'Sync'}</span>
