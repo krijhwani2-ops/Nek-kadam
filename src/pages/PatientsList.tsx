@@ -90,7 +90,7 @@ export default function PatientsList() {
   );
 
   return (
-    <div className="max-w-5xl mx-auto space-y-3 pb-6 px-3.5 pt-1">
+    <div className="max-w-5xl mx-auto space-y-2.5 pb-6 pt-0.5">
       {/* 1. STITCH DIRECTORY HEADING */}
       <section className="pt-1 flex items-center justify-between" data-purpose="directory-heading">
         <div className="flex items-center space-x-2.5">

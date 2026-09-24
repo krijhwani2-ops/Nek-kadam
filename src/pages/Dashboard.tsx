@@ -239,7 +239,7 @@ export default function Dashboard() {
     <div className="flex flex-col min-h-full bg-[#F4F7F6] dark:bg-slate-950 pb-10">
       
       {loading && (
-        <div className="mx-3.5 mt-2 shrink-0">
+        <div className="mt-1 shrink-0">
           <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-4 py-2 flex items-center justify-center gap-2 text-emerald-800 dark:text-emerald-300 text-xs font-black uppercase tracking-wide">
             <RefreshCw size={14} className="animate-spin" />
             Refreshing dashboard…
@@ -247,7 +247,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="max-w-5xl mx-auto w-full px-3.5 pt-2.5 space-y-3">
+      <div className="max-w-5xl mx-auto w-full space-y-2.5 pt-0.5">
         {/* 1. STITCH PROFILE HEADER CARD WITH INTEGRATED SEARCH */}
         <section className="bg-gradient-to-br from-emerald-800 via-emerald-700 to-teal-900 rounded-2xl p-3 text-white shadow-sm" data-purpose="user-profile-card">
           <div className="flex items-center justify-between">
@@ -315,51 +315,6 @@ export default function Dashboard() {
             </div>
           </div>
         )}
-
-        {/* 2. ELEVATED CLINICAL METRICS SUMMARY */}
-        <section className="grid grid-cols-3 gap-2.5" data-purpose="metrics-summary">
-          <div 
-            onClick={() => navigate('/patients')}
-            className="bg-white dark:bg-slate-900 rounded-2xl p-3 shadow-xs border border-emerald-100 dark:border-emerald-950/60 hover:border-emerald-300 dark:hover:border-emerald-700 transition-all cursor-pointer group active:scale-[0.98]"
-          >
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400 tracking-wider">Today Reg.</span>
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-            </div>
-            <span className="text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight leading-none block">
-              {data?.stats?.patientsToday || 0}
-            </span>
-            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-1 block truncate">New patients today</span>
-          </div>
-
-          <div 
-            onClick={() => navigate('/patients')}
-            className="bg-white dark:bg-slate-900 rounded-2xl p-3 shadow-xs border border-purple-100 dark:border-purple-950/60 hover:border-purple-300 dark:hover:border-purple-700 transition-all cursor-pointer group active:scale-[0.98]"
-          >
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-black uppercase text-purple-700 dark:text-purple-400 tracking-wider truncate">{t('activeVisits')}</span>
-              <div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div>
-            </div>
-            <span className="text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight leading-none block">
-              {data?.stats?.totalVisits || 0}
-            </span>
-            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-1 block truncate">Total clinic visits</span>
-          </div>
-
-          <div 
-            onClick={() => navigate('/patients')}
-            className="bg-white dark:bg-slate-900 rounded-2xl p-3 shadow-xs border border-blue-100 dark:border-blue-950/60 hover:border-blue-300 dark:hover:border-blue-700 transition-all cursor-pointer group active:scale-[0.98]"
-          >
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-black uppercase text-blue-700 dark:text-blue-400 tracking-wider truncate">{t('totalPatients')}</span>
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-            </div>
-            <span className="text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight leading-none block">
-              {data?.stats?.totalPatients || 0}
-            </span>
-            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-1 block truncate">IndexedDB offline ready</span>
-          </div>
-        </section>
 
         {/* 3. BALANCED 4-ACTION CLINICAL DESK GRID */}
         <section className="grid grid-cols-2 sm:grid-cols-4 gap-2.5" data-purpose="quick-actions">

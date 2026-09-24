@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db, checkServerOnline, saveVisitOffline, getPendingVisitsForPatient, cleanPatientId } from '../lib/db';
 import { getBaseUrl, apiFetch } from '../lib/session';
-import { Phone, CreditCard, Plus, Clock, Trash2, X, Printer, FileText, Calendar, Stethoscope, RefreshCw, QrCode, ScanFace, User, Droplet, MapPin } from 'lucide-react';
+import { Phone, CreditCard, Plus, Clock, Trash2, X, Printer, FileText, Calendar, Stethoscope, RefreshCw, QrCode, ScanFace, User, Droplet, MapPin, Camera } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Spinner } from '../components/ui';
 import FaceEnrollmentModal from '../components/face/FaceEnrollmentModal';
@@ -86,7 +86,7 @@ export default function PatientProfile() {
   const [visits, setVisits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dosages, setDosages] = useState<any[]>([]);
-  const [mobileActiveTab, setMobileActiveTab] = useState<'history' | 'prescription'>('history');
+  const [mobileActiveTab, setMobileActiveTab] = useState<'history' | 'photos' | 'prescription'>('history');
   const [showOpdSlip, setShowOpdSlip] = useState(false);
   const [isFaceEnrollOpen, setIsFaceEnrollOpen] = useState(false);
   const [hasFaceEnrolled, setHasFaceEnrolled] = useState(false);
@@ -725,7 +725,7 @@ export default function PatientProfile() {
   if (!patient) return <div className="flex flex-col items-center justify-center py-20 gap-4"><p className="text-slate-500 font-bold">Patient not found.</p><button onClick={() => navigate('/patients')} className="btn-primary">Back to Patients</button></div>;
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-5 space-y-5">
+    <div className="max-w-6xl mx-auto px-0 sm:px-4 py-1 sm:py-5 space-y-3.5 sm:space-y-5">
       {/* Slide-down Toast */}
       {toastMessage && (
         <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[9999] px-6 py-3 rounded-2xl shadow-2xl text-white font-black text-sm flex items-center gap-2 animate-slide-down ${
@@ -944,38 +944,52 @@ export default function PatientProfile() {
         </div>
       </section>
 
-      {/* 1.5 CLINICAL PHOTO ATTACHMENTS (DEVICE-LOCAL ONLY) */}
-      <PatientPhotoGallery
-        cardNumber={cleanPatientId(patient?.card_number || patient?.id || id)}
-        patientName={patient?.name}
-      />
-
-      {/* 2. STITCH MOBILE NAVIGATION TOGGLE (HISTORY / NEW RX) */}
-      <div className="flex lg:hidden bg-slate-200/80 dark:bg-slate-800 p-1 rounded-xl items-center" data-purpose="section-tabs">
+      {/* 2. STITCH MOBILE NAVIGATION TOGGLE (HISTORY / PHOTOS / CLINICAL RX) */}
+      <div className="flex lg:hidden bg-slate-200/80 dark:bg-slate-800 p-1 rounded-xl items-center gap-1" data-purpose="section-tabs">
         <button
           type="button"
           onClick={() => setMobileActiveTab('history')}
-          className={`flex-1 py-2 rounded-lg font-extrabold text-xs flex items-center justify-center space-x-1.5 transition-all ${
+          className={`flex-1 py-2 px-1 rounded-lg font-extrabold text-[11px] sm:text-xs flex items-center justify-center space-x-1 transition-all ${
             mobileActiveTab === 'history'
               ? 'bg-white dark:bg-slate-900 shadow-xs text-emerald-800 dark:text-emerald-300'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
           }`}
         >
           <Clock size={14} className={mobileActiveTab === 'history' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'} />
-          <span>HISTORY ({visits.length})</span>
+          <span className="truncate">HISTORY ({visits.length})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileActiveTab('photos')}
+          className={`flex-1 py-2 px-1 rounded-lg font-extrabold text-[11px] sm:text-xs flex items-center justify-center space-x-1 transition-all ${
+            mobileActiveTab === 'photos'
+              ? 'bg-white dark:bg-slate-900 shadow-xs text-emerald-800 dark:text-emerald-300'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+          }`}
+        >
+          <Camera size={14} className={mobileActiveTab === 'photos' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'} />
+          <span className="truncate">PHOTOS</span>
         </button>
         <button
           type="button"
           onClick={() => setMobileActiveTab('prescription')}
-          className={`flex-1 py-2 rounded-lg font-extrabold text-xs flex items-center justify-center space-x-1.5 transition-all ${
+          className={`flex-1 py-2 px-1 rounded-lg font-extrabold text-[11px] sm:text-xs flex items-center justify-center space-x-1 transition-all ${
             mobileActiveTab === 'prescription'
               ? 'bg-emerald-600 text-white shadow-xs'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
           }`}
         >
           <Plus size={14} className={mobileActiveTab === 'prescription' ? 'text-white' : 'text-slate-500 dark:text-slate-400'} />
-          <span>NEW RX</span>
+          <span className="truncate">CLINICAL RX</span>
         </button>
+      </div>
+
+      {/* Mobile Photos View (between History and Clinical Rx) */}
+      <div className={`space-y-4 lg:hidden ${mobileActiveTab === 'photos' ? 'block' : 'hidden'}`}>
+        <PatientPhotoGallery
+          cardNumber={cleanPatientId(patient?.card_number || patient?.id || id)}
+          patientName={patient?.name}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
@@ -1211,8 +1225,14 @@ export default function PatientProfile() {
             </button>
           </div>
         </div>
-             {/* Right Column: History & Details */}
+             {/* Right Column: History & Details + Photos on Desktop */}
         <div className={`lg:col-span-4 space-y-4 ${mobileActiveTab === 'history' ? 'block' : 'hidden lg:block'}`}>
+          <div className="hidden lg:block">
+            <PatientPhotoGallery
+              cardNumber={cleanPatientId(patient?.card_number || patient?.id || id)}
+              patientName={patient?.name}
+            />
+          </div>
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 p-5 rounded-2xl shadow-sm max-h-[750px] overflow-y-auto custom-scrollbar">
             <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100 dark:border-slate-800">
               <h4 className="font-black text-slate-800 dark:text-slate-100 flex items-center gap-2 text-sm">

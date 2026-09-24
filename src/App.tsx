@@ -94,7 +94,7 @@ function BackButtonHandler() {
   return null;
 }
 
-const APP_VERSION = "1.4.7"; // Current release version
+const APP_VERSION = "1.4.8"; // Current release version
 
 interface UpdateInfo {
   version: string;
@@ -866,7 +866,7 @@ function AppLayout() {
         )}
         
         <main className={`flex-1 min-h-0 relative ${location.pathname === '/chat' ? 'overflow-hidden flex flex-col' : 'overflow-y-auto overscroll-contain'}`} style={{ WebkitOverflowScrolling: 'touch' }}>
-          <div className={`mx-auto pb-28 md:pb-8 ${location.pathname === '/chat' ? 'p-0 w-full h-full max-w-none flex-grow flex flex-col' : 'max-w-7xl p-3 sm:p-4 md:p-6 lg:p-8'}`}>
+          <div className={`mx-auto pb-28 md:pb-8 ${location.pathname === '/chat' ? 'p-0 w-full h-full max-w-none flex-grow flex flex-col' : 'max-w-7xl px-2 py-2 sm:px-4 sm:py-4 md:p-6 lg:p-8'}`}>
             <Routes>
               <Route path="/login" element={!isLoggedIn ? <Login /> : <Navigate to="/" replace />} />
               
