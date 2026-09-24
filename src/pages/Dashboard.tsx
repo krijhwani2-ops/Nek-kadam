@@ -401,10 +401,10 @@ export default function Dashboard() {
                 <article 
                   key={presence.userId}
                   onClick={() => navigate(`/profile/${presence.userId}`)}
-                  className="bg-gray-50/70 dark:bg-slate-850/60 hover:bg-gray-50 dark:hover:bg-slate-800 border border-gray-100 dark:border-slate-800 rounded-xl p-2.5 flex items-center justify-between transition-colors cursor-pointer" 
+                  className="bg-gray-50/70 dark:bg-slate-850/60 hover:bg-gray-50 dark:hover:bg-slate-800 border border-gray-100 dark:border-slate-800 rounded-xl p-2.5 flex items-center justify-between transition-colors cursor-pointer gap-2" 
                   data-purpose="operator-card"
                 >
-                  <div className="flex items-center space-x-2.5 min-w-0 flex-1 mr-2">
+                  <div className="flex items-center space-x-2.5 min-w-0 flex-1">
                     <div className="relative shrink-0">
                       <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-600 text-white font-bold text-xs flex items-center justify-center shadow-sm">
                         {initials}
@@ -412,20 +412,19 @@ export default function Dashboard() {
                       <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 border-2 border-white dark:border-slate-900 rounded-full ${statusInfo.dot}`}></span>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center space-x-1.5">
+                      <div className="flex items-center gap-1.5 min-w-0">
                         <h3 className="text-xs font-bold text-gray-900 dark:text-slate-100 leading-tight truncate">{presence.userName}</h3>
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-white dark:bg-slate-800 text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-700 uppercase tracking-wider shrink-0">{presence.department || 'GEN'}</span>
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-white dark:bg-slate-800 text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-700 uppercase tracking-wider shrink-0">{presence.department || 'GEN'}</span>
                       </div>
-                      <p className="text-[10px] text-gray-400 dark:text-slate-500 font-medium leading-none mt-0.5">
-                        {presence.isOnline ? 'Active now' : formatLastActive(presence.lastActivityAt)}
-                      </p>
+                      <div className="flex items-center gap-1.5 text-[10px] text-gray-400 dark:text-slate-500 font-medium leading-none mt-1 min-w-0 truncate">
+                        <span>{presence.isOnline ? 'Active now' : formatLastActive(presence.lastActivityAt)}</span>
+                        <span>•</span>
+                        <span className="text-slate-600 dark:text-slate-300 font-semibold truncate">{presence.currentScreen || 'Dashboard'}</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-1.5 shrink-0">
-                    <span className="text-[10px] text-gray-500 dark:text-slate-400 font-semibold bg-white dark:bg-slate-800 px-2 py-0.5 rounded-md border border-gray-100 dark:border-slate-700 max-w-[100px] truncate">
-                      {presence.currentScreen || 'Dashboard'}
-                    </span>
-                    <span className={`inline-flex items-center space-x-1 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-wide uppercase ${statusInfo.bg}`}>
+                  <div className="shrink-0 flex items-center">
+                    <span className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[9px] font-black tracking-wide uppercase ${statusInfo.bg}`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot} ${presence.isOnline ? 'animate-pulse' : ''}`}></span>
                       <span>{statusInfo.label}</span>
                     </span>

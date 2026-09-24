@@ -94,7 +94,7 @@ function BackButtonHandler() {
   return null;
 }
 
-const APP_VERSION = "1.4.8"; // Current release version
+const APP_VERSION = "1.4.9"; // Current release version
 
 interface UpdateInfo {
   version: string;
@@ -454,82 +454,75 @@ function TopBar({ onSync, syncing, onToggleMenu, onOpenScanner, onOpenFaceScanne
   }, []);
 
   return (
-    <header className="h-[calc(3.5rem+env(safe-area-inset-top,0px))] pt-[env(safe-area-inset-top,0px)] flex items-center justify-between px-3 bg-emerald-600 text-white shadow-sm shrink-0 min-w-0 z-30">
-      <div className="flex items-center gap-1.5 min-w-0 shrink">
+    <header className="h-[calc(3.5rem+env(safe-area-inset-top,0px))] pt-[env(safe-area-inset-top,0px)] flex items-center justify-between px-3 bg-emerald-700 text-white shadow-sm shrink-0 min-w-0 z-30">
+      <div className="flex items-center gap-2 min-w-0">
         {session && (
           <button 
             onClick={onToggleMenu}
-            className="md:hidden min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-emerald-700 active:bg-emerald-800 shrink-0 transition-colors"
+            className="md:hidden w-10 h-10 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 shrink-0 transition-all text-white"
             aria-label="Toggle Menu"
           >
-            <Menu size={22} />
+            <Menu size={20} />
           </button>
         )}
         {!isHome && (
           <button 
             onClick={() => navigate(-1)} 
-            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-emerald-700 active:bg-emerald-800 shrink-0 transition-colors"
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 shrink-0 transition-all text-white"
             aria-label="Go Back"
           >
-            <ChevronLeft size={22} />
+            <ChevronLeft size={20} />
           </button>
         )}
-        <h1 className="text-base font-black tracking-tight truncate shrink-0 ml-0.5">Nek Kadam</h1>
-        {session && (
-          <span className="hidden sm:inline-block bg-emerald-700 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border border-emerald-500/40 ml-1 truncate max-w-[140px]">
-            {session.userName}
+        <div className="flex items-center gap-2 min-w-0">
+          <h1 className="text-base sm:text-lg font-black tracking-tight shrink-0 text-white">Nek Kadam</h1>
+          <span 
+            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-black/20 text-emerald-100 border border-white/15 shrink-0"
+            title={onlineCount > 0 ? "Connected to Render Cloud" : "Local Storage Mode Active"}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${onlineCount > 0 ? 'bg-emerald-300 animate-pulse' : 'bg-amber-300'}`}></span>
+            <span>{onlineCount > 0 ? 'Online' : 'Local'}</span>
           </span>
-        )}
-        {onlineCount > 0 ? (
-          <span className="flex items-center gap-1 ml-1 bg-emerald-800/60 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-400/30 shrink-0" title="Connected to Render Cloud">
-            <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></div>
-            <span>Online</span>
-          </span>
-        ) : (
-          <span className="flex items-center gap-1 ml-1 bg-emerald-900/40 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-400/20 text-emerald-200/90 shrink-0" title="Local Storage Mode Active">
-            <div className="w-1.5 h-1.5 bg-emerald-300/80 rounded-full"></div>
-            <span>Local</span>
-          </span>
-        )}
+        </div>
       </div>
       
       <div className="flex items-center gap-1.5 shrink-0">
         {session && (
           <button 
             onClick={logout} 
-            className="min-h-[44px] min-w-[44px] px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl flex items-center justify-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0 transition-all"
+            className="hidden sm:flex h-9 px-3 bg-white/10 hover:bg-white/20 text-white rounded-xl items-center justify-center gap-1.5 font-bold text-xs active:scale-95 border border-white/15 shrink-0 transition-all"
             title="Switch User"
           >
-            <LogOut size={16} />
-            <span className="hidden sm:inline">{t('switchUser')}</span>
+            <LogOut size={15} />
+            <span>{t('switchUser')}</span>
           </button>
         )}
         {onOpenFaceScanner && (
           <button 
             onClick={onOpenFaceScanner} 
-            className="min-h-[44px] min-w-[44px] px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl flex items-center justify-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0 transition-all"
+            className="hidden md:flex h-9 px-3 bg-white/10 hover:bg-white/20 text-white rounded-xl items-center justify-center gap-1.5 font-bold text-xs active:scale-95 border border-white/15 shrink-0 transition-all"
             title="Scan Patient Face (Offline AI Recognition)"
           >
-             <ScanFace size={18} className="text-emerald-200" />
-             <span className="hidden sm:inline">Face ID</span>
+             <ScanFace size={16} className="text-emerald-200" />
+             <span>Face ID</span>
           </button>
         )}
         <button 
           onClick={onOpenScanner} 
-          className="min-h-[44px] min-w-[44px] px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl flex items-center justify-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0 transition-all"
+          className="w-10 h-10 bg-white/15 hover:bg-white/25 active:scale-95 text-white rounded-xl flex items-center justify-center border border-white/20 shrink-0 transition-all"
           title="Scan OPD Card QR / Barcode"
+          aria-label="Scan OPD Card"
         >
-           <QrCode size={18} className="text-emerald-200" />
-           <span className="hidden sm:inline">Scan</span>
+           <QrCode size={19} className="text-emerald-100" />
         </button>
         <button 
           onClick={onSync} 
           disabled={syncing}
-          className="min-h-[44px] min-w-[44px] px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl flex items-center justify-center gap-1.5 font-bold text-xs active:scale-95 border border-emerald-500/30 shrink-0 transition-all"
+          className="w-10 h-10 bg-white/15 hover:bg-white/25 active:scale-95 text-white rounded-xl flex items-center justify-center border border-white/20 shrink-0 transition-all disabled:opacity-50"
           title="Sync Records"
+          aria-label="Sync Records"
         >
-           <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
-           <span className="hidden sm:inline">{syncing ? 'Syncing...' : 'Sync'}</span>
+           <RefreshCw size={17} className={`text-emerald-100 ${syncing ? 'animate-spin' : ''}`} />
         </button>
       </div>
     </header>
