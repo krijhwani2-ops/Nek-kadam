@@ -571,7 +571,7 @@ export default function FaceScannerModal({
                           <h5 className="text-xs font-black text-white">{p.name}</h5>
                         </div>
                         <p className="text-[10px] text-slate-400 mt-0.5">
-                          {p.age ? `${p.age} yrs • ` : ''}{p.gender || 'Patient'} {p.phone ? `• 📞 ${p.phone}` : ''}
+                          {p.age ? `${p.age} yrs • ` : ''}{p.gender || 'Patient'}{p.phone ? ` • Tel: ${p.phone}` : ''}
                         </p>
                       </div>
                       <button 

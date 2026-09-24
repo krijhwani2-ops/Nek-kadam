@@ -176,10 +176,15 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}): Pro
     headers['Authorization'] = `Bearer ${token}`;
   }
   const baseUrl = getBaseUrl();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+
   let res = await fetch(`${baseUrl}${endpoint}`, {
     ...options,
     headers,
+    signal: options.signal || controller.signal,
   });
+  clearTimeout(timeoutId);
 
   // Handle 401 Unauthorized by attempting transparent PC login recovery on desktop/web
   if (res.status === 401 && !endpoint.startsWith('/api/login') && !endpoint.startsWith('/api/pc-login')) {
@@ -203,10 +208,14 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}): Pro
         const freshToken = freshSession?.sessionId || (typeof window !== 'undefined' ? localStorage.getItem('nk_token') : '') || '';
         if (freshToken) {
           headers['Authorization'] = `Bearer ${freshToken}`;
+          const retryController = new AbortController();
+          const retryTimeoutId = setTimeout(() => retryController.abort(), 5000);
           res = await fetch(`${baseUrl}${endpoint}`, {
             ...options,
             headers,
+            signal: options.signal || retryController.signal,
           });
+          clearTimeout(retryTimeoutId);
         }
       } else if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('nk:auth_expired', { detail: { endpoint } }));

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db, checkServerOnline, saveVisitOffline, getPendingVisitsForPatient, cleanPatientId } from '../lib/db';
 import { getBaseUrl, apiFetch } from '../lib/session';
-import { Phone, CreditCard, Plus, Clock, Trash2, X, Printer, FileText, Calendar, Stethoscope, RefreshCw, QrCode, ScanFace } from 'lucide-react';
+import { Phone, CreditCard, Plus, Clock, Trash2, X, Printer, FileText, Calendar, Stethoscope, RefreshCw, QrCode, ScanFace, User, Droplet, MapPin } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Spinner } from '../components/ui';
 import FaceEnrollmentModal from '../components/face/FaceEnrollmentModal';
@@ -200,67 +200,76 @@ export default function PatientProfile() {
         return;
       }
       
-      let enrichedVisits: any[] = [];
-      try {
-        const cardParam = patientData.card_number || patientData.id || cleanId;
-        console.log('[API DEBUG] Fetching history for:', cardParam);
-        const res = await fetch(`${getBaseUrl()}/api/patients/${cardParam}/visits`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('nk_token') || ''}`
-          }
-        });
-        
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-        }
-        
-        const result = await res.json();
-        console.log('[API DEBUG] Result received:', result);
-        enrichedVisits = result.data || [];
-      } catch (fetchErr: unknown) {
-        console.error('[API DEBUG] Server fetch failed, using local data:', fetchErr);
-      }
-      
-      // Always check local IndexedDB cache and merge
-      if (enrichedVisits.length === 0) {
-        const localVisits = await loadVisitsFromIndexedDB(patientData.card_number, patientData.id);
-        if (localVisits.length > 0) enrichedVisits = localVisits;
-      }
-      
-      // CRITICAL: Merge any unsynced pending visits from nk_pending_ops queue
+      let localVisits = await loadVisitsFromIndexedDB(patientData.card_number, patientData.id);
+
+      // Merge any unsynced pending visits from nk_pending_ops queue
       try {
         const pendingVisits = await getPendingVisitsForPatient(patientData.card_number);
         if (pendingVisits.length > 0) {
-          console.log('[API DEBUG] Merging', pendingVisits.length, 'pending unsynced visits into display');
-          // Add pending visits that aren't already in the list
           for (const pv of pendingVisits) {
-            const alreadyExists = enrichedVisits.some((v: any) => 
+            const alreadyExists = localVisits.some((v: any) => 
               v.date === pv.date && v.doctor_name === pv.doctor_name
             );
             if (!alreadyExists) {
-              enrichedVisits.unshift(pv);
+              localVisits.unshift(pv);
             }
           }
         }
       } catch (pendingErr) {
-        console.warn('[API DEBUG] Failed to read pending visits:', pendingErr);
+        console.warn('[PATIENT PROFILE] Failed to read pending visits:', pendingErr);
       }
 
+      // Immediately display local patient & visits from IndexedDB (instant render)
       setPatient(patientData);
-      setVisits(enrichedVisits);
-      if (enrichedVisits.length === 0) {
+      setVisits(localVisits);
+      if (localVisits.length === 0) {
         setMobileActiveTab('prescription');
       }
+      setLoading(false);
 
-      // Check offline biometric enrollment
+      // Check offline biometric enrollment immediately from local store
       try {
         const bio = await getPatientBiometric(patientData.card_number || patientData.id || cleanId);
         setHasFaceEnrolled(!!bio);
       } catch (_bioErr) {}
+
+      // Background non-blocking refresh from server (if online / Render awake)
+      try {
+        const cardParam = patientData.card_number || patientData.id || cleanId;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+        const res = await fetch(`${getBaseUrl()}/api/patients/${cardParam}/visits`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('nk_token') || ''}`
+          },
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const result = await res.json();
+          const serverVisits = result.data || [];
+          if (serverVisits.length > 0) {
+            // Re-merge any pending local writes
+            const pending = await getPendingVisitsForPatient(patientData.card_number).catch(() => []);
+            const finalMerged = [...serverVisits];
+            for (const pv of pending) {
+              if (!finalMerged.some((v: any) => v.date === pv.date && v.doctor_name === pv.doctor_name)) {
+                finalMerged.unshift(pv);
+              }
+            }
+            setVisits(finalMerged);
+          }
+        }
+      } catch (fetchErr: unknown) {
+        // Silently keep local visits when server is sleeping or offline
+        console.log('[PATIENT PROFILE] Background server sync skipped or timed out, keeping local data');
+      }
     } catch (e) {
       console.error('Failed to fetch patient data:', e);
+      setLoading(false);
     }
-    setLoading(false);
   }, [id]);
 
   useEffect(() => {
@@ -794,7 +803,7 @@ export default function PatientProfile() {
                 {/* Gender Chip */}
                 {patient.gender && (
                   <span className="inline-flex items-center px-2.5 py-0.5 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-semibold text-[11px] rounded-full border border-blue-100 dark:border-blue-900 shadow-xs">
-                    <span className="mr-1">👤</span>
+                    <User size={12} className="mr-1 text-blue-600 dark:text-blue-400" />
                     {patient.gender}
                   </span>
                 )}
@@ -817,7 +826,7 @@ export default function PatientProfile() {
                 {/* Blood Group Chip */}
                 {patient.blood_group && (
                   <span className="inline-flex items-center px-2.5 py-0.5 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 font-semibold text-[11px] rounded-full border border-rose-100 dark:border-rose-900/40 shadow-xs">
-                    <span className="mr-1">🩸</span>
+                    <Droplet size={12} className="mr-1 text-rose-600 dark:text-rose-400" />
                     {patient.blood_group}
                   </span>
                 )}
@@ -825,7 +834,7 @@ export default function PatientProfile() {
                 {/* Address Chip */}
                 {patient.address && (
                   <span className="inline-flex items-center px-2.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-[11px] rounded-full border border-slate-200 dark:border-slate-700 shadow-xs">
-                    <span className="mr-1">📍</span>
+                    <MapPin size={12} className="mr-1 text-slate-500 dark:text-slate-400" />
                     {patient.address}
                   </span>
                 )}
@@ -901,8 +910,8 @@ export default function PatientProfile() {
           {/* Metric: Age */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3 flex items-center justify-between shadow-xs">
             <div className="flex items-center space-x-2">
-              <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center">
-                <span className="text-xs">👤</span>
+              <div className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                <User size={14} />
               </div>
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Age</span>
             </div>
@@ -1661,8 +1670,9 @@ export default function PatientProfile() {
                   </p>
                 )}
                 {patient.address && (
-                  <p className="text-[11px] text-slate-500 truncate max-w-xs mx-auto">
-                    📍 {patient.address}
+                  <p className="text-[11px] text-slate-500 truncate max-w-xs mx-auto flex items-center justify-center gap-1">
+                    <MapPin size={12} className="shrink-0 text-slate-400" />
+                    <span>{patient.address}</span>
                   </p>
                 )}
               </div>

@@ -94,7 +94,7 @@ function BackButtonHandler() {
   return null;
 }
 
-const APP_VERSION = "1.4.6"; // Current release version
+const APP_VERSION = "1.4.7"; // Current release version
 
 interface UpdateInfo {
   version: string;
@@ -116,7 +116,10 @@ function OTAUpdater() {
       if (typeof navigator !== 'undefined' && !navigator.onLine) return;
 
       try {
-        const res = await fetch(`${getBaseUrl()}/api/version`, { cache: 'no-store' });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const res = await fetch(`${getBaseUrl()}/api/version`, { cache: 'no-store', signal: controller.signal });
+        clearTimeout(timeoutId);
         if (!res.ok) return;
         const data: UpdateInfo = await res.json();
         if (!isMounted || !data?.version) return;
@@ -477,10 +480,15 @@ function TopBar({ onSync, syncing, onToggleMenu, onOpenScanner, onOpenFaceScanne
             {session.userName}
           </span>
         )}
-        {onlineCount > 0 && (
-          <span className="hidden xs:flex items-center gap-1 ml-1 bg-emerald-800/50 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-500/20 shrink-0">
+        {onlineCount > 0 ? (
+          <span className="flex items-center gap-1 ml-1 bg-emerald-800/60 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-400/30 shrink-0" title="Connected to Render Cloud">
             <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></div>
-            <span>{onlineCount}</span>
+            <span>Online</span>
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 ml-1 bg-emerald-900/40 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-400/20 text-emerald-200/90 shrink-0" title="Local Storage Mode Active">
+            <div className="w-1.5 h-1.5 bg-emerald-300/80 rounded-full"></div>
+            <span>Local</span>
           </span>
         )}
       </div>
@@ -571,6 +579,7 @@ function AppLayout() {
   const { isLoggedIn, loading, session, updatePresence, logout } = useAuth();
   const { t } = useApp();
   const [syncing, setSyncing] = useState(false);
+  const syncingRef = useRef(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isGlobalScannerOpen, setIsGlobalScannerOpen] = useState(false);
   const [isFaceScannerOpen, setIsFaceScannerOpen] = useState(false);
@@ -670,6 +679,8 @@ function AppLayout() {
 
     // Run full sync once on app load
     import('./lib/db').then(async ({ fullDataSync }) => {
+      if (syncingRef.current) return;
+      syncingRef.current = true;
       try {
         console.log('[LIVE SYNC] Initial sync on app load...');
         setSyncing(true);
@@ -679,6 +690,7 @@ function AppLayout() {
         console.error('[LIVE SYNC] Initial sync failed:', e);
       } finally {
         setSyncing(false);
+        syncingRef.current = false;
       }
     });
 
@@ -688,12 +700,17 @@ function AppLayout() {
       socket = io(socketUrl, { reconnection: true, transports: ['websocket', 'polling'] });
       
       socket.on('connect', () => {
+        if (syncingRef.current) return;
+        syncingRef.current = true;
         console.log('[LIVE SYNC] Connected to server socket. Catching up...');
         setSyncing(true);
         fullDataSync().then(() => {
           window.dispatchEvent(new Event('nk_live_sync_completed'));
         }).catch(err => console.error('[LIVE SYNC] Catchup failed:', err))
-          .finally(() => setSyncing(false));
+          .finally(() => {
+            setSyncing(false);
+            syncingRef.current = false;
+          });
       });
 
       socket.on('db_changed', (msg: any) => {

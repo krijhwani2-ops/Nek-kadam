@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   FilePlus, Clock, RefreshCw,
-  Search, ShieldCheck, Users
+  Search, ShieldCheck, Users,
+  ScanFace, ClipboardList, QrCode, ArrowUpRight
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchDashboardData, DashboardData, logActivity, getBaseUrl } from '../lib/session';
 import { useApp } from '../contexts/AppContext';
+import { db } from '../lib/db';
 
 function formatLogTime(ts?: string | number): string {
   if (!ts) return '';
@@ -26,18 +28,36 @@ export default function Dashboard() {
   const { session } = useAuth();
   const navigate = useNavigate();
   const { t } = useApp();
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isOnline, setIsOnline] = useState(true);
+  const [data, setData] = useState<DashboardData | null>(() => {
+    try {
+      const cached = localStorage.getItem('nk_dashboard_cached_data');
+      if (cached) return JSON.parse(cached);
+    } catch {}
+    return null;
+  });
+  const [loading, setLoading] = useState(() => {
+    try {
+      return !localStorage.getItem('nk_dashboard_cached_data');
+    } catch {
+      return true;
+    }
+  });
+  const [isOnline, setIsOnline] = useState<boolean>(() => {
+    return typeof navigator !== 'undefined' ? navigator.onLine : true;
+  });
   const [presenceList, setPresenceList] = useState<any[]>([]);
 
   const loadPresence = async () => {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
       const res = await fetch(`${getBaseUrl()}/api/presence`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('nk_token') || ''}`
-        }
+        },
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       if (res.ok) {
         const json = await res.json();
         setPresenceList(json.data || []);
@@ -50,26 +70,79 @@ export default function Dashboard() {
   useEffect(() => {
     if (!session) return;
     logActivity('Viewing Dashboard');
-    async function load() {
-      const res = await fetchDashboardData();
-      if (res) {
-        setData(res);
-        setIsOnline(true);
-      } else {
-        setIsOnline(false);
+    
+    // 1. Immediately show local cached stats from IndexedDB (instant, no network)
+    async function loadLocalFirst() {
+      try {
+        const { data: patients } = await db.from('patients').select('*');
+        const { data: visits } = await db.from('visits').select('*');
+        const allPatients = patients || [];
+        const allVisits = visits || [];
+        
+        const today = new Date().toISOString().slice(0, 10);
+        const patientsToday = allPatients.filter((p: any) => 
+          p.created_at && p.created_at.slice(0, 10) === today
+        ).length;
+        
+        const localStats: DashboardData = {
+          stats: {
+            patientsToday,
+            totalVisits: allVisits.length,
+            totalPatients: allPatients.length,
+          },
+          recentLogs: []
+        };
+
+        // Set local data immediately so UI renders with real numbers
+        setData(prev => {
+          if (prev && prev.stats) {
+            return {
+              ...prev,
+              stats: {
+                patientsToday: Math.max(prev.stats.patientsToday || 0, patientsToday),
+                totalVisits: Math.max(prev.stats.totalVisits || 0, allVisits.length),
+                totalPatients: Math.max(prev.stats.totalPatients || 0, allPatients.length),
+              }
+            };
+          }
+          return localStats;
+        });
+
+        try {
+          localStorage.setItem('nk_dashboard_cached_data', JSON.stringify(localStats));
+        } catch {}
+      } catch (e) {
+        console.warn('[DASHBOARD] Local cache read failed:', e);
       }
       setLoading(false);
+    }
+    
+    loadLocalFirst();
+    
+    // 2. Then try server for live stats (non-blocking background update)
+    async function loadFromServer() {
+      try {
+        const res = await fetchDashboardData();
+        if (res && res.stats) {
+          setData(res);
+          setIsOnline(true);
+          try {
+            localStorage.setItem('nk_dashboard_cached_data', JSON.stringify(res));
+          } catch {}
+        } else {
+          setIsOnline(false);
+        }
+      } catch {
+        setIsOnline(false);
+      }
       await loadPresence();
     }
-    load();
-    const interval = setInterval(load, 15000);
     
-    const onLiveSync = () => {
-      load();
-    };
-    const onPresenceSync = () => {
-      loadPresence();
-    };
+    loadFromServer();
+    const interval = setInterval(loadFromServer, 15000);
+    
+    const onLiveSync = () => { loadLocalFirst(); loadFromServer(); };
+    const onPresenceSync = () => { loadPresence(); };
     window.addEventListener('nk_live_sync_completed', onLiveSync);
     window.addEventListener('nk_presence_changed', onPresenceSync);
 
@@ -187,6 +260,20 @@ export default function Dashboard() {
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                 <span>{session.department} DEPARTMENT</span>
               </div>
+              {isOnline ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-400/20 text-emerald-200 border border-emerald-300/30">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-300"></span>
+                  </span>
+                  Render Online
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-400/25 text-amber-100 border border-amber-300/30">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-300"></span>
+                  Local Mode (IndexedDB)
+                </span>
+              )}
             </div>
             <button 
               onClick={() => window.location.reload()} 
@@ -217,29 +304,68 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* 2. STITCH METRICS SUMMARY (3-COL DIVIDED) */}
-        <section className="bg-white dark:bg-slate-900 rounded-2xl py-2.5 px-3 shadow-sm border border-gray-100 dark:border-slate-800" data-purpose="metrics-summary">
-          <div className="grid grid-cols-3 divide-x divide-gray-100 dark:divide-slate-800 text-center">
-            <div className="flex flex-col justify-center px-1">
-              <span className="text-2xl font-black text-gray-900 dark:text-slate-100 leading-tight">{data?.stats?.patientsToday || 0}</span>
-              <span className="text-[10px] font-extrabold uppercase text-emerald-600 dark:text-emerald-400 tracking-wider mt-0.5">Today Reg.</span>
+        {/* OFFLINE / ONLINE STATUS BANNER */}
+        {!isOnline && (
+          <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl px-3.5 py-2 flex items-center justify-between text-xs text-amber-900 dark:text-amber-200 shadow-sm animate-in fade-in duration-300">
+            <div className="flex items-center gap-2">
+              <span className="flex h-2 w-2 rounded-full bg-amber-500 shrink-0"></span>
+              <span className="text-[11px] leading-tight">
+                <strong>Offline-First Active:</strong> Showing records from local IndexedDB. Connecting to Render in background…
+              </span>
             </div>
-            <div className="flex flex-col justify-center px-1">
-              <span className="text-2xl font-black text-purple-600 dark:text-purple-400 leading-tight">{data?.stats?.totalVisits || 0}</span>
-              <span className="text-[10px] font-bold uppercase text-gray-500 dark:text-slate-400 tracking-wider mt-0.5 truncate">{t('activeVisits')}</span>
+          </div>
+        )}
+
+        {/* 2. ELEVATED CLINICAL METRICS SUMMARY */}
+        <section className="grid grid-cols-3 gap-2.5" data-purpose="metrics-summary">
+          <div 
+            onClick={() => navigate('/patients')}
+            className="bg-white dark:bg-slate-900 rounded-2xl p-3 shadow-xs border border-emerald-100 dark:border-emerald-950/60 hover:border-emerald-300 dark:hover:border-emerald-700 transition-all cursor-pointer group active:scale-[0.98]"
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400 tracking-wider">Today Reg.</span>
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
             </div>
-            <div className="flex flex-col justify-center px-1">
-              <span className="text-2xl font-black text-blue-600 dark:text-blue-400 leading-tight">{data?.stats?.totalPatients || 0}</span>
-              <span className="text-[10px] font-bold uppercase text-gray-500 dark:text-slate-400 tracking-wider mt-0.5 truncate">{t('totalPatients')}</span>
+            <span className="text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight leading-none block">
+              {data?.stats?.patientsToday || 0}
+            </span>
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-1 block truncate">New patients today</span>
+          </div>
+
+          <div 
+            onClick={() => navigate('/patients')}
+            className="bg-white dark:bg-slate-900 rounded-2xl p-3 shadow-xs border border-purple-100 dark:border-purple-950/60 hover:border-purple-300 dark:hover:border-purple-700 transition-all cursor-pointer group active:scale-[0.98]"
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-black uppercase text-purple-700 dark:text-purple-400 tracking-wider truncate">{t('activeVisits')}</span>
+              <div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div>
             </div>
+            <span className="text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight leading-none block">
+              {data?.stats?.totalVisits || 0}
+            </span>
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-1 block truncate">Total clinic visits</span>
+          </div>
+
+          <div 
+            onClick={() => navigate('/patients')}
+            className="bg-white dark:bg-slate-900 rounded-2xl p-3 shadow-xs border border-blue-100 dark:border-blue-950/60 hover:border-blue-300 dark:hover:border-blue-700 transition-all cursor-pointer group active:scale-[0.98]"
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-black uppercase text-blue-700 dark:text-blue-400 tracking-wider truncate">{t('totalPatients')}</span>
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+            </div>
+            <span className="text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight leading-none block">
+              {data?.stats?.totalPatients || 0}
+            </span>
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium mt-1 block truncate">IndexedDB offline ready</span>
           </div>
         </section>
 
-        {/* 3. STITCH QUICK ACTIONS (50/50 BALANCED GRID) */}
-        <section className="grid grid-cols-2 gap-2.5" data-purpose="quick-actions">
+        {/* 3. BALANCED 4-ACTION CLINICAL DESK GRID */}
+        <section className="grid grid-cols-2 sm:grid-cols-4 gap-2.5" data-purpose="quick-actions">
           <button 
             onClick={() => navigate('/patients/new')} 
-            className="flex items-center space-x-2.5 p-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm active:scale-[0.98] transition-transform text-left" 
+            className="flex items-center space-x-2.5 p-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm active:scale-[0.98] transition-all text-left" 
             type="button"
           >
             <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
@@ -247,12 +373,13 @@ export default function Dashboard() {
             </div>
             <div className="overflow-hidden flex-1">
               <div className="text-xs font-bold leading-tight text-white whitespace-nowrap truncate">{t('registerPatient')}</div>
-              <div className="text-[10px] font-medium text-emerald-100 uppercase tracking-wider mt-0.5 truncate">New Record</div>
+              <div className="text-[10px] font-medium text-emerald-100 uppercase tracking-wider mt-0.5 truncate">New Entry</div>
             </div>
           </button>
+
           <button 
             onClick={() => navigate('/patients')} 
-            className="flex items-center space-x-2.5 p-3 rounded-2xl bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-800 dark:text-slate-100 border border-gray-100 dark:border-slate-800 shadow-sm active:scale-[0.98] transition-transform text-left" 
+            className="flex items-center space-x-2.5 p-3 rounded-2xl bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-850 text-gray-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-800 shadow-xs active:scale-[0.98] transition-all text-left" 
             type="button"
           >
             <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center shrink-0">
@@ -260,7 +387,35 @@ export default function Dashboard() {
             </div>
             <div className="overflow-hidden flex-1">
               <div className="text-xs font-bold text-gray-900 dark:text-slate-100 leading-tight truncate">{t('patients')}</div>
-              <div className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mt-0.5 truncate">View All</div>
+              <div className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mt-0.5 truncate">1,696+ Records</div>
+            </div>
+          </button>
+
+          <button 
+            onClick={() => navigate('/face-id')} 
+            className="flex items-center space-x-2.5 p-3 rounded-2xl bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-850 text-gray-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-800 shadow-xs active:scale-[0.98] transition-all text-left" 
+            type="button"
+          >
+            <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/40 flex items-center justify-center shrink-0">
+              <ScanFace className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+            </div>
+            <div className="overflow-hidden flex-1">
+              <div className="text-xs font-bold text-gray-900 dark:text-slate-100 leading-tight truncate">Face ID Desk</div>
+              <div className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider mt-0.5 truncate">Offline AI</div>
+            </div>
+          </button>
+
+          <button 
+            onClick={() => navigate('/med-queue')} 
+            className="flex items-center space-x-2.5 p-3 rounded-2xl bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-850 text-gray-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-800 shadow-xs active:scale-[0.98] transition-all text-left" 
+            type="button"
+          >
+            <div className="w-9 h-9 rounded-xl bg-teal-50 dark:bg-teal-950/40 flex items-center justify-center shrink-0">
+              <ClipboardList className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+            </div>
+            <div className="overflow-hidden flex-1">
+              <div className="text-xs font-bold text-gray-900 dark:text-slate-100 leading-tight truncate">Pharmacy</div>
+              <div className="text-[10px] font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wider mt-0.5 truncate">Dispense Desk</div>
             </div>
           </button>
         </section>

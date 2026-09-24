@@ -8,10 +8,17 @@ import BarcodeScannerModal from '../components/BarcodeScannerModal';
 
 export default function PatientsList() {
   const { t } = useApp();
-  const [patients, setPatients] = useState<any[]>([]);
+  const [patients, setPatients] = useState<any[]>(() => {
+    if (typeof window !== 'undefined' && (window as any).__nk_patients_cache) {
+      return (window as any).__nk_patients_cache;
+    }
+    return [];
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [localQuery, setLocalQuery] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    return !(typeof window !== 'undefined' && (window as any).__nk_patients_cache?.length);
+  });
   const [isSyncing, setIsSyncing] = useState(false);
   const [visibleCount, setVisibleCount] = useState(30);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -61,7 +68,11 @@ export default function PatientsList() {
         .from('patients')
         .select('*')
         .order('created_at', { ascending: false });
-      setPatients(data || []);
+      const list = data || [];
+      setPatients(list);
+      if (typeof window !== 'undefined') {
+        (window as any).__nk_patients_cache = list;
+      }
     } catch (e) {
       console.error('Failed to load patients:', e);
       setPatients([]);
@@ -164,33 +175,50 @@ export default function PatientsList() {
       ) : (
         <div className="space-y-2">
           <section className="space-y-2" data-purpose="patient-directory-list">
-            {filteredPatients.slice(0, visibleCount).map((p) => (
-              <Link
-                key={p.id}
-                to={`/patients/${p.card_number}`}
-                className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-slate-100 dark:border-slate-800/80 shadow-sm flex items-center justify-between active:bg-slate-50 dark:active:bg-slate-800/60 hover:border-emerald-300 dark:hover:border-slate-700 transition-colors cursor-pointer group"
-              >
-                <div className="flex items-center space-x-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500 text-white font-bold text-base flex items-center justify-center shrink-0 shadow-sm">
-                    {(p.name || 'P').charAt(0).toUpperCase()}
+            {filteredPatients.slice(0, visibleCount).map((p) => {
+              const isTemp = p.card_number && p.card_number.toString().startsWith('TEMP-');
+              const cardLabel = isTemp ? 'No ID' : `#${p.card_number}`;
+              const metaParts = [];
+              if (p.age) metaParts.push(`${p.age} yrs`);
+              if (p.gender) metaParts.push(p.gender);
+              if (p.phone) metaParts.push(p.phone);
+
+              return (
+                <Link
+                  key={p.id}
+                  to={`/patients/${p.card_number}`}
+                  className="bg-white dark:bg-slate-900 rounded-xl p-3 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-between active:scale-[0.99] active:bg-slate-50 dark:active:bg-slate-800/80 hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-sm transition-all duration-150 cursor-pointer group"
+                >
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white font-black text-sm flex items-center justify-center shrink-0 shadow-xs">
+                      {(p.name || 'P').charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <h2 className="font-bold text-slate-900 dark:text-slate-100 text-sm leading-tight truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                        {p.name || 'Unnamed Patient'}
+                      </h2>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium tracking-normal mt-0.5 truncate flex items-center gap-1">
+                        {metaParts.length > 0 ? (
+                          metaParts.join(' · ')
+                        ) : (
+                          <span className="italic text-slate-400">No details registered</span>
+                        )}
+                      </p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <h2 className="font-bold text-slate-900 dark:text-slate-100 text-sm leading-tight truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                      {p.name || 'Unnamed Patient'}
-                    </h2>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium tracking-wide mt-0.5 truncate">
-                      {p.phone || <span className="italic text-slate-400">No phone</span>}
-                    </p>
+                  <div className="flex items-center space-x-2 shrink-0 pl-2">
+                    <span className={`font-mono font-bold text-xs px-2.5 py-0.5 rounded-full border shadow-2xs leading-normal ${
+                      isTemp 
+                        ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800' 
+                        : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                    }`}>
+                      {cardLabel}
+                    </span>
+                    <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all shrink-0" />
                   </div>
-                </div>
-                <div className="flex items-center space-x-2 shrink-0 pl-2">
-                  <span className="bg-amber-500 text-white font-bold text-xs px-2.5 py-0.5 rounded-full shadow-sm leading-normal">
-                    {p.card_number && p.card_number.toString().startsWith('TEMP-') ? 'No ID' : `#${p.card_number}`}
-                  </span>
-                  <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all shrink-0" />
-                </div>
-              </Link>
-            ))}
+                </Link>
+              );
+            })}
           </section>
 
           {visibleCount < filteredPatients.length && (
