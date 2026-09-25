@@ -136,9 +136,9 @@ app.get('/api/version', (req, res) => {
   const host = req.get('host') || 'nek-kadam.onrender.com';
   const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
   res.json({ 
-    version: '1.4.9', 
+    version: '1.5.0', 
     bundleUrl: `${protocol}://${host}/bundle.zip`,
-    bundleId: '1.4.9',
+    bundleId: '1.5.0',
     apkUrl: `${protocol}://${host}/apk/nek-kadam.apk` 
   });
 });

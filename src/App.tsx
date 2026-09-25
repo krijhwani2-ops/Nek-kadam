@@ -94,7 +94,7 @@ function BackButtonHandler() {
   return null;
 }
 
-const APP_VERSION = "1.4.9"; // Current release version
+const APP_VERSION = "1.5.0"; // Current release version
 
 interface UpdateInfo {
   version: string;
