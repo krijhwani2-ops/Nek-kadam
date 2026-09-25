@@ -224,7 +224,7 @@ export default function NewPatient() {
         phone: cleanPhone || '', 
         address: cleanAddress || '', 
         card_number: cleanCard,
-        blood_group: bloodGroup || null,
+        blood_group: null,
         age: age ? parseInt(age, 10) : null,
         gender: gender || null,
         created_at: new Date().toISOString()
@@ -243,12 +243,12 @@ export default function NewPatient() {
         return;
       }
 
-      // 2. Create Visit & Prescription (only if prescription section was opened and filled)
+      // 2. Create Visit & Prescription (if doctorName is chosen OR prescription section was filled)
       const hasMeds = medicineGroups.some(g => g.meds.length > 0);
-      if (isPrescriptionOpen && (doctorName || hasMeds || visitNotes.trim())) {
+      if (doctorName || (isPrescriptionOpen && (hasMeds || visitNotes.trim()))) {
         try {
           const visitId = 'VISIT-' + Date.now();
-          console.log('[NEW PATIENT] Creating initial visit:', visitId);
+          console.log('[NEW PATIENT] Creating initial visit:', visitId, 'Doctor:', doctorName);
           
           const { error: vError } = await db.from('visits').insert({ 
             id: visitId,
@@ -398,53 +398,37 @@ export default function NewPatient() {
             />
           </div>
 
-          {/* Row 3: Age + Gender + Blood (Dense 3-Column Layout) */}
+          {/* Row 3: Attending Doctor (Left) + Gender (Center) + Age (Right) */}
           <div className="grid grid-cols-12 gap-2 pt-0.5">
-            {/* Age (5 cols) */}
-            <div className="col-span-12 sm:col-span-5 space-y-1">
+            {/* Attending Doctor Segmented Control (5 cols) */}
+            <div className="col-span-5 space-y-1">
               <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 ml-1 flex items-center gap-1">
-                <User2 size={11} className="text-blue-500" />
-                Age (Yrs)
+                <User2 size={11} className="text-emerald-500" />
+                Doctor
               </label>
-              <div className="flex items-center gap-1.5">
-                <input 
-                  ref={ageInputRef}
-                  name="age" 
-                  type="number" 
-                  min="0" 
-                  max="125" 
-                  value={age} 
-                  onChange={(e) => setAge(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      phoneInputRef.current?.focus();
-                    }
-                  }}
-                  placeholder="Yrs" 
-                  className="w-16 px-2 py-2 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl outline-none font-black text-center text-sm text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all shadow-sm" 
-                />
-                <div className="flex gap-1 flex-1">
-                  {[18, 35, 50, 65].map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => setAge(preset.toString())}
-                      className={`flex-1 py-1.5 px-1 rounded-lg text-[10px] font-black border transition-all ${
-                        age === preset.toString()
-                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                          : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-emerald-400'
-                      }`}
-                    >
-                      {preset}
-                    </button>
-                  ))}
-                </div>
+              <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700 h-[38px]">
+                {[
+                  { key: 'Dr. Vibhuti Kori', label: 'Dr. Vibhuti' },
+                  { key: 'Dr. Rajdeep Sonkar', label: 'Dr. Rajdeep' }
+                ].map((doc) => (
+                  <button
+                    key={doc.key}
+                    type="button"
+                    onClick={() => setDoctorName(doctorName === doc.key ? '' : doc.key)}
+                    className={`flex-1 py-1 text-[11px] font-black rounded-lg transition-all truncate px-1 ${
+                      doctorName === doc.key
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
+                  >
+                    {doc.label}
+                  </button>
+                ))}
               </div>
             </div>
 
             {/* Gender Segmented Pills (4 cols) */}
-            <div className="col-span-7 sm:col-span-4 space-y-1">
+            <div className="col-span-4 space-y-1">
               <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 ml-1">
                 Gender
               </label>
@@ -470,22 +454,28 @@ export default function NewPatient() {
               </div>
             </div>
 
-            {/* Blood Group (3 cols) */}
-            <div className="col-span-5 sm:col-span-3 space-y-1">
-              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 ml-1 flex items-center gap-1">
-                <Droplets size={11} className="text-red-500" />
-                Blood
+            {/* Age Clean Input without Preset Suggestions (3 cols) */}
+            <div className="col-span-3 space-y-1">
+              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 ml-1">
+                Age (Yrs)
               </label>
-              <select 
-                value={bloodGroup} 
-                onChange={(e) => setBloodGroup(e.target.value)} 
-                className="w-full px-2 py-2 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl outline-none font-bold text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all h-[38px] shadow-sm cursor-pointer"
-              >
-                <option value="">Unknown</option>
-                {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(g => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
-              </select>
+              <input 
+                ref={ageInputRef}
+                name="age" 
+                type="number" 
+                min="0" 
+                max="125" 
+                value={age} 
+                onChange={(e) => setAge(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    phoneInputRef.current?.focus();
+                  }
+                }}
+                placeholder="Yrs" 
+                className="w-full px-2 py-2 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl outline-none font-black text-center text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all h-[38px] shadow-sm placeholder-slate-400" 
+              />
             </div>
           </div>
 
