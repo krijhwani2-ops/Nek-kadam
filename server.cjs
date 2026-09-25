@@ -90,13 +90,24 @@ app.use((req, res, next) => {
 // AUDIT FIX: Serve only the dist folder, not the entire project root (was exposing nekkadam.db, source code, .env)
 app.use('/static', express.static('dist'));
 app.use('/apk', express.static(__dirname + '/apk'));
-app.get('/bundle.zip', (_req, res) => res.sendFile(path.join(__dirname, 'dist', 'bundle.zip')));
-app.get('/api/version', (_req, res) => res.json({ 
-  version: '1.4.9', 
-  bundleUrl: '/bundle.zip',
-  bundleId: '1.4.9',
-  apkUrl: '/apk/nek-kadam.apk' 
-}));
+app.get('/bundle.zip', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Content-Type', 'application/zip');
+  res.sendFile(path.join(__dirname, 'dist', 'bundle.zip'));
+});
+app.get('/api/version', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  const host = req.get('host') || 'nek-kadam.onrender.com';
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+  res.json({ 
+    version: '1.4.9', 
+    bundleUrl: `${protocol}://${host}/bundle.zip`,
+    bundleId: '1.4.9',
+    apkUrl: `${protocol}://${host}/apk/nek-kadam.apk` 
+  });
+});
 
 // ─────────────────────────────────────
 //  ECOSYSTEM: Request Logger
