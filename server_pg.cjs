@@ -1840,19 +1840,27 @@ app.post('/api/users/create-profile', async (req, res) => {
   if (!name || !department) return res.status(400).json({ error: 'Missing name or department' });
 
   try {
+    const isNamedAdmin = ['admin', 'rohan', 'dr. vibhuti kori', 'dr. rajdeep sonkar'].includes(name.trim().toLowerCase());
     const { rows: existingRows } = await pool.query(
       `SELECT u.id, u.name, u.role, u."departmentId", d.name AS department
        FROM users u
        LEFT JOIN departments d ON u."departmentId" = d.id
-       WHERE LOWER(u.name) = LOWER($1) LIMIT 1`,
+       WHERE LOWER(TRIM(u.name)) = LOWER(TRIM($1))
+       ORDER BY CASE WHEN UPPER(u.role) = 'ADMIN' THEN 0 ELSE 1 END, u.created_at ASC
+       LIMIT 1`,
       [name]
     );
 
     let userObj;
     if (existingRows.length > 0) {
       userObj = existingRows[0];
+      if (isNamedAdmin && userObj.role?.toUpperCase() !== 'ADMIN') {
+        await pool.query("UPDATE users SET role = 'ADMIN' WHERE id = $1", [userObj.id]);
+        userObj.role = 'ADMIN';
+      }
     } else {
       const id = uuid();
+      const initialRole = isNamedAdmin ? 'ADMIN' : (role || 'Volunteer');
       const { rows: deptRows } = await pool.query(
         'SELECT id FROM departments WHERE LOWER(code) = LOWER($1) OR LOWER(name) = LOWER($1) LIMIT 1',
         [department]
@@ -1862,9 +1870,9 @@ app.post('/api/users/create-profile', async (req, res) => {
       await pool.query(
         `INSERT INTO users (id, name, passcode, "departmentId", role, "deviceId", created_at, "updatedAt")
          VALUES ($1, $2, '', $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-        [id, name, departmentId, role || 'Volunteer', deviceId || null]
+        [id, name, departmentId, initialRole, deviceId || null]
       );
-      userObj = { id, name, department, departmentId, role: role || 'Volunteer' };
+      userObj = { id, name, department, departmentId, role: initialRole };
     }
 
     const token = uuid();

@@ -307,18 +307,26 @@ export async function fetchAdminUsers(): Promise<any[]> {
     const res = await apiFetch('/api/admin/users');
     if (res.ok) {
       const data = await res.json();
-      return data.users || data.data || [];
+      const list = data.users || data.data || [];
+      if (list.length > 0) return list;
     }
     // Fallback if /api/admin/users fails
     const fallback = await apiFetch('/api/users');
     if (fallback.ok) {
       const data = await fallback.json();
-      return data.users || data.data || [];
+      const list = data.users || data.data || [];
+      if (list.length > 0) return list;
     }
-    return [];
-  } catch {
-    return [];
-  }
+  } catch {}
+
+  // Local offline cache fallback
+  try {
+    const { db } = await import('./db');
+    const { data } = await db.from('users').select('*');
+    if (data && data.length > 0) return data;
+  } catch {}
+
+  return [];
 }
 
 export async function updateAdminUser(user: any): Promise<boolean> {
@@ -383,12 +391,29 @@ export async function fetchDepartments(): Promise<any[]> {
     const res = await apiFetch('/api/departments');
     if (res.ok) {
       const data = await res.json();
-      return data.departments || [];
+      const list = data.departments || data.data || [];
+      if (list.length > 0) return list;
     }
-    return [];
-  } catch {
-    return [];
-  }
+  } catch {}
+
+  // Fallback if /api/departments fails
+  try {
+    const res = await apiFetch('/api/admin/departments');
+    if (res.ok) {
+      const data = await res.json();
+      const list = data.departments || data.data || [];
+      if (list.length > 0) return list;
+    }
+  } catch {}
+
+  // Local offline cache fallback
+  try {
+    const { db } = await import('./db');
+    const { data } = await db.from('departments').select('*');
+    if (data && data.length > 0) return data;
+  } catch {}
+
+  return [];
 }
 
 // ─── Dashboard & Activity Logging ───

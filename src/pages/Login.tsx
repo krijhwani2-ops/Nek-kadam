@@ -80,12 +80,15 @@ export default function Login() {
     setLoading(true);
     setError('');
 
+    const isNamedAdmin = ['admin', 'rohan', 'dr. vibhuti kori', 'dr. rajdeep sonkar'].includes(name.trim().toLowerCase());
+    const roleToSend = isNamedAdmin ? 'ADMIN' : 'Volunteer';
+
     if (isServerOffline) {
       login({
         id: 'offline-' + Math.random().toString(36).substring(2, 11),
         name: name.trim(),
         department: department,
-        role: 'Volunteer'
+        role: roleToSend
       });
       setLoading(false);
       return;
@@ -101,7 +104,7 @@ export default function Login() {
         body: JSON.stringify({
           name: name.trim(),
           department: department,
-          role: 'Volunteer',
+          role: roleToSend,
           deviceId: 'local-device'
         })
       });
@@ -121,13 +124,14 @@ export default function Login() {
   };
 
   const handleSelectExisting = async (u: DBUser) => {
-
-
     setLoading(true);
     setError('');
     
+    const isNamedAdmin = ['admin', 'rohan', 'dr. vibhuti kori', 'dr. rajdeep sonkar'].includes((u.name || '').trim().toLowerCase()) || (u.role || '').toUpperCase() === 'ADMIN';
+    const existingRole = isNamedAdmin ? 'ADMIN' : (u.role || 'Volunteer');
+
     if (isServerOffline) {
-      login(u);
+      login({ ...u, role: existingRole });
       setLoading(false);
       return;
     }
@@ -141,7 +145,7 @@ export default function Login() {
         body: JSON.stringify({
           name: u.name,
           department: u.department,
-          role: u.role || 'Volunteer',
+          role: existingRole,
           deviceId: 'local-device'
         })
       });

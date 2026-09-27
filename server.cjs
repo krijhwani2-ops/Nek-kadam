@@ -2004,15 +2004,28 @@ app.post('/api/users/create-profile', (req, res) => {
   if (!name || !department) return res.status(400).json({ error: 'Missing name or department' });
 
   try {
-    let user = db.prepare('SELECT * FROM users WHERE LOWER(name) = LOWER(?) AND department = ?').get(name, department);
+    const isNamedAdmin = ['admin', 'rohan', 'dr. vibhuti kori', 'dr. rajdeep sonkar'].includes(name.trim().toLowerCase());
+    
+    // Look up user by name (case-insensitive), prioritizing ADMIN role if duplicate entries exist
+    let user = db.prepare(`
+      SELECT * FROM users 
+      WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))
+      ORDER BY CASE WHEN UPPER(role) = 'ADMIN' THEN 0 ELSE 1 END, created_at ASC
+      LIMIT 1
+    `).get(name);
+
+    const effectiveRole = isNamedAdmin ? 'ADMIN' : (user?.role || role || 'Volunteer');
+
     if (!user) {
       const id = uuid();
-      // Insert user without passcode
       db.prepare(`
         INSERT INTO users (id, name, passcode, department, role, deviceId, isActive, updatedAt)
         VALUES (?, ?, '', ?, ?, ?, 1, datetime('now'))
-      `).run(id, name, department, role || 'Volunteer', deviceId || null);
+      `).run(id, name, department, effectiveRole, deviceId || null);
       user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    } else if (isNamedAdmin && user.role !== 'ADMIN') {
+      db.prepare("UPDATE users SET role = 'ADMIN' WHERE id = ?").run(user.id);
+      user.role = 'ADMIN';
     }
 
     const token = uuid();
@@ -2025,7 +2038,7 @@ app.post('/api/users/create-profile', (req, res) => {
       lastActiveTime: Date.now()
     });
 
-    res.json({ success: true, token, user: { id: user.id, name: user.name, department: user.department, role: user.role || 'Volunteer' } });
+    res.json({ success: true, token, user: { id: user.id, name: user.name, department: user.department || department, role: user.role || 'Volunteer' } });
     if (req.io) req.io.emit('db_changed', { table: 'users' });
   } catch (e) {
     console.error('[CREATE PROFILE ERROR SQLITE]', e);
