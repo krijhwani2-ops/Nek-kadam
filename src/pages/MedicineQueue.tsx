@@ -456,7 +456,7 @@ export default function MedicineQueue() {
               const next = toggleAudioMute();
               setMuted(next);
             }}
-            title={muted ? 'Unmute Dispatch Chime' : 'Mute Dispatch Chime'}
+            aria-label={muted ? 'Unmute Dispatch Chime' : 'Mute Dispatch Chime'} title={muted ? 'Unmute Dispatch Chime' : 'Mute Dispatch Chime'}
             className={`p-3 rounded-xl transition-all border flex items-center gap-2 text-xs font-black uppercase tracking-wider ${
               muted 
                 ? 'bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20' 
@@ -473,7 +473,7 @@ export default function MedicineQueue() {
               unlockAudioContext();
               playPharmacyChime();
             }}
-            title="Test Chime Sound"
+            aria-label="Test Chime Sound" title="Test Chime Sound"
             className="p-3 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 transition-all border border-slate-700/50 flex items-center gap-2 text-xs font-black uppercase tracking-wider"
           >
             <Volume2 size={18} className="text-amber-400" />
