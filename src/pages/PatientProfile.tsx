@@ -1059,11 +1059,11 @@ export default function PatientProfile() {
                 </div>
                 <div className="flex gap-1.5">
                   {medicineGroups.length > 1 && (
-                    <button type="button" onClick={() => removeGroup(activeGroupIndex)} className="p-2 bg-red-50 dark:bg-red-950/20 text-red-500 dark:text-red-400 rounded-xl hover:bg-red-500 dark:hover:bg-red-600 hover:text-white transition-all border border-red-100 dark:border-red-900/30 shadow-sm">
+                    <button aria-label="Remove group" type="button" onClick={() => removeGroup(activeGroupIndex)} className="p-2 bg-red-50 dark:bg-red-950/20 text-red-500 dark:text-red-400 rounded-xl hover:bg-red-500 dark:hover:bg-red-600 hover:text-white transition-all border border-red-100 dark:border-red-900/30 shadow-sm">
                       <Trash2 size={16} />
                     </button>
                   )}
-                  <button type="button" onClick={addGroup} className="p-2 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-500 dark:text-emerald-400 rounded-xl hover:bg-emerald-500 dark:hover:bg-emerald-600 hover:text-white transition-all border border-emerald-100 dark:border-emerald-900/30 shadow-sm">
+                  <button aria-label="Add group" type="button" onClick={addGroup} className="p-2 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-500 dark:text-emerald-400 rounded-xl hover:bg-emerald-500 dark:hover:bg-emerald-600 hover:text-white transition-all border border-emerald-100 dark:border-emerald-900/30 shadow-sm">
                     <Plus size={16} />
                   </button>
                 </div>
@@ -1190,7 +1190,7 @@ export default function PatientProfile() {
                                <span className="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[9px] font-black px-2 py-0.5 rounded-lg">x{med.quantity}</span>
                             </div>
                           </div>
-                          <button type="button" onClick={() => {
+                          <button aria-label="Remove medicine" type="button" onClick={() => {
                               const updated = [...medicineGroups];
                               updated[activeGroupIndex].meds = updated[activeGroupIndex].meds.filter(m => m.code !== med.code);
                               setMedicineGroups(updated);
@@ -1447,11 +1447,11 @@ export default function PatientProfile() {
                       </div>
                       <div className="flex gap-1.5">
                         {editVisitMeds.length > 1 && (
-                          <button type="button" onClick={() => removeEditGroup(editActiveGroupIndex)} className="p-2 bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 rounded-lg hover:bg-red-500 dark:hover:bg-red-600 hover:text-white transition-all">
+                          <button aria-label="Remove group" type="button" onClick={() => removeEditGroup(editActiveGroupIndex)} className="p-2 bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 rounded-lg hover:bg-red-500 dark:hover:bg-red-600 hover:text-white transition-all">
                             <Trash2 size={14} />
                           </button>
                         )}
-                        <button type="button" onClick={addEditGroup} className="p-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 dark:text-emerald-400 rounded-lg hover:bg-emerald-500 dark:hover:bg-emerald-600 hover:text-white transition-all">
+                        <button aria-label="Add group" type="button" onClick={addEditGroup} className="p-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 dark:text-emerald-400 rounded-lg hover:bg-emerald-500 dark:hover:bg-emerald-600 hover:text-white transition-all">
                           <Plus size={14} />
                         </button>
                       </div>
