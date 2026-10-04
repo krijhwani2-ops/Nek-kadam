@@ -278,7 +278,7 @@ export default function Settings() {
             </div>
           </div>
           <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-            Latest Build v1.5.0 (5.2 MB)
+            Latest Build v1.5.1 (5.2 MB)
           </span>
         </div>
 
@@ -290,11 +290,11 @@ export default function Settings() {
             <div className="flex flex-col sm:flex-row gap-3">
               <a
                 href={`${getBaseUrl()}/apk/nek-kadam.apk`}
-                download="nek-kadam-v1.5.0.apk"
+                download="nek-kadam-v1.5.1.apk"
                 className="flex-1 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-blue-600/15 flex items-center justify-center gap-2 transition-all"
               >
                 <Download size={16} />
-                Direct Download APK (v1.5.0)
+                Direct Download APK (v1.5.1)
               </a>
               <a
                 href="https://nek-kadam.onrender.com/apk/nek-kadam.apk"
