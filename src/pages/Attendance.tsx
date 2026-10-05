@@ -237,7 +237,12 @@ export default function Attendance() {
             <p className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest">{safeFormatDate(date, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={loadData} className="p-2 bg-slate-50 dark:bg-slate-800 rounded-lg text-slate-400 dark:text-slate-500 active:bg-slate-100 dark:active:bg-slate-700">
+            <button
+              onClick={loadData}
+              className="p-2 bg-slate-50 dark:bg-slate-800 rounded-lg text-slate-400 dark:text-slate-500 active:bg-slate-100 dark:active:bg-slate-700"
+              aria-label="Refresh attendance data"
+              title="Refresh"
+            >
               <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
             </button>
             <input 
@@ -323,7 +328,12 @@ export default function Attendance() {
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden flex flex-col">
             <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <h3 className="font-black text-slate-800 dark:text-slate-100">Create New Batch</h3>
-              <button onClick={() => setShowBatchModal(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400">
+              <button
+                onClick={() => setShowBatchModal(false)}
+                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400"
+                aria-label="Close"
+                title="Close"
+              >
                 <X size={20} />
               </button>
             </div>
@@ -365,7 +375,12 @@ export default function Attendance() {
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <h3 className="font-black text-slate-800 dark:text-slate-100">Add Child</h3>
-              <button onClick={() => setShowEnroll(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400">
+              <button
+                onClick={() => setShowEnroll(false)}
+                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400"
+                aria-label="Close"
+                title="Close"
+              >
                 <X size={20} />
               </button>
             </div>

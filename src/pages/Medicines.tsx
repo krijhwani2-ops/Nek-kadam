@@ -185,7 +185,12 @@ export default function Medicines() {
             <h2 className="text-lg font-extrabold text-brand-darkGreen dark:text-emerald-400 flex items-center gap-2">
               <Plus className="text-brand-green" /> Register New Medicine
             </h2>
-            <button onClick={() => setShowAddForm(false)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+            <button
+              onClick={() => setShowAddForm(false)}
+              className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+              aria-label="Close"
+              title="Close"
+            >
               <X size={18} className="text-slate-400" />
             </button>
           </div>
@@ -228,7 +233,12 @@ export default function Medicines() {
             <h2 className="text-lg font-extrabold text-brand-darkGreen dark:text-emerald-400 flex items-center gap-2">
               <FileText className="text-brand-green" /> Bulk Import Medicines
             </h2>
-            <button onClick={() => setShowBulkForm(false)} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+            <button
+              onClick={() => setShowBulkForm(false)}
+              className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+              aria-label="Close"
+              title="Close"
+            >
               <X size={18} className="text-slate-400" />
             </button>
           </div>
