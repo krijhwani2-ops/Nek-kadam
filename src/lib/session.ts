@@ -6,6 +6,7 @@ import { openDB } from 'idb';
 
 // Allow overriding the server IP for mobile connectivity
 const savedIp = typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_SERVER_IP') : null;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const SERVER_IP = savedIp || '192.168.29.180';
 const SERVER_PORT = 3001;
 
