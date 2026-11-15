@@ -125,7 +125,7 @@ export default function Inventory() {
             <h2 className="text-xl font-extrabold text-brand-darkGreen flex items-center gap-2">
               <Plus className="text-brand-green" /> Register New Medicine
             </h2>
-            <button onClick={() => setShowAddForm(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+            <button aria-label="Close add medicine form" onClick={() => setShowAddForm(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
               <X size={20} className="text-slate-400" />
             </button>
           </div>
@@ -245,6 +245,7 @@ export default function Inventory() {
                       {isEditing ? (
                         <div className="flex gap-2 justify-end">
                           <button
+                            aria-label="Save changes"
                             onClick={() => handleUpdate(med.code)}
                             className="p-2 bg-brand-green text-white rounded-xl hover:bg-brand-darkGreen transition-colors shadow-md shadow-brand-green/20"
                             title="Save"
@@ -252,6 +253,7 @@ export default function Inventory() {
                             <Save size={20} />
                           </button>
                           <button
+                            aria-label="Cancel editing"
                             onClick={() => setEditingCode(null)}
                             className="p-2 bg-slate-200 text-slate-600 rounded-xl hover:bg-slate-300 transition-colors"
                             title="Cancel"
