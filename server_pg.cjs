@@ -134,7 +134,8 @@ app.use(express.static(path.join(__dirname, 'dist')));
 app.get('/api/version', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   const host = req.get('host') || 'nek-kadam.onrender.com';
-  const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+  const isHttps = req.headers['x-forwarded-proto'] === 'https' || !host.includes('localhost');
+  const protocol = isHttps ? 'https' : 'http';
   res.json({ 
     version: '1.5.3', 
     bundleUrl: `${protocol}://${host}/bundle.zip`,

@@ -75,31 +75,53 @@ export default function PatientsList() {
           (window as any).__nk_patients_cache = list;
         }
         setLoading(false);
-      } else {
-        // If local cache is empty (fresh APK install), fetch directly from server
+      }
+
+      // If local cache is empty or has 0 patients, fetch directly from cloud server
+      if (list.length === 0) {
         try {
           const { getBaseUrl } = await import('../lib/session');
           const token = localStorage.getItem('nk_token') || '';
-          const base = getBaseUrl();
-          const res = await fetch(`${base}/rpc/query`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': token ? `Bearer ${token}` : 'Bearer mobile-staff'
-            },
-            body: JSON.stringify({ table: 'patients', select: '*' })
-          });
+          let base = getBaseUrl();
+          if (!base || base.includes('localhost') || base.includes('127.0.0.1')) {
+            base = 'https://nek-kadam.onrender.com';
+          }
 
-          if (res.ok) {
-            const json = await res.json().catch(() => ({}));
-            const remoteList = json.data || [];
-            if (remoteList.length > 0) {
-              setPatients(remoteList);
-              if (typeof window !== 'undefined') {
-                (window as any).__nk_patients_cache = remoteList;
+          const endpoints = [
+            `${base}/rpc/query`,
+            'https://nek-kadam.onrender.com/rpc/query'
+          ];
+
+          for (const ep of endpoints) {
+            try {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 6000);
+              const res = await fetch(ep, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': token ? `Bearer ${token}` : 'Bearer mobile-staff'
+                },
+                body: JSON.stringify({ table: 'patients', select: '*' }),
+                signal: controller.signal
+              });
+              clearTimeout(timeoutId);
+
+              if (res.ok) {
+                const json = await res.json().catch(() => ({}));
+                const remoteList = json.data || [];
+                if (remoteList.length > 0) {
+                  setPatients(remoteList);
+                  if (typeof window !== 'undefined') {
+                    (window as any).__nk_patients_cache = remoteList;
+                  }
+                  const { setCache } = await import('../lib/db');
+                  await setCache('nk_full_patients', remoteList);
+                  break;
+                }
               }
-              const { setCache } = await import('../lib/db');
-              await setCache('nk_full_patients', remoteList);
+            } catch (epErr) {
+              console.warn('[PATIENTS FETCH NOTICE]', ep, epErr);
             }
           }
         } catch (_) {}

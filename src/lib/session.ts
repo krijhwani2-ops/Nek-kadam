@@ -3,6 +3,7 @@
 // Stores session in IndexedDB for offline persistence
 
 import { openDB } from 'idb';
+import { Capacitor } from '@capacitor/core';
 
 export interface DBUser {
   id: string;
@@ -145,34 +146,43 @@ export function getServerIp() {
   return localStorage.getItem('NEK_KADAM_SERVER_IP') || '192.168.29.180';
 }
 
-const CLOUD_URL = 'https://nek-kadam.onrender.com';
+export const CLOUD_URL = 'https://nek-kadam.onrender.com';
 
 export function checkIsCapacitor(): boolean {
   if (typeof window === 'undefined') return false;
+  try {
+    if (Capacitor.isNativePlatform()) return true;
+    const p = Capacitor.getPlatform();
+    if (p === 'android' || p === 'ios') return true;
+  } catch {}
   const cap = (window as any)?.Capacitor;
-  if (cap) {
-    if (typeof cap.isNativePlatform === 'function' && cap.isNativePlatform()) return true;
-    if (cap.isNativePlatform === true) return true;
-    if (typeof cap.getPlatform === 'function') {
-      const p = cap.getPlatform();
-      if (p === 'android' || p === 'ios') return true;
-    }
-  }
+  if (cap?.isNativePlatform && cap.isNativePlatform()) return true;
   if (window.location.protocol === 'capacitor:' || window.location.protocol === 'ionic:') return true;
-  if (window.location.hostname === 'localhost' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && !window.location.port) {
-    return true;
+  if (/Android|iPhone|iPad|iPod/i.test(navigator?.userAgent || '')) {
+    if (window.location.hostname === 'localhost' || !window.location.port) {
+      return true;
+    }
   }
   return false;
 }
 
 export function getBaseUrl(): string {
-  const mode = (typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_NETWORK_MODE') : null) || 'auto';
-  const savedIp = typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_SERVER_IP') : null;
   const isCapacitor = checkIsCapacitor();
+  const isMobileDevice = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+  const mode = (typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_NETWORK_MODE') : null) || ((isCapacitor || isMobileDevice) ? 'internet' : 'auto');
+  const savedIp = typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_SERVER_IP') : null;
+
+  // On native Capacitor APK or mobile phone, ALWAYS use Cloud URL unless explicitly set to a valid remote LAN IP
+  if (isCapacitor || isMobileDevice) {
+    if (mode === 'lan' && savedIp && savedIp !== 'localhost' && savedIp !== '127.0.0.1' && isPrivateNetwork(savedIp)) {
+      return `http://${savedIp}:${SERVER_PORT}`;
+    }
+    return CLOUD_URL;
+  }
 
   // 1. Explicit Internet Mode: always use Cloud URL
   if (mode === 'internet') {
-    if (!isCapacitor && typeof window !== 'undefined' && window.location.hostname && !isPrivateNetwork(window.location.hostname)) {
+    if (typeof window !== 'undefined' && window.location.hostname && !isPrivateNetwork(window.location.hostname)) {
       return ''; // Already on cloud web app -> relative
     }
     return CLOUD_URL;
@@ -181,7 +191,7 @@ export function getBaseUrl(): string {
   // 2. Explicit LAN Mode: always use LAN IP or localhost
   if (mode === 'lan') {
     if (savedIp) return `http://${savedIp}:${SERVER_PORT}`;
-    if (!isCapacitor && typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
       return `http://localhost:${SERVER_PORT}`;
     }
     if (typeof window !== 'undefined' && window.location.hostname && isPrivateNetwork(window.location.hostname)) {
@@ -190,23 +200,15 @@ export function getBaseUrl(): string {
     return `http://192.168.29.180:${SERVER_PORT}`;
   }
 
-  // 3. Auto Mode (default)
-  // For mobile / Capacitor APK: default to Cloud URL so it syncs live with the web app
-  if (isCapacitor) {
-    return CLOUD_URL;
-  }
-
-  // Server machine local browser (localhost)
+  // 3. Auto Mode (default for desktop browsers)
   if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
     return `http://localhost:${SERVER_PORT}`;
   }
 
-  // Access in browser on LAN (e.g. phone browser on http://192.168.29.180:5173)
   if (typeof window !== 'undefined' && window.location.hostname) {
     if (isPrivateNetwork(window.location.hostname)) {
       return `${window.location.protocol}//${window.location.hostname}:${SERVER_PORT}`;
     }
-    // Public cloud domain (e.g. Render) -> relative same origin
     return '';
   }
 
@@ -291,7 +293,7 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}): Pro
   }
   const baseUrl = getBaseUrl();
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
 
   let res = await fetch(`${baseUrl}${endpoint}`, {
     ...options,

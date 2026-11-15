@@ -1,6 +1,6 @@
 // ─── Nek Kadam: Offline-First Database Client ───
 // Architecture: LOCAL FIRST. All reads/writes go to IndexedDB.
-import { getStoredSession, setStoredSession, getBaseUrl, isPrivateNetwork } from './session';
+import { getStoredSession, setStoredSession, getBaseUrl, isPrivateNetwork, checkIsCapacitor } from './session';
 // Server sync happens ONLY on manual "Sync" button press.
 // No silent failures. Every operation is try-catched.
 
@@ -86,7 +86,10 @@ export function getServerIp() {
 }
 
 function getApiUrl(): string {
-  const base = getBaseUrl();
+  let base = getBaseUrl();
+  if (checkIsCapacitor() && (!base || base.includes('localhost') || base.includes('127.0.0.1'))) {
+    base = CLOUD_URL;
+  }
   return base ? `${base}/rpc` : '/rpc';
 }
 
@@ -503,17 +506,34 @@ export async function checkServerOnline(): Promise<boolean> {
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
+    const timeout = setTimeout(() => controller.abort(), 4000);
     const res = await fetch(urlToPing, { signal: controller.signal });
     clearTimeout(timeout);
-    _serverOnline = res.ok;
-    _lastCheck = Date.now();
-    return res.ok;
-  } catch {
-    _serverOnline = false;
-    _lastCheck = Date.now();
-    return false;
+    if (res.ok) {
+      _serverOnline = true;
+      _lastCheck = Date.now();
+      return true;
+    }
+  } catch {}
+
+  // Fallback check to Cloud URL
+  if (base !== CLOUD_URL) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
+      const res = await fetch(`${CLOUD_URL}/api/health`, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (res.ok) {
+        _serverOnline = true;
+        _lastCheck = Date.now();
+        return true;
+      }
+    } catch {}
   }
+
+  _serverOnline = false;
+  _lastCheck = Date.now();
+  return false;
 }
 
 // ─── Sync Engine ───

@@ -116,23 +116,39 @@ function OTAUpdater() {
       if (typeof navigator !== 'undefined' && !navigator.onLine) return;
 
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000);
-        const res = await fetch(`${getBaseUrl()}/api/version`, { cache: 'no-store', signal: controller.signal });
-        clearTimeout(timeoutId);
-        if (!res.ok) return;
-        const data: UpdateInfo = await res.json();
-        if (!isMounted || !data?.version) return;
+        const endpoints = [
+          'https://nek-kadam.onrender.com/api/version',
+          `${getBaseUrl()}/api/version`
+        ];
 
-        if (data.version !== APP_VERSION) {
+        let updateData: UpdateInfo | null = null;
+        for (const ep of endpoints) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 6000);
+            const res = await fetch(ep, { cache: 'no-store', signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (res.ok) {
+              const data: UpdateInfo = await res.json();
+              if (data && data.version) {
+                updateData = data;
+                break;
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (!isMounted || !updateData?.version) return;
+
+        if (updateData.version !== APP_VERSION) {
           isUpdatingRef.current = true;
-          console.log(`[SILENT OTA] Internet connected. New version detected (v${data.version} vs current v${APP_VERSION}). Downloading silently without asking...`);
-          setUpdatingVersion(data.version);
+          console.log(`[SILENT OTA] Internet connected. New version detected (v${updateData.version} vs current v${APP_VERSION}). Downloading silently without asking...`);
+          setUpdatingVersion(updateData.version);
 
           if (Capacitor.isNativePlatform()) {
             try {
               const { LiveUpdate } = await import('@capawesome/capacitor-live-update');
-              const bundleId = (data.bundleId || data.version || '').replace(/[^a-zA-Z0-9._-]/g, '_');
+              const bundleId = (updateData.bundleId || updateData.version || '').replace(/[^a-zA-Z0-9._-]/g, '_');
 
               // Check if bundle already downloaded on device
               const downloaded = await LiveUpdate.getDownloadedBundles().catch(() => ({ bundleIds: [] }));
@@ -149,11 +165,11 @@ function OTAUpdater() {
                 return;
               }
 
-              // Download new bundle in background with zero prompts or confirmation needed
-              const rawBundleUrl = data.bundleUrl || '/bundle.zip';
-              const bundleUrl = rawBundleUrl.startsWith('http://') || rawBundleUrl.startsWith('https://')
+              // Download new bundle in background via verified HTTPS Cloud URL
+              const rawBundleUrl = updateData.bundleUrl || '/bundle.zip';
+              const bundleUrl = rawBundleUrl.startsWith('https://')
                 ? rawBundleUrl
-                : `${getBaseUrl()}${rawBundleUrl.startsWith('/') ? '' : '/'}${rawBundleUrl}`;
+                : (rawBundleUrl.startsWith('http://') ? rawBundleUrl.replace('http://', 'https://') : `https://nek-kadam.onrender.com${rawBundleUrl.startsWith('/') ? '' : '/'}${rawBundleUrl}`);
 
               await LiveUpdate.downloadBundle({
                 url: bundleUrl,
@@ -163,7 +179,7 @@ function OTAUpdater() {
 
               // Set as active bundle and reload silently
               await LiveUpdate.setNextBundle({ bundleId });
-              console.log('[SILENT OTA] Update downloaded and primed. Reloading app silently into v' + data.version);
+              console.log('[SILENT OTA] Update downloaded and primed. Reloading app silently into v' + updateData.version);
 
               setTimeout(async () => {
                 try {
@@ -175,7 +191,7 @@ function OTAUpdater() {
             } catch (err: any) {
               const msg = err?.message || String(err);
               if (msg.includes('already exists') || msg.includes('BUNDLE_EXISTS')) {
-                const bundleId = (data.bundleId || data.version || '').replace(/[^a-zA-Z0-9._-]/g, '_');
+                const bundleId = (updateData.bundleId || updateData.version || '').replace(/[^a-zA-Z0-9._-]/g, '_');
                 try {
                   const { LiveUpdate } = await import('@capawesome/capacitor-live-update');
                   await LiveUpdate.setNextBundle({ bundleId });
