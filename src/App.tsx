@@ -94,7 +94,7 @@ function BackButtonHandler() {
   return null;
 }
 
-const APP_VERSION = "1.5.1"; // Current release version
+const APP_VERSION = "1.5.2"; // Current release version
 
 interface UpdateInfo {
   version: string;
@@ -271,7 +271,10 @@ function Sidebar() {
           const ip = getServerIp() || '192.168.29.180';
           setMobileUrl(`http://${ip}:5173`);
         }
-        const presenceRes = await fetch(`${getBaseUrl()}/api/presence`);
+        const presenceController = new AbortController();
+        const pTimeoutId = setTimeout(() => presenceController.abort(), 3500);
+        const presenceRes = await fetch(`${getBaseUrl()}/api/presence`, { signal: presenceController.signal });
+        clearTimeout(pTimeoutId);
         const pJson = await presenceRes.json();
         if (pJson.data) {
            setOnlineUsers(pJson.data.filter((u: any) => u.isOnline));

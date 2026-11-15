@@ -4,6 +4,121 @@
 
 import { openDB } from 'idb';
 
+export interface DBUser {
+  id: string;
+  name: string;
+  department: string;
+  role?: string;
+  hasPasscode?: number;
+}
+
+export const STANDARD_FALLBACK_USERS: DBUser[] = [
+  { id: 'usr-admin', name: 'Admin', department: 'Reception', role: 'ADMIN' },
+  { id: 'usr-rohan', name: 'Rohan', department: 'Medical', role: 'ADMIN' },
+  { id: 'usr-vibhuti', name: 'Dr. Vibhuti Kori', department: 'Medical', role: 'ADMIN' },
+  { id: 'usr-rajdeep', name: 'Dr. Rajdeep Sonkar', department: 'Medical', role: 'ADMIN' },
+  { id: 'usr-volunteers', name: 'Volunteers', department: 'Service', role: 'Volunteer' },
+  { id: 'usr-pharmacy', name: 'Pharmacy', department: 'Medicine', role: 'Volunteer' },
+  { id: 'usr-triage', name: 'Triage', department: 'Reception', role: 'Volunteer' },
+];
+
+export const STANDARD_DEPARTMENTS = [
+  { id: 'dept-rec', code: 'REC', name: 'Reception' },
+  { id: 'dept-med', code: 'MED', name: 'Medical' },
+  { id: 'dept-pharm', code: 'PHARM', name: 'Medicine' },
+  { id: 'dept-edu', code: 'EDU', name: 'Education' },
+  { id: 'dept-srv', code: 'SRV', name: 'Service' },
+  { id: 'dept-comp', code: 'COMP', name: 'Computer Classes' },
+  { id: 'dept-camp', code: 'CAMP', name: 'Summer Camp' },
+  { id: 'dept-oth', code: 'OTH', name: 'Other' },
+];
+
+export const CACHED_USERS_KEY = 'nk_cached_users';
+
+export function getCachedUsers(): DBUser[] {
+  if (typeof window === 'undefined') return STANDARD_FALLBACK_USERS;
+  try {
+    const raw = localStorage.getItem(CACHED_USERS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const seen = new Set<string>();
+        const merged: DBUser[] = [];
+        for (const u of parsed) {
+          const key = (u.name || '').trim().toLowerCase();
+          if (key && !seen.has(key)) {
+            seen.add(key);
+            merged.push(u);
+          }
+        }
+        for (const fb of STANDARD_FALLBACK_USERS) {
+          const key = fb.name.trim().toLowerCase();
+          if (!seen.has(key)) {
+            seen.add(key);
+            merged.push(fb);
+          }
+        }
+        return merged;
+      }
+    }
+  } catch (_) {}
+  return STANDARD_FALLBACK_USERS;
+}
+
+export function setCachedUsers(users: DBUser[]): void {
+  if (typeof window === 'undefined' || !Array.isArray(users)) return;
+  try {
+    localStorage.setItem(CACHED_USERS_KEY, JSON.stringify(users));
+  } catch (_) {}
+}
+
+export async function fetchLoginUsers(timeoutMs = 2500): Promise<{ users: DBUser[]; isOffline: boolean }> {
+  const fallback = getCachedUsers();
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const token = (typeof window !== 'undefined' ? localStorage.getItem('nk_token') : '') || '';
+    const res = await fetch(`${getBaseUrl()}/api/users`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const json = await res.json().catch(() => ({}));
+      const rawUsers = json.data || json.users || [];
+      if (Array.isArray(rawUsers) && rawUsers.length > 0) {
+        const seen = new Set<string>();
+        const merged: DBUser[] = [];
+        for (const u of rawUsers) {
+          const key = (u.name || '').trim().toLowerCase();
+          if (key && !seen.has(key)) {
+            seen.add(key);
+            merged.push({
+              id: u.id || `usr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              name: u.name,
+              department: u.department || 'Medical',
+              role: u.role || 'Volunteer',
+              hasPasscode: u.hasPasscode
+            });
+          }
+        }
+        for (const fb of STANDARD_FALLBACK_USERS) {
+          const key = fb.name.trim().toLowerCase();
+          if (!seen.has(key)) {
+            seen.add(key);
+            merged.push(fb);
+          }
+        }
+        setCachedUsers(merged);
+        return { users: merged, isOffline: false };
+      }
+    }
+  } catch (_) {}
+
+  return { users: fallback, isOffline: true };
+}
+
 // Allow overriding the server IP for mobile connectivity
 const savedIp = typeof window !== 'undefined' ? localStorage.getItem('NEK_KADAM_SERVER_IP') : null;
 const SERVER_IP = savedIp || '192.168.29.180';
@@ -326,7 +441,7 @@ export async function fetchAdminUsers(): Promise<any[]> {
     if (data && data.length > 0) return data;
   } catch {}
 
-  return [];
+  return getCachedUsers();
 }
 
 export async function updateAdminUser(user: any): Promise<boolean> {
@@ -413,7 +528,7 @@ export async function fetchDepartments(): Promise<any[]> {
     if (data && data.length > 0) return data;
   } catch {}
 
-  return [];
+  return STANDARD_DEPARTMENTS;
 }
 
 // ─── Dashboard & Activity Logging ───

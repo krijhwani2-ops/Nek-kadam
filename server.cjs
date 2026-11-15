@@ -102,9 +102,9 @@ app.get('/api/version', (req, res) => {
   const host = req.get('host') || 'nek-kadam.onrender.com';
   const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
   res.json({ 
-    version: '1.5.1', 
+    version: '1.5.2', 
     bundleUrl: `${protocol}://${host}/bundle.zip`,
-    bundleId: '1.5.1',
+    bundleId: '1.5.2',
     apkUrl: `${protocol}://${host}/apk/nek-kadam.apk` 
   });
 });
@@ -535,6 +535,7 @@ const PUBLIC_PATHS = [
   '/api/pc-login',
   '/api/users',
   '/api/users/create-profile',
+  '/api/departments',
   '/api/version',
   '/api/health',
   '/api/backup/download',
@@ -1074,6 +1075,38 @@ app.post('/api/tokens/priority', (req, res) => {
   }
 });
 
+const STANDARD_FALLBACK_USERS = [
+  { id: 'usr-admin', name: 'Admin', department: 'Reception', deptCode: 'REC', role: 'ADMIN' },
+  { id: 'usr-rohan', name: 'Rohan', department: 'Medical', deptCode: 'MED', role: 'ADMIN' },
+  { id: 'usr-vibhuti', name: 'Dr. Vibhuti Kori', department: 'Medical', deptCode: 'MED', role: 'ADMIN' },
+  { id: 'usr-rajdeep', name: 'Dr. Rajdeep Sonkar', department: 'Medical', deptCode: 'MED', role: 'ADMIN' },
+  { id: 'usr-volunteers', name: 'Volunteers', department: 'Service', deptCode: 'SRV', role: 'Volunteer' },
+  { id: 'usr-pharmacy', name: 'Pharmacy', department: 'Medicine', deptCode: 'PHARM', role: 'Volunteer' },
+  { id: 'usr-triage', name: 'Triage', department: 'Reception', deptCode: 'REC', role: 'Volunteer' },
+];
+
+function mergeWithFallbackUsers(rawList) {
+  const seen = new Set();
+  const merged = [];
+  if (Array.isArray(rawList)) {
+    for (const u of rawList) {
+      const key = (u.name || '').trim().toLowerCase();
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        merged.push(u);
+      }
+    }
+  }
+  for (const fb of STANDARD_FALLBACK_USERS) {
+    const key = fb.name.trim().toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      merged.push(fb);
+    }
+  }
+  return merged;
+}
+
 app.get('/api/users', (req, res) => {
   try {
     const users = db.prepare(`
@@ -1085,10 +1118,11 @@ app.get('/api/users', (req, res) => {
       GROUP BY LOWER(TRIM(u.name))
       ORDER BY u.name
     `).all();
-    res.json({ data: users, users: users });
+    const merged = mergeWithFallbackUsers(users);
+    res.json({ data: merged, users: merged });
   } catch (err) {
-    console.error('[GET /api/users] error:', err);
-    res.status(500).json({ error: 'Database error' });
+    console.error('[GET /api/users] error (returning standard fallbacks):', err);
+    res.json({ data: STANDARD_FALLBACK_USERS, users: STANDARD_FALLBACK_USERS, fallback: true });
   }
 });
 

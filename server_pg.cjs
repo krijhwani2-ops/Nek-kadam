@@ -136,9 +136,9 @@ app.get('/api/version', (req, res) => {
   const host = req.get('host') || 'nek-kadam.onrender.com';
   const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
   res.json({ 
-    version: '1.5.1', 
+    version: '1.5.2', 
     bundleUrl: `${protocol}://${host}/bundle.zip`,
-    bundleId: '1.5.1',
+    bundleId: '1.5.2',
     apkUrl: `${protocol}://${host}/apk/nek-kadam.apk` 
   });
 });
@@ -278,6 +278,7 @@ const PUBLIC_PATHS_PG = [
   '/api/pc-login',
   '/api/users',
   '/api/users/create-profile',
+  '/api/departments',
   '/api/version',
   '/api/health',
   '/api/backup/download',
@@ -359,6 +360,38 @@ async function hydrateUserFromBearer(req, res, next) {
 app.use('/rpc', hydrateUserFromBearer, requireAuth);
 app.use('/api', hydrateUserFromBearer, requireAuth);
 
+const STANDARD_FALLBACK_USERS = [
+  { id: 'usr-admin', name: 'Admin', department: 'Reception', deptCode: 'REC', role: 'ADMIN' },
+  { id: 'usr-rohan', name: 'Rohan', department: 'Medical', deptCode: 'MED', role: 'ADMIN' },
+  { id: 'usr-vibhuti', name: 'Dr. Vibhuti Kori', department: 'Medical', deptCode: 'MED', role: 'ADMIN' },
+  { id: 'usr-rajdeep', name: 'Dr. Rajdeep Sonkar', department: 'Medical', deptCode: 'MED', role: 'ADMIN' },
+  { id: 'usr-volunteers', name: 'Volunteers', department: 'Service', deptCode: 'SRV', role: 'Volunteer' },
+  { id: 'usr-pharmacy', name: 'Pharmacy', department: 'Medicine', deptCode: 'PHARM', role: 'Volunteer' },
+  { id: 'usr-triage', name: 'Triage', department: 'Reception', deptCode: 'REC', role: 'Volunteer' },
+];
+
+function mergeWithFallbackUsers(rawList) {
+  const seen = new Set();
+  const merged = [];
+  if (Array.isArray(rawList)) {
+    for (const u of rawList) {
+      const key = (u.name || '').trim().toLowerCase();
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        merged.push(u);
+      }
+    }
+  }
+  for (const fb of STANDARD_FALLBACK_USERS) {
+    const key = fb.name.trim().toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      merged.push(fb);
+    }
+  }
+  return merged;
+}
+
 // ─── Users (login picker) ───
 app.get('/api/users', async (_req, res) => {
   try {
@@ -377,12 +410,18 @@ app.get('/api/users', async (_req, res) => {
       deptCode: r.deptcode || '',
       role: r.role || 'Volunteer',
     }));
+    const merged = mergeWithFallbackUsers(mapped);
     res.json({
-      data: mapped,
-      users: mapped,
+      data: merged,
+      users: merged,
     });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.warn('[GET /api/users] DB notice (returning standard fallbacks):', e.message);
+    res.json({
+      data: STANDARD_FALLBACK_USERS,
+      users: STANDARD_FALLBACK_USERS,
+      fallback: true
+    });
   }
 });
 

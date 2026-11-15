@@ -1,16 +1,8 @@
 import { useState, useEffect } from 'react';
 import { HeartPulse, ChevronRight, UserPlus, Server } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { getBaseUrl, getServerIp, setServerIp } from '../lib/session';
+import { getBaseUrl, getServerIp, setServerIp, DBUser, STANDARD_FALLBACK_USERS, getCachedUsers, setCachedUsers, fetchLoginUsers } from '../lib/session';
 import { QRCodeSVG } from 'qrcode.react';
-
-interface DBUser {
-  id: string;
-  name: string;
-  department: string;
-  role?: string;
-  hasPasscode?: number;
-}
 
 const DEPARTMENTS = [
   'Reception',
@@ -20,52 +12,81 @@ const DEPARTMENTS = [
   'Service',
   'Computer Classes',
   'Summer Camp',
+  'Campaign',
   'Other'
 ];
 
 export default function Login() {
   const { login } = useAuth();
-  const [users, setUsers] = useState<DBUser[]>([]);
+  const [users, setUsers] = useState<DBUser[]>(() => getCachedUsers());
   
   const [name, setName] = useState('');
   const [department, setDepartment] = useState('Medical');
   
   const [loading, setLoading] = useState(false);
-  const [fetching, setFetching] = useState(true);
+  const [fetching, setFetching] = useState(false);
   const [error, setError] = useState('');
   const [showExisting, setShowExisting] = useState(false);
+  const [manualNameMode, setManualNameMode] = useState(false);
   
   const [showConfig, setShowConfig] = useState(false);
   const [localIp, setLocalIp] = useState(getServerIp());
   const [isServerOffline, setIsServerOffline] = useState(false);
 
-
-
   useEffect(() => {
+    let isMounted = true;
     const fetchUsers = async () => {
+      // 1. Immediately read from IndexedDB users cache
       try {
-        const usersRes = await fetch(`${getBaseUrl()}/api/users`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('nk_token') || ''}` }
-        });
-        const usersJson = await usersRes.json();
-        const rawUsers = usersJson.data || usersJson.users || [];
-        const seen = new Set<string>();
-        const uniqueUsers = rawUsers.filter((u: any) => {
-          const key = (u.name || '').trim().toLowerCase();
-          if (!key || seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-        setUsers(uniqueUsers);
-        setIsServerOffline(false);
+        const { db } = await import('../lib/db');
+        const { data: cached } = await db.from('users').select('*');
+        if (isMounted && cached && cached.length > 0) {
+          const seen = new Set<string>();
+          const uniqueCached: DBUser[] = [];
+          for (const u of cached) {
+            const key = (u.name || '').trim().toLowerCase();
+            if (key && !seen.has(key)) {
+              seen.add(key);
+              uniqueCached.push(u);
+            }
+          }
+          for (const fb of STANDARD_FALLBACK_USERS) {
+            const key = fb.name.trim().toLowerCase();
+            if (!seen.has(key)) {
+              seen.add(key);
+              uniqueCached.push(fb);
+            }
+          }
+          if (uniqueCached.length > 0) {
+            setUsers(uniqueCached);
+          }
+        }
+      } catch (e) {
+        console.warn('[LOGIN] Local user cache note:', e);
+      }
+
+      // 2. Fetch live users from server with timeout
+      try {
+        const { users: liveUsers, isOffline } = await fetchLoginUsers(3000);
+        if (isMounted) {
+          if (liveUsers && liveUsers.length > 0) {
+            setUsers(liveUsers);
+          }
+          setIsServerOffline(isOffline);
+        }
       } catch (e: any) {
-        console.error('[LOAD ERROR]', e);
-        setIsServerOffline(true);
+        console.warn('[LOGIN FETCH NOTICE]', e?.message || e);
+        if (isMounted) {
+          setIsServerOffline(true);
+        }
       } finally {
-        setFetching(false);
+        if (isMounted) {
+          setFetching(false);
+        }
       }
     };
     fetchUsers();
+    return () => { isMounted = false; };
   }, []);
 
   const handleContinue = async (e?: React.FormEvent) => {
@@ -117,7 +138,14 @@ export default function Login() {
       console.log('[USER IDENTIFIED]:', result.user);
       login(result.user, result.token);
     } catch (err: any) {
-      setError(err.message || 'Server error. Profile identification failed.');
+      console.warn('[LOGIN NETWORK FALLBACK]', err);
+      // Seamless offline fallback so staff can always work
+      login({
+        id: 'local-' + Math.random().toString(36).substring(2, 11),
+        name: name.trim(),
+        department: department,
+        role: roleToSend
+      });
     } finally {
       setLoading(false);
     }
@@ -155,7 +183,8 @@ export default function Login() {
       }
       login(result.user, result.token);
     } catch (err: any) {
-      setError(err.message || 'Failed to initialize session for existing profile.');
+      console.warn('[LOGIN SELECT EXISTING FALLBACK]', err);
+      login({ ...u, role: existingRole });
     } finally {
       setLoading(false);
     }
@@ -256,12 +285,21 @@ export default function Login() {
                 <form onSubmit={handleContinue} className="space-y-6">
                   <div className="space-y-4">
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block ml-1">Your Name</label>
-                      {isServerOffline ? (
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block ml-1">Your Name</label>
+                        <button
+                          type="button"
+                          onClick={() => setManualNameMode(!manualNameMode)}
+                          className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 underline cursor-pointer"
+                        >
+                          {manualNameMode ? "← Select from staff list" : "+ Type custom name"}
+                        </button>
+                      </div>
+                      {isServerOffline || manualNameMode || users.length === 0 ? (
                         <input 
                           type="text" 
                           required
-                          placeholder="e.g. Rohan"
+                          placeholder="e.g. Dr. Rohan / Volunteer"
                           value={name}
                           onChange={e => setName(e.target.value)}
                           className="w-full px-5 py-4 bg-slate-900 border-2 border-slate-800 rounded-2xl outline-none font-bold text-white shadow-sm transition-all focus:border-emerald-500"
