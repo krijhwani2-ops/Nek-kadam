@@ -132,4 +132,35 @@ describe('Login & Session Robust Fallback Suite', () => {
     expect(codes).toContain('MED');
     expect(codes).toContain('PHARM');
   });
+
+  it('fetchLoginUsers handles 200 OK with empty users list by returning fallback users and isOffline: false', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ data: [] }),
+    });
+
+    const result = await fetchLoginUsers(500);
+    expect(result.isOffline).toBe(false);
+    expect(result.users.length).toBeGreaterThanOrEqual(7);
+    expect(result.users.some(u => u.name === 'Admin')).toBe(true);
+    expect(result.users.some(u => u.name === 'Dr. Vibhuti Kori')).toBe(true);
+  });
+
+  it('getCachedUsers safely handles corrupted JSON in localStorage', () => {
+    localStorage.setItem(CACHED_USERS_KEY, 'invalid-json{{{');
+    const users = getCachedUsers();
+    expect(users.length).toBeGreaterThanOrEqual(7);
+    expect(users.some(u => u.name === 'Dr. Vibhuti Kori')).toBe(true);
+  });
+
+  it('STANDARD_DEPARTMENTS contains all essential clinic departments', () => {
+    expect(STANDARD_DEPARTMENTS.length).toBeGreaterThanOrEqual(8);
+    const names = STANDARD_DEPARTMENTS.map(d => d.name);
+    expect(names).toContain('Reception');
+    expect(names).toContain('Medical');
+    expect(names).toContain('Medicine');
+    expect(names).toContain('Education');
+    expect(names).toContain('Service');
+  });
 });

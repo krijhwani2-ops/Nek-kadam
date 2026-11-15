@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { HeartPulse, ChevronRight, UserPlus, Server } from 'lucide-react';
+import { HeartPulse, ChevronRight, UserPlus, Server, ChevronDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getBaseUrl, getServerIp, setServerIp, DBUser, STANDARD_FALLBACK_USERS, getCachedUsers, setCachedUsers, fetchLoginUsers } from '../lib/session';
 import { QRCodeSVG } from 'qrcode.react';
@@ -19,6 +19,7 @@ const DEPARTMENTS = [
 export default function Login() {
   const { login } = useAuth();
   const [users, setUsers] = useState<DBUser[]>(() => getCachedUsers());
+  const displayUsers = users && users.length > 0 ? users : STANDARD_FALLBACK_USERS;
   
   const [name, setName] = useState('');
   const [department, setDepartment] = useState('Medical');
@@ -31,35 +32,27 @@ export default function Login() {
   
   const [showConfig, setShowConfig] = useState(false);
   const [localIp, setLocalIp] = useState(getServerIp());
-  const [isServerOffline, setIsServerOffline] = useState(false);
+  const [isServerOffline, setIsServerOffline] = useState(() => (typeof navigator !== 'undefined' ? !navigator.onLine : false));
+  const [isCheckingConnection, setIsCheckingConnection] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
     const fetchUsers = async () => {
-      // 1. Immediately read from IndexedDB users cache
+      // If browser is definitely offline, immediately switch to offline mode without waiting
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        if (isMounted) {
+          setIsServerOffline(true);
+          setIsCheckingConnection(false);
+          setFetching(false);
+        }
+        return;
+      }
+
+      // 1. Immediately read from local user cache
       try {
-        const { db } = await import('../lib/db');
-        const { data: cached } = await db.from('users').select('*');
+        const cached = getCachedUsers();
         if (isMounted && cached && cached.length > 0) {
-          const seen = new Set<string>();
-          const uniqueCached: DBUser[] = [];
-          for (const u of cached) {
-            const key = (u.name || '').trim().toLowerCase();
-            if (key && !seen.has(key)) {
-              seen.add(key);
-              uniqueCached.push(u);
-            }
-          }
-          for (const fb of STANDARD_FALLBACK_USERS) {
-            const key = fb.name.trim().toLowerCase();
-            if (!seen.has(key)) {
-              seen.add(key);
-              uniqueCached.push(fb);
-            }
-          }
-          if (uniqueCached.length > 0) {
-            setUsers(uniqueCached);
-          }
+          setUsers(cached);
         }
       } catch (e) {
         console.warn('[LOGIN] Local user cache note:', e);
@@ -67,7 +60,7 @@ export default function Login() {
 
       // 2. Fetch live users from server with timeout
       try {
-        const { users: liveUsers, isOffline } = await fetchLoginUsers(3000);
+        const { users: liveUsers, isOffline } = await fetchLoginUsers(2500);
         if (isMounted) {
           if (liveUsers && liveUsers.length > 0) {
             setUsers(liveUsers);
@@ -81,6 +74,7 @@ export default function Login() {
         }
       } finally {
         if (isMounted) {
+          setIsCheckingConnection(false);
           setFetching(false);
         }
       }
@@ -89,6 +83,23 @@ export default function Login() {
     return () => { isMounted = false; };
   }, []);
 
+  const saveToLocalCache = (userToCache: DBUser) => {
+    try {
+      const current = getCachedUsers();
+      const seen = new Set<string>();
+      const updated: DBUser[] = [userToCache];
+      seen.add(userToCache.name.trim().toLowerCase());
+      for (const u of current) {
+        const k = (u.name || '').trim().toLowerCase();
+        if (k && !seen.has(k)) {
+          seen.add(k);
+          updated.push(u);
+        }
+      }
+      setCachedUsers(updated);
+    } catch (_) {}
+  };
+
   const handleContinue = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!name.trim()) {
@@ -96,34 +107,16 @@ export default function Login() {
       return;
     }
 
-
-
     setLoading(true);
     setError('');
 
-    const isNamedAdmin = ['admin', 'rohan', 'dr. vibhuti kori', 'dr. rajdeep sonkar'].includes(name.trim().toLowerCase());
-    const roleToSend = isNamedAdmin ? 'ADMIN' : 'Volunteer';
-
-    const saveToLocalCache = (userToCache: DBUser) => {
-      try {
-        const current = getCachedUsers();
-        const seen = new Set<string>();
-        const updated: DBUser[] = [userToCache];
-        seen.add(userToCache.name.trim().toLowerCase());
-        for (const u of current) {
-          const k = u.name.trim().toLowerCase();
-          if (!seen.has(k)) {
-            seen.add(k);
-            updated.push(u);
-          }
-        }
-        setCachedUsers(updated);
-      } catch (_) {}
-    };
+    const matchingUser = displayUsers.find(u => u.name.trim().toLowerCase() === name.trim().toLowerCase());
+    const isNamedAdmin = ['admin', 'rohan', 'dr. vibhuti kori', 'dr. rajdeep sonkar'].includes(name.trim().toLowerCase()) || matchingUser?.role?.toUpperCase() === 'ADMIN';
+    const roleToSend = isNamedAdmin ? 'ADMIN' : (matchingUser?.role || 'Volunteer');
 
     if (isServerOffline) {
-      const offlineUser = {
-        id: 'offline-' + Math.random().toString(36).substring(2, 11),
+      const offlineUser: DBUser = {
+        id: matchingUser?.id || ('offline-' + Math.random().toString(36).substring(2, 11)),
         name: name.trim(),
         department: department,
         role: roleToSend
@@ -158,14 +151,13 @@ export default function Login() {
         throw new Error(result.error || 'Failed to identify user');
       }
 
-      console.log('[USER IDENTIFIED]:', result.user);
       saveToLocalCache(result.user);
       login(result.user, result.token);
     } catch (err: any) {
       console.warn('[LOGIN NETWORK FALLBACK]', err);
       // Seamless offline fallback so staff can always work
-      const fallbackUser = {
-        id: 'local-' + Math.random().toString(36).substring(2, 11),
+      const fallbackUser: DBUser = {
+        id: matchingUser?.id || ('local-' + Math.random().toString(36).substring(2, 11)),
         name: name.trim(),
         department: department,
         role: roleToSend
@@ -183,9 +175,11 @@ export default function Login() {
     
     const isNamedAdmin = ['admin', 'rohan', 'dr. vibhuti kori', 'dr. rajdeep sonkar'].includes((u.name || '').trim().toLowerCase()) || (u.role || '').toUpperCase() === 'ADMIN';
     const existingRole = isNamedAdmin ? 'ADMIN' : (u.role || 'Volunteer');
+    const userToLogin = { ...u, role: existingRole };
+    saveToLocalCache(userToLogin);
 
     if (isServerOffline) {
-      login({ ...u, role: existingRole });
+      login(userToLogin);
       setLoading(false);
       return;
     }
@@ -211,10 +205,11 @@ export default function Login() {
       if (!res.ok) {
         throw new Error(result.error || 'Failed to authenticate user profile');
       }
+      saveToLocalCache(result.user);
       login(result.user, result.token);
     } catch (err: any) {
       console.warn('[LOGIN SELECT EXISTING FALLBACK]', err);
-      login({ ...u, role: existingRole });
+      login(userToLogin);
     } finally {
       setLoading(false);
     }
@@ -286,6 +281,11 @@ export default function Login() {
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
               ⚡ Standalone / Offline Mode Active — Instant Fallback Login Ready
             </div>
+          ) : isCheckingConnection ? (
+            <div className="bg-sky-500/10 text-sky-300 p-3 rounded-2xl text-xs font-bold text-center border border-sky-500/20 flex items-center justify-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse"></span>
+              🔄 Connecting to Server — Instant Fallback Ready
+            </div>
           ) : (
             <div className="bg-emerald-500/10 text-emerald-400 p-3 rounded-2xl text-xs font-bold text-center border border-emerald-500/20 flex items-center justify-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -312,8 +312,6 @@ export default function Login() {
                   Save & Restart
                 </button>
             </div>
-          ) : fetching && users.length === 0 ? (
-             <div className="flex justify-center py-4"><div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div></div>
           ) : (
             <div className="space-y-6">
               
@@ -331,7 +329,7 @@ export default function Login() {
                           {manualNameMode ? "← Select from staff list" : "+ Type custom name"}
                         </button>
                       </div>
-                      {manualNameMode || users.length === 0 ? (
+                      {manualNameMode ? (
                         <input 
                           type="text" 
                           required
@@ -341,42 +339,84 @@ export default function Login() {
                           className="w-full px-5 py-4 bg-slate-900 border-2 border-slate-800 rounded-2xl outline-none font-bold text-white shadow-sm transition-all focus:border-emerald-500"
                         />
                       ) : (
-                        <select 
-                          required
-                          value={name}
-                          onChange={e => {
-                            const val = e.target.value;
-                            if (val === '__custom__') {
-                              setManualNameMode(true);
-                              setName('');
-                              return;
-                            }
-                            setName(val);
-                            const user = users.find(u => u.name === val);
-                            if (user && user.department) setDepartment(user.department);
-                          }}
-                          className="w-full px-5 py-4 bg-slate-900 border-2 border-slate-800 rounded-2xl outline-none font-bold text-white shadow-sm transition-all focus:border-emerald-500 appearance-none cursor-pointer"
-                        >
-                          <option value="" disabled>Select your name...</option>
-                          {users.map(u => (
-                            <option key={u.id} value={u.name}>{u.name}{u.department ? ` (${u.department})` : ''}</option>
-                          ))}
-                          <option value="__custom__">+ Enter custom name / Type name...</option>
-                        </select>
+                        <div className="relative">
+                          <select 
+                            required
+                            value={name}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '__custom__') {
+                                setManualNameMode(true);
+                                setName('');
+                                return;
+                              }
+                              setName(val);
+                              const user = displayUsers.find(u => u.name === val);
+                              if (user && user.department) setDepartment(user.department);
+                            }}
+                            className="w-full px-5 py-4 pr-12 bg-slate-900 border-2 border-slate-800 rounded-2xl outline-none font-bold text-white shadow-sm transition-all focus:border-emerald-500 appearance-none cursor-pointer"
+                          >
+                            <option value="" disabled className="bg-slate-900 text-slate-400" style={{ backgroundColor: '#0f172a', color: '#94a3b8' }}>Select your name...</option>
+                            {displayUsers.map(u => (
+                              <option key={u.id || u.name} value={u.name} className="bg-slate-900 text-slate-100 py-2.5" style={{ backgroundColor: '#0f172a', color: '#f8fafc' }}>
+                                {u.name}{u.department ? ` (${u.department})` : ''}
+                              </option>
+                            ))}
+                            <option value="__custom__" className="bg-slate-900 text-emerald-400 font-bold" style={{ backgroundColor: '#0f172a', color: '#34d399' }}>+ Enter custom name / Type name...</option>
+                          </select>
+                          <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                            <ChevronDown size={20} />
+                          </div>
+                        </div>
                       )}
                     </div>
 
+                    {!manualNameMode && displayUsers.length > 0 && (
+                      <div className="space-y-1.5 pt-1">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block ml-1">
+                          Quick 1-Tap Select
+                        </label>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {displayUsers.slice(0, 6).map(u => (
+                            <button
+                              key={'chip-' + (u.id || u.name)}
+                              type="button"
+                              onClick={() => {
+                                setName(u.name);
+                                if (u.department) setDepartment(u.department);
+                              }}
+                              className={`p-2.5 rounded-xl border text-left flex items-center gap-2 transition-all text-xs font-bold ${
+                                name === u.name
+                                  ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300 shadow-md ring-1 ring-emerald-500/50'
+                                  : 'bg-slate-900/60 border-slate-800/80 text-slate-300 hover:border-slate-700 hover:bg-slate-900'
+                              }`}
+                            >
+                              <span className="w-6 h-6 rounded-lg bg-slate-800 text-emerald-400 font-black text-[11px] flex items-center justify-center shrink-0">
+                                {u.name.charAt(0)}
+                              </span>
+                              <span className="truncate">{u.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block ml-1">Department</label>
-                      <select 
-                        value={department}
-                        onChange={e => setDepartment(e.target.value)}
-                        className="w-full px-5 py-4 bg-slate-900 border-2 border-slate-800 rounded-2xl outline-none font-bold text-white cursor-pointer transition-all focus:border-emerald-500 appearance-none"
-                      >
-                        {DEPARTMENTS.map(d => (
-                          <option key={d} value={d}>{d}</option>
-                        ))}
-                      </select>
+                      <div className="relative">
+                        <select 
+                          value={department}
+                          onChange={e => setDepartment(e.target.value)}
+                          className="w-full px-5 py-4 pr-12 bg-slate-900 border-2 border-slate-800 rounded-2xl outline-none font-bold text-white cursor-pointer transition-all focus:border-emerald-500 appearance-none"
+                        >
+                          {DEPARTMENTS.map(d => (
+                            <option key={d} value={d} className="bg-slate-900 text-slate-100 py-2.5" style={{ backgroundColor: '#0f172a', color: '#f8fafc' }}>{d}</option>
+                          ))}
+                        </select>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                          <ChevronDown size={20} />
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -388,7 +428,7 @@ export default function Login() {
                     {loading ? 'Connecting...' : 'Continue'} <ChevronRight size={18} />
                   </button>
 
-                  {users.length > 0 && (
+                  {displayUsers.length > 0 && (
                     <button 
                       type="button"
                       onClick={() => setShowExisting(true)}
@@ -411,9 +451,9 @@ export default function Login() {
                   </div>
                   
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[40vh] overflow-y-auto pr-1">
-                    {users.slice(0, 10).map(u => (
+                    {displayUsers.slice(0, 10).map(u => (
                       <button
-                        key={u.id}
+                        key={'recent-' + (u.id || u.name)}
                         onClick={() => handleSelectExisting(u)}
                         className="p-4 rounded-2xl border text-left flex items-center gap-3.5 transition-all group relative bg-slate-900/40 border-slate-800 hover:border-slate-700 hover:bg-slate-900/60"
                       >

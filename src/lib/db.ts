@@ -188,7 +188,7 @@ function cacheKey(query: Record<string, any>, action: string): string {
   return `nk_cache_${action}_${JSON.stringify(query)}`;
 }
 
-async function setCache(key: string, data: any): Promise<void> {
+export async function setCache(key: string, data: any): Promise<void> {
   try {
     const db = await dbPromise;
     await db.put('keyval', data, key);
@@ -197,7 +197,7 @@ async function setCache(key: string, data: any): Promise<void> {
   }
 }
 
-async function getCache(key: string): Promise<any | null> {
+export async function getCache(key: string): Promise<any | null> {
   try {
     const db = await dbPromise;
     const val = await db.get('keyval', key);

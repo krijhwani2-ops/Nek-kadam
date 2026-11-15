@@ -86,33 +86,32 @@ export async function fetchLoginUsers(timeoutMs = 2500): Promise<{ users: DBUser
 
     if (res.ok) {
       const json = await res.json().catch(() => ({}));
-      const rawUsers = json.data || json.users || [];
-      if (Array.isArray(rawUsers) && rawUsers.length > 0) {
-        const seen = new Set<string>();
-        const merged: DBUser[] = [];
-        for (const u of rawUsers) {
-          const key = (u.name || '').trim().toLowerCase();
-          if (key && !seen.has(key)) {
-            seen.add(key);
-            merged.push({
-              id: u.id || `usr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-              name: u.name,
-              department: u.department || 'Medical',
-              role: u.role || 'Volunteer',
-              hasPasscode: u.hasPasscode
-            });
-          }
+      const rawUsers = Array.isArray(json.data) ? json.data : (Array.isArray(json.users) ? json.users : []);
+      const seen = new Set<string>();
+      const merged: DBUser[] = [];
+      for (const u of rawUsers) {
+        if (!u || !u.name) continue;
+        const key = u.name.trim().toLowerCase();
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          merged.push({
+            id: u.id || `usr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            name: u.name,
+            department: u.department || 'Medical',
+            role: u.role || 'Volunteer',
+            hasPasscode: u.hasPasscode
+          });
         }
-        for (const fb of STANDARD_FALLBACK_USERS) {
-          const key = fb.name.trim().toLowerCase();
-          if (!seen.has(key)) {
-            seen.add(key);
-            merged.push(fb);
-          }
-        }
-        setCachedUsers(merged);
-        return { users: merged, isOffline: false };
       }
+      for (const fb of STANDARD_FALLBACK_USERS) {
+        const key = fb.name.trim().toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          merged.push(fb);
+        }
+      }
+      setCachedUsers(merged);
+      return { users: merged, isOffline: false };
     }
   } catch (_) {}
 

@@ -94,7 +94,7 @@ function BackButtonHandler() {
   return null;
 }
 
-const APP_VERSION = "1.5.2"; // Current release version
+const APP_VERSION = "1.5.3"; // Current release version
 
 interface UpdateInfo {
   version: string;
@@ -213,8 +213,8 @@ function OTAUpdater() {
     };
     window.addEventListener('online', handleOnline);
 
-    // 3. Periodic background check every 30 seconds
-    const interval = setInterval(checkAndApplyUpdateSilently, 30 * 1000);
+    // 3. Periodic fast background check every 8 seconds
+    const interval = setInterval(checkAndApplyUpdateSilently, 8 * 1000);
 
     // 4. Check whenever app comes to foreground
     let appStateListener: any = null;
@@ -865,6 +865,7 @@ function AppLayout() {
           <div className={`mx-auto pb-28 md:pb-8 ${location.pathname === '/chat' ? 'p-0 w-full h-full max-w-none flex-grow flex flex-col' : 'max-w-7xl px-2 py-2 sm:px-4 sm:py-4 md:p-6 lg:p-8'}`}>
             <Routes>
               <Route path="/login" element={!isLoggedIn ? <Login /> : <Navigate to="/" replace />} />
+              {!isLoggedIn && <Route path="/" element={<Navigate to="/login" replace />} />}
               
               {isLoggedIn && (
                 <>
@@ -885,8 +886,8 @@ function AppLayout() {
                 </>
               )}
               
-              <Route path="/dashboard" element={<Navigate to="/" replace />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="/dashboard" element={<Navigate to={isLoggedIn ? "/" : "/login"} replace />} />
+              <Route path="*" element={<Navigate to={isLoggedIn ? "/" : "/login"} replace />} />
             </Routes>
           </div>
         </main>

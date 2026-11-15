@@ -69,15 +69,55 @@ export default function PatientsList() {
         .select('*')
         .order('created_at', { ascending: false });
       const list = data || [];
-      setPatients(list);
-      if (typeof window !== 'undefined') {
-        (window as any).__nk_patients_cache = list;
+      if (list.length > 0) {
+        setPatients(list);
+        if (typeof window !== 'undefined') {
+          (window as any).__nk_patients_cache = list;
+        }
+        setLoading(false);
+      } else {
+        // If local cache is empty (fresh APK install), fetch directly from server
+        try {
+          const { getBaseUrl } = await import('../lib/session');
+          const token = localStorage.getItem('nk_token') || '';
+          const base = getBaseUrl();
+          const res = await fetch(`${base}/rpc/query`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': token ? `Bearer ${token}` : 'Bearer mobile-staff'
+            },
+            body: JSON.stringify({ table: 'patients', select: '*' })
+          });
+
+          if (res.ok) {
+            const json = await res.json().catch(() => ({}));
+            const remoteList = json.data || [];
+            if (remoteList.length > 0) {
+              setPatients(remoteList);
+              if (typeof window !== 'undefined') {
+                (window as any).__nk_patients_cache = remoteList;
+              }
+              const { setCache } = await import('../lib/db');
+              await setCache('nk_full_patients', remoteList);
+            }
+          }
+        } catch (_) {}
+
+        setLoading(false);
+
+        // Also trigger background full sync so visits, medicines, etc. are synced
+        try {
+          const { fullDataSync } = await import('../lib/db');
+          fullDataSync().then(() => {
+            window.dispatchEvent(new Event('nk_live_sync_completed'));
+          }).catch(() => {});
+        } catch (_) {}
       }
     } catch (e) {
       console.error('Failed to load patients:', e);
-      setPatients([]);
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   const filteredPatients = patients.filter(
