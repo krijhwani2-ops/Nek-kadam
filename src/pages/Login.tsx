@@ -104,18 +104,39 @@ export default function Login() {
     const isNamedAdmin = ['admin', 'rohan', 'dr. vibhuti kori', 'dr. rajdeep sonkar'].includes(name.trim().toLowerCase());
     const roleToSend = isNamedAdmin ? 'ADMIN' : 'Volunteer';
 
+    const saveToLocalCache = (userToCache: DBUser) => {
+      try {
+        const current = getCachedUsers();
+        const seen = new Set<string>();
+        const updated: DBUser[] = [userToCache];
+        seen.add(userToCache.name.trim().toLowerCase());
+        for (const u of current) {
+          const k = u.name.trim().toLowerCase();
+          if (!seen.has(k)) {
+            seen.add(k);
+            updated.push(u);
+          }
+        }
+        setCachedUsers(updated);
+      } catch (_) {}
+    };
+
     if (isServerOffline) {
-      login({
+      const offlineUser = {
         id: 'offline-' + Math.random().toString(36).substring(2, 11),
         name: name.trim(),
         department: department,
         role: roleToSend
-      });
+      };
+      saveToLocalCache(offlineUser);
+      login(offlineUser);
       setLoading(false);
       return;
     }
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
       const res = await fetch(`${getBaseUrl()}/api/users/create-profile`, {
         method: 'POST',
         headers: {
@@ -127,8 +148,10 @@ export default function Login() {
           department: department,
           role: roleToSend,
           deviceId: 'local-device'
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
 
       const result = await res.json();
       if (!res.ok) {
@@ -136,16 +159,19 @@ export default function Login() {
       }
 
       console.log('[USER IDENTIFIED]:', result.user);
+      saveToLocalCache(result.user);
       login(result.user, result.token);
     } catch (err: any) {
       console.warn('[LOGIN NETWORK FALLBACK]', err);
       // Seamless offline fallback so staff can always work
-      login({
+      const fallbackUser = {
         id: 'local-' + Math.random().toString(36).substring(2, 11),
         name: name.trim(),
         department: department,
         role: roleToSend
-      });
+      };
+      saveToLocalCache(fallbackUser);
+      login(fallbackUser);
     } finally {
       setLoading(false);
     }
@@ -165,6 +191,8 @@ export default function Login() {
     }
     
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
       const res = await fetch(`${getBaseUrl()}/api/users/create-profile`, {
         method: 'POST',
         headers: {
@@ -175,8 +203,10 @@ export default function Login() {
           department: u.department,
           role: existingRole,
           deviceId: 'local-device'
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
       const result = await res.json();
       if (!res.ok) {
         throw new Error(result.error || 'Failed to authenticate user profile');
@@ -251,9 +281,15 @@ export default function Login() {
             </div>
           )}
 
-          {isServerOffline && (
-            <div className="bg-amber-500/10 text-amber-400 p-4 rounded-2xl text-xs font-bold text-center border border-amber-500/20 animate-pulse">
-              ⚠️ Offline Mode Active (Enter details manually)
+          {isServerOffline ? (
+            <div className="bg-amber-500/10 text-amber-300 p-3.5 rounded-2xl text-xs font-bold text-center border border-amber-500/20 flex items-center justify-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+              ⚡ Standalone / Offline Mode Active — Instant Fallback Login Ready
+            </div>
+          ) : (
+            <div className="bg-emerald-500/10 text-emerald-400 p-3 rounded-2xl text-xs font-bold text-center border border-emerald-500/20 flex items-center justify-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              🟢 Server Online — Cloud Sync Connected
             </div>
           )}
 
@@ -295,7 +331,7 @@ export default function Login() {
                           {manualNameMode ? "← Select from staff list" : "+ Type custom name"}
                         </button>
                       </div>
-                      {isServerOffline || manualNameMode || users.length === 0 ? (
+                      {manualNameMode || users.length === 0 ? (
                         <input 
                           type="text" 
                           required
@@ -310,6 +346,11 @@ export default function Login() {
                           value={name}
                           onChange={e => {
                             const val = e.target.value;
+                            if (val === '__custom__') {
+                              setManualNameMode(true);
+                              setName('');
+                              return;
+                            }
                             setName(val);
                             const user = users.find(u => u.name === val);
                             if (user && user.department) setDepartment(user.department);
@@ -320,6 +361,7 @@ export default function Login() {
                           {users.map(u => (
                             <option key={u.id} value={u.name}>{u.name}{u.department ? ` (${u.department})` : ''}</option>
                           ))}
+                          <option value="__custom__">+ Enter custom name / Type name...</option>
                         </select>
                       )}
                     </div>
