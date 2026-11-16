@@ -519,6 +519,7 @@ export default function MedicineQueue() {
           </div>
           <button 
             onClick={() => setToast(null)}
+            aria-label="Close toast"
             className="text-xs opacity-70 hover:opacity-100 font-bold ml-4"
           >
             ✕
