@@ -323,7 +323,7 @@ export default function Attendance() {
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden flex flex-col">
             <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <h3 className="font-black text-slate-800 dark:text-slate-100">Create New Batch</h3>
-              <button onClick={() => setShowBatchModal(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400">
+              <button aria-label="Close modal" onClick={() => setShowBatchModal(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400">
                 <X size={20} />
               </button>
             </div>
@@ -365,7 +365,7 @@ export default function Attendance() {
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <h3 className="font-black text-slate-800 dark:text-slate-100">Add Child</h3>
-              <button onClick={() => setShowEnroll(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400">
+              <button aria-label="Close modal" onClick={() => setShowEnroll(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400">
                 <X size={20} />
               </button>
             </div>
